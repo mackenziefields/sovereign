@@ -1,0 +1,18 @@
+# Example only (not used by the dashboard setup). For a later move to the `wrangler` command-line workflow.
+# Copy to wrangler.toml, fill in the KV id, then:  wrangler secret put ANTHROPIC_API_KEY ; wrangler secret put ACCESS_CODE ; wrangler deploy
+# Never put secrets in this file.
+
+name = "sovereign-ai"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+[[kv_namespaces]]
+binding = "USAGE"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+ALLOWED_ORIGINS = "https://mackenziefields.github.io"
+MODEL_OUTLINE = "claude-sonnet-5-5"
+MODEL_LIGHT = "claude-haiku-5-5"
+MAX_MODULES = "8"
+DAILY_BUDGET_USD = "5"
