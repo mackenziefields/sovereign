@@ -245,15 +245,15 @@
   const partsFrom = (t) => String(t || '').split(/\n\s*\n/).map((blk) => blk.split('\n').map((x) => x.trim()).filter(Boolean)).filter((l) => l.length).slice(0, 8)
     .map((l) => ({ title: l[0].slice(0, 120), questions: l.slice(1, 9).map((x) => x.slice(0, 500)) }));
   // "Text entry", "a PDF", ... for the sentence telling people what form to submit in
-  const FORMAT_SENTENCE = { text: 'Submit as a text box entry.', pdf: 'Submit as a PDF.', image: 'Submit as an image.', any: 'No preferred file type: submit as a text box entry, PDF, or image.' };
-  const FORMAT_SHORT = { text: 'Text entry', pdf: 'PDF upload', image: 'Image upload', any: 'Text entry, PDF, or image' };
+  const FORMAT_SENTENCE = { text: 'Submit as a text box entry.', pdf: 'Submit as a PDF.', image: 'Submit as an image.', file: 'Submit as a PDF, an Excel file, or an image.', any: 'No preferred file type: submit as a text box entry, PDF, or image.' };
+  const FORMAT_SHORT = { text: 'Text entry', pdf: 'PDF upload', image: 'Image upload', file: 'PDF, Excel file, or image upload', any: 'Text entry, PDF, or image' };
 
   function assignmentForm(c, m, a) {
     return h('form', { class: a ? 'inline-edit' : '', onsubmit: (e) => {
       e.preventDefault(); const f = new FormData(e.target);
       const graded = a && a.work && a.work.final && a.work.final.feedback;
       const lines = (k, n) => String(f.get(k) || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, n).map((x) => x.slice(0, 500));
-      const v = { materials: String(f.get('materials') || '').trim().slice(0, 6000), steps: a ? a.steps : [], parts: partsFrom(f.get('parts')), format: ['text', 'pdf', 'image', 'any'].includes(f.get('format')) ? f.get('format') : '', submit: String(f.get('submit') || '').trim().slice(0, 1000), criteria: lines('criteria', 8).map((x) => x.slice(0, 300)), estimate: String(f.get('estimate') || '').trim().slice(0, 60), title: f.get('title').trim(), description: f.get('description').trim(), due: a && a.locked ? a.due : S.validDate(f.get('due') || '') };
+      const v = { materials: String(f.get('materials') || '').trim().slice(0, 6000), steps: a ? a.steps : [], parts: partsFrom(f.get('parts')), format: ['text', 'pdf', 'image', 'file', 'any'].includes(f.get('format')) ? f.get('format') : '', submit: String(f.get('submit') || '').trim().slice(0, 1000), criteria: lines('criteria', 8).map((x) => x.slice(0, 300)), estimate: String(f.get('estimate') || '').trim().slice(0, 60), title: f.get('title').trim(), description: f.get('description').trim(), due: a && a.locked ? a.due : S.validDate(f.get('due') || '') };
       if (!graded) { v.points = num(f.get('points')); v.score = num(f.get('score')); }
       if (a) { Object.assign(a, v); ui.edit = null; }
       else {
@@ -268,7 +268,7 @@
       field('Overview / instructions (optional)', 'description', { value: a ? a.description : '', multiline: true, rows: 3 }),
       field('Scenario and materials (optional)', 'materials', { value: a ? a.materials : '', multiline: true, rows: 8, hint: 'The case, document, or data the work is based on.' }),
       field('Parts and guiding questions (optional)', 'parts', { value: a ? partsText(a) : '', multiline: true, rows: 8, hint: 'Each part: its title on one line, then one question per line. Leave a blank line between parts.' }),
-      select('Submit as', 'format', [['', 'Not specified'], ['text', 'Text entry'], ['pdf', 'PDF'], ['image', 'Image'], ['any', 'Text, PDF, or image']], a ? a.format : ''),
+      select('Submit as', 'format', [['', 'Not specified'], ['text', 'Text entry'], ['pdf', 'PDF'], ['image', 'Image'], ['file', 'PDF, Excel file, or image (tables, charts)'], ['any', 'Text, PDF, or image']], a ? a.format : ''),
       field('What to submit (optional)', 'submit', { value: a ? a.submit : '', multiline: true, rows: 2 }),
       a && a.rubric.length ? h('p', { class: 'small muted' }, 'Grading criteria are weighted and fixed for AI review: ' + a.rubric.map((k) => k.name + ' (' + k.max + ')').join('; ')) : field('How it is graded (optional)', 'criteria', { value: a ? a.criteria.join('\n') : '', multiline: true, rows: 3, hint: 'One criterion per line. The AI reviews against these.' }),
       field('Estimated time (optional)', 'estimate', { value: a ? a.estimate : '', placeholder: 'e.g. 45 minutes' }),
@@ -338,6 +338,10 @@
         row('Submitting', FORMAT_SHORT[a.format] || 'Text entry or a file upload (text, PDF, or image)'),
         row('Status', status)),
       a.description || a.purpose ? sec('Overview', a.description ? h('p', { class: 'pre' }, a.description) : null, a.purpose ? h('p', { class: 'pre' }, a.purpose) : null) : null,
+      a.basis === 'readings' ? sec('Draw on this module’s readings',
+        h('p', { class: 'small muted' }, 'This assignment is graded on how well you understand the readings and key ideas of this module. Use them, and name what you draw on.'),
+        m.readings.filter((x) => x.source !== 'placeholder').length ? h('ul', { class: 'plain' }, m.readings.filter((x) => x.source !== 'placeholder').map((x) => h('li', {}, x.url ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.title) : x.title))) : h('p', { class: 'small' }, 'No readings have been added to this module yet. Add some on the ', h('a', { href: href(c, 'modules', m.id) }, 'module page'), '.'),
+        h('p', {}, h('a', { href: href(c, 'modules', m.id) }, 'Open the module →'))) : null,
       a.materials ? sec('Scenario and materials', h('p', { class: 'pre' }, a.materials)) : null,
       a.parts.map((p, i) => sec('Step ' + (i + 1) + (p.title ? ': ' + p.title : ''), p.questions.length ? h('ul', { class: 'plain' }, p.questions.map((x) => h('li', {}, x))) : null)),
       a.steps.length ? sec('What to do', h('ol', { class: 'steps-list' }, a.steps.map((x) => h('li', {}, x)))) : null,
@@ -348,6 +352,7 @@
       a.due ? h('p', { class: 'small muted' }, 'Late work is accepted and marked late.') : null,
       !a.parts.length && !a.materials && a.points > 0 && !a.work ? writeBtn(c, m, a) : null,
       sec('Your submission', S.workPanel(c, m, a, true)),
+      a.points > 0 ? S.officePanel(c, m, a) : null,
       h('div', { class: 'item-actions' }, editBtn(a.id, 'Edit this assignment')));
   }
 

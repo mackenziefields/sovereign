@@ -1,18 +1,19 @@
-/* sovereign. — submitting work, AI feedback, the 72-hour resubmission window, and the final grade. */
+/* sovereign. — submitting work, AI feedback, the 72-hour resubmission window, the final grade, and ungraded office hours. */
 (function (S) {
   'use strict';
   const { h, toast, commit, badge } = S;
-  const drafts = {}; // assignment id -> { text, file, agree, busy, err }  (never saved; nothing is sent until the person agrees)
-  const dr = (a) => drafts[a.id] || (drafts[a.id] = { text: '', file: null, agree: false, busy: false, err: '' });
+  const drafts = {}; // draft key -> { text, file, agree, busy, err, material }  (never saved; nothing is sent until the person agrees)
+  const dr = (key) => drafts[key] || (drafts[key] = { text: '', file: null, agree: false, busy: false, err: '', material: '' });
 
   const when = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } };
   const money = (n) => (S.ai && S.ai.money ? S.ai.money(n) : '$' + n.toFixed(2));
   const list = (items, cls) => (items && items.length ? h('ul', { class: cls || 'plain' }, items.map((x) => h('li', {}, x))) : null);
 
-  // The reviewable pieces: what the AI is told, and what is stored. Returns { payload, stored } or throws an Error with a plain message.
-  async function prepare(d) {
+  // What the AI is told, and what is stored. Returns { payload, stored, blob? } or throws an Error with a plain message.
+  async function prepare(d, fileOnly) {
     const f = d.file, L = S.FILE_LIMITS;
     if (!f) {
+      if (fileOnly) throw new Error('This assignment needs a table, chart, or similar layout, so choose a PDF, Excel file, or image to submit.');
       const t = d.text.trim();
       if (!t) throw new Error('Write your answer or choose a file first.');
       if (t.length > L.text) throw new Error('That is longer than the AI can review (about ' + L.text.toLocaleString() + ' characters). Shorten it or attach a PDF.');
@@ -20,6 +21,7 @@
     }
     const kind = S.files.classify(f);
     if (kind === 'text') {
+      if (fileOnly) throw new Error('This assignment needs a PDF, Excel file, or image, not a text file.');
       const t = (await S.files.readText(f)).trim();
       if (!t) throw new Error('That file is empty.');
       if (t.length > L.text) throw new Error('That file is longer than the AI can review (about ' + L.text.toLocaleString() + ' characters).');
@@ -33,15 +35,20 @@
       const r = await S.files.downscale(f);
       return { payload: { file: { mime: r.mime, base64: await S.files.base64(r.blob) } }, blob: r.blob, stored: { fileName: f.name, fileType: r.mime, fileSize: r.blob.size } };
     }
-    throw new Error('The AI can review text, PDF, and image files. Attach this one as evidence without AI feedback instead.');
+    if (kind === 'xlsx') {
+      if (f.size > L.xlsx) throw new Error('That Excel file is over 5 MB. Save a smaller copy and try again.');
+      const t = await S.files.xlsxToText(f); // cell values only; charts and formatting are not read
+      return { payload: { text: t }, blob: f, stored: { fileName: f.name, fileType: f.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileSize: f.size } };
+    }
+    throw new Error('The AI can review text, PDF, image, and Excel (.xlsx) files. Attach this one as evidence without AI feedback instead.');
   }
 
   async function submit(c, m, a, round) {
-    const d = dr(a);
+    const d = dr(a.id), fileOnly = a.format === 'file';
     d.err = ''; d.busy = true; S.render(false);
     let fileId = '';
     try {
-      const p = await prepare(d);
+      const p = await prepare(d, fileOnly);
       const at = new Date();
       if (p.blob) { fileId = S.uid(); await S.files.put(fileId, p.blob); }
       const fb = await S.ai.review(c, m, a, p.payload, round);
@@ -60,13 +67,36 @@
     S.render(false);
   }
 
+  // Office hours: the same flow, but for material the learner chose, with no grade and no record in the Grades page or Portfolio.
+  async function officeSubmit(c, m, a, round) {
+    const key = 'oh:' + a.id, d = dr(key);
+    d.err = ''; d.busy = true; S.render(false);
+    let fileId = '';
+    try {
+      const material = round === 1 ? d.material.trim() : (a.office && a.office.material) || '';
+      if (round === 1 && !material) throw new Error('Tell the AI which article, reading, or example you are working from.');
+      const p = await prepare(d, false);
+      const at = new Date();
+      if (p.blob) { fileId = S.uid(); await S.files.put(fileId, p.blob); }
+      const fb = await S.ai.office(c, m, a, p.payload, round, material);
+      const sub = { text: '', fileId, fileName: '', fileType: '', fileSize: 0, ...p.stored, at: at.toISOString(), late: false, feedback: fb };
+      a.office = { material, rounds: ((a.office && a.office.rounds) || []).concat([sub]) };
+      drafts[key] = null; S.save(); toast(round === 1 ? 'Office-hours feedback is ready. It isn’t graded.' : 'Second round of feedback is ready. Nothing here is graded.');
+    } catch (e) {
+      if (fileId) S.files.del(fileId);
+      d.err = e && e.message ? e.message : 'Something went wrong. Please try again.';
+    }
+    if (drafts[key]) drafts[key].busy = false;
+    S.render(false);
+  }
+
   // Attach a file as evidence only (any type, no AI review, no grade).
   async function attachOnly(c, m, a) {
-    const d = dr(a);
+    const d = dr(a.id);
     if (!d.file) { d.err = 'Choose a file first.'; return S.render(false); }
     if (d.file.size > S.FILE_LIMITS.attach) { d.err = 'That file is over 25 MB, which is more than this browser can keep.'; return S.render(false); }
     d.busy = true; d.err = ''; S.render(false);
-    let id = S.uid();
+    const id = S.uid();
     try {
       await S.files.put(id, d.file);
       const at = new Date();
@@ -76,25 +106,30 @@
     S.render(false);
   }
 
-  function inputForm(c, m, a, round) {
-    const d = dr(a);
+  // o: { key, label, fileOnly, onSend, attach (offer "attach without feedback"), material (ask which material) }
+  function inputForm(c, m, a, o) {
+    const d = dr(o.key);
     const agree = h('input', { type: 'checkbox', checked: d.agree, disabled: d.busy, onchange: (e) => { d.agree = e.target.checked; go.disabled = !d.agree || d.busy; } });
-    const go = h('button', { class: 'btn', type: 'button', disabled: !d.agree || d.busy, onclick: () => submit(c, m, a, round) }, d.busy ? 'Reviewing…' : (round === 1 ? 'Get AI feedback' : 'Submit for final review'));
+    const go = h('button', { class: 'btn', type: 'button', disabled: !d.agree || d.busy, onclick: o.onSend }, d.busy ? 'Reviewing…' : o.label);
     const fileIn = h('input', { type: 'file', disabled: d.busy, onchange: (e) => { d.file = e.target.files[0] || null; d.err = ''; S.render(false); } });
-    const sending = d.file ? 'The file “' + d.file.name + '”' : 'The text you typed';
+    const sending = d.file ? (S.files.classify(d.file) === 'xlsx' ? 'The cell values (as text) from “' + d.file.name + '”' : 'The file “' + d.file.name + '”') : 'The text you typed';
     return h('div', { class: 'submit-box' },
       d.err ? h('p', { class: 'banner error', role: 'alert' }, d.err) : null,
-      h('label', { class: 'field' }, h('span', {}, round === 1 ? 'Your work' : 'Your revised work'),
-        h('textarea', { rows: 6, placeholder: 'Type or paste your answer here, or choose a file below.', disabled: d.busy || !!d.file, value: d.text, oninput: (e) => { d.text = e.target.value; } })),
-      h('label', { class: 'field' }, h('span', {}, 'Or a file (text, PDF, or image get AI feedback)'), fileIn,
-        h('small', {}, d.file ? 'Selected: ' + d.file.name + '. It will be used instead of the text above.' : 'PDFs up to 2 MB. Photos are shrunk automatically.')),
+      o.material ? h('label', { class: 'field' }, h('span', {}, 'What are you working from?'),
+        h('input', { type: 'text', maxlength: '300', disabled: d.busy, value: d.material, placeholder: 'e.g. the title and link of the article you chose', oninput: (e) => { d.material = e.target.value; } })) : null,
+      o.fileOnly
+        ? h('p', { class: 'small muted' }, 'This assignment needs a table, chart, or similar layout, so it can’t be typed in a text box. Submit a PDF, an Excel (.xlsx) file, or an image.')
+        : h('label', { class: 'field' }, h('span', {}, o.textLabel || 'Your work'),
+          h('textarea', { rows: 6, placeholder: 'Type or paste your answer here, or choose a file below.', disabled: d.busy || !!d.file, value: d.text, oninput: (e) => { d.text = e.target.value; } })),
+      h('label', { class: 'field' }, h('span', {}, o.fileOnly ? 'Your file (PDF, Excel, or image)' : 'Or a file (text, PDF, image, or Excel get AI feedback)'), fileIn,
+        h('small', {}, d.file ? 'Selected: ' + d.file.name + (o.fileOnly ? '.' : '. It will be used instead of the text above.') : 'PDFs up to 2 MB. Excel files up to 5 MB (cell values only). Photos are shrunk automatically.')),
       h('label', { class: 'consent' }, agree, h('span', {}, sending + ' will be sent to the AI service to review. It is used for this review only and is not kept by the service. Send it?')),
       h('div', { class: 'btn-row' }, go,
-        round === 1 && d.file ? h('button', { class: 'btn ghost', type: 'button', disabled: d.busy, onclick: () => attachOnly(c, m, a) }, 'Attach without AI feedback') : null,
+        o.attach && d.file ? h('button', { class: 'btn ghost', type: 'button', disabled: d.busy, onclick: () => attachOnly(c, m, a) }, 'Attach without AI feedback') : null,
         d.file ? h('button', { class: 'btn ghost', type: 'button', disabled: d.busy, onclick: () => { d.file = null; S.render(false); } }, 'Clear file') : null));
   }
 
-  function feedbackView(f, showScore) {
+  function feedbackView(f, showScore, office) {
     return h('div', { class: 'feedback' },
       f.summary ? h('p', {}, f.summary) : null,
       f.strengths.length ? h('div', {}, h('h4', { class: 'minor' }, 'What’s working'), list(f.strengths)) : null,
@@ -102,7 +137,7 @@
       f.nextSteps.length ? h('div', {}, h('h4', { class: 'minor' }, 'Next steps'), list(f.nextSteps)) : null,
       f.criteria.length ? h('div', {}, h('h4', { class: 'minor' }, showScore ? 'By criterion' : 'Criteria this was reviewed against'),
         h('ul', { class: 'plain' }, f.criteria.map((k) => h('li', {}, h('b', {}, k.name), showScore ? ' · ' + k.score + ' / ' + k.max : '', k.comment ? ' — ' + k.comment : '')))) : null,
-      h('p', { class: 'small muted' }, 'Reviewed by AI on ' + when(f.at) + (f.cost ? ' · about ' + money(f.cost) : '') + '. This is an automated assessment, not a human grade.'));
+      h('p', { class: 'small muted' }, 'Reviewed by AI on ' + when(f.at) + (f.cost ? ' · about ' + money(f.cost) : '') + (office ? '. Practice feedback only: nothing here is graded.' : '. This is an automated assessment, not a human grade.')));
   }
 
   function fileLine(sub) {
@@ -119,11 +154,32 @@
 
   S.finalFeedback = (a) => h('div', {}, feedbackView(a.work.final.feedback, true), fileLine(a.work.final));
 
-  // The panel on a module's assignment: submit, review, resubmit, final grade.
+  // Optional, ungraded: practice on a real article, reading, or example the learner chose.
+  S.officePanel = function (c, m, a) {
+    const ready = S.ai && S.ai.ready && S.ai.ready(), o = a.office, n = o ? o.rounds.length : 0, key = 'oh:' + a.id, d = dr(key);
+    const body = [
+      h('p', { class: 'small muted' }, 'Want to work from a real article, reading, or example you chose yourself, instead of the one provided? Do the assignment with your own material here and get feedback in up to two rounds. This is practice: it is never graded and doesn’t change your grade or Portfolio.'),
+      o && o.material ? h('p', { class: 'small' }, h('b', {}, 'Working from: '), o.material) : null,
+      o ? o.rounds.map((r, i) => h('div', { class: 'oh-round' }, h('h4', { class: 'minor' }, 'Round ' + (i + 1) + ' · ' + when(r.at)), r.feedback ? feedbackView(r.feedback, false, true) : null, fileLine(r))) : null,
+      n < 2 ? (ready ? inputForm(c, m, a, { key, label: n ? 'Get second-round feedback' : 'Get office-hours feedback', material: n === 0, textLabel: n ? 'Your revised work' : 'Your work', onSend: () => officeSubmit(c, m, a, n + 1) }) : h('p', { class: 'small' }, 'Office hours need the AI service. Add its address and access code under Data & Backup → AI.')) : h('p', { class: 'small muted' }, 'You’ve used both rounds. Start over to try different material.'),
+      n ? h('div', { class: 'btn-row' }, h('button', { class: 'linkbtn danger', type: 'button', onclick: () => {
+        if (!confirm('Clear this office-hours session, including its feedback? This cannot be undone.')) return;
+        (a.office.rounds || []).forEach((r) => { if (r.fileId) S.files.del(r.fileId); });
+        a.office = null; drafts[key] = null; commit();
+      } }, 'Start over')) : null,
+    ];
+    const k = 'oh-open:' + a.id;
+    const det = h('details', { class: 'work-panel', open: S.ui.open.has(k) || d.busy || !!d.err }, h('summary', {}, 'Office hours (optional, not graded)' + (n ? ' · ' + n + ' of 2 rounds' : '')), h('div', { class: 'wp-body' }, body));
+    det.addEventListener('toggle', () => { if (det.open) S.ui.open.add(k); else S.ui.open.delete(k); });
+    return det;
+  };
+
+  // The panel on an assignment page: submit, review, resubmit, final grade.
   S.workPanel = function (c, m, a, forceOpen) {
-    const w = a.work, key = 'wp:' + a.id;
+    const w = a.work, key = 'wp:' + a.id, d0 = dr(a.id), fileOnly = a.format === 'file';
     const ready = S.ai && S.ai.ready && S.ai.ready();
     const canReview = a.points > 0;
+    const form = (round) => inputForm(c, m, a, { key: a.id, label: round === 1 ? 'Get AI feedback' : 'Submit for final review', fileOnly, attach: round === 1, onSend: () => submit(c, m, a, round) });
     let body;
     if (!w) {
       body = !canReview ? h('p', { class: 'small muted' }, 'Add points to this assignment (Edit) to turn on submissions and AI feedback.')
@@ -131,7 +187,7 @@
           h('p', { class: 'small muted' }, 'Submit once to get detailed feedback (without a grade). You then have ' + S.REVIEW_HOURS + ' hours to resubmit for your final grade. If you don’t, the first review becomes your grade.'),
           a.due ? h('p', { class: 'small muted' }, 'Due ' + S.fmtDate(a.due) + '. Late work is accepted and marked late.') : null,
           !ready ? h('p', { class: 'small' }, 'AI feedback needs the AI service. Add its address and access code under Data & Backup → AI. You can still attach a file without feedback.') : null,
-          inputForm(c, m, a, 1)];
+          form(1)];
     } else if (w.phase === 'reviewed') {
       const left = S.hoursLeft(a);
       body = [
@@ -140,7 +196,7 @@
         fileLine(w.first),
         h('p', { class: 'callout' }, 'Your grade is revealed after your final review. Resubmit by ' + when(w.deadline) + ' (' + (left > 1 ? Math.ceil(left) + ' hours left' : 'under an hour left') + '). If you don’t, this first review becomes your grade then.'),
         h('h4', { class: 'minor' }, 'Resubmit your revised work'),
-        ready ? inputForm(c, m, a, 2) : h('p', { class: 'small' }, 'Reconnect the AI service under Data & Backup → AI to resubmit.'),
+        ready ? form(2) : h('p', { class: 'small' }, 'Reconnect the AI service under Data & Backup → AI to resubmit.'),
         h('div', { class: 'btn-row' }, h('button', { class: 'linkbtn', type: 'button', onclick: () => {
           if (!confirm('Skip resubmitting? Your first review becomes your final grade and the first submission’s feedback is replaced by the final record.')) return;
           S.finalizeWork(a); commit();
@@ -163,8 +219,8 @@
       ];
     }
     const label = !w ? 'Submit work' : w.phase === 'reviewed' ? 'Feedback ready' : (w.final.feedback ? 'Final grade' : 'Attached');
-    const d = h('details', { class: 'work-panel', open: forceOpen || S.ui.open.has(key) || (dr(a).busy) || (!!dr(a).err) }, h('summary', {}, label), h('div', { class: 'wp-body' }, body));
-    d.addEventListener('toggle', () => { if (d.open) S.ui.open.add(key); else S.ui.open.delete(key); });
-    return d;
+    const det = h('details', { class: 'work-panel', open: forceOpen || S.ui.open.has(key) || d0.busy || !!d0.err }, h('summary', {}, label), h('div', { class: 'wp-body' }, body));
+    det.addEventListener('toggle', () => { if (det.open) S.ui.open.add(key); else S.ui.open.delete(key); });
+    return det;
   };
 })(window.Sovereign);

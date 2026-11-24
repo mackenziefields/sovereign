@@ -190,6 +190,19 @@
     const each = Math.floor((a.points / n) * 10) / 10;
     return cr.map((t, i) => ({ name: t.slice(0, 120), max: i === n - 1 ? Math.round((a.points - each * (n - 1)) * 10) / 10 : each }));
   }
+  // Office hours: practice feedback on the person's own material, up to two rounds, never graded.
+  ai.office = async function (course, mod, a, payload, round, material, opts) {
+    const prior = a.office && a.office.rounds[0] && a.office.rounds[0].feedback;
+    const r = await ai.call('/review', {
+      mode: 'office', context: material,
+      course: { title: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '' },
+      assignment: { title: a.title, description: a.description },
+      round: round === 2 ? 2 : 1, previousImprovements: round === 2 && prior ? prior.improvements : [], submission: payload,
+    }, opts || {});
+    if (!S.state.courses.includes(course) || !mod.assignments.includes(a)) throw new AIError('gone', 'That assignment was removed while it was being reviewed.');
+    if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
+    return { ...r.feedback, cost: (r.usage && r.usage.cost) || 0 };
+  };
   ai.review = async function (course, mod, a, payload, round, opts) {
     const first = a.work && a.work.first && a.work.first.feedback;
     const r = await ai.call('/review', {
@@ -204,7 +217,7 @@
   };
 
   // Refuses to start AI work against an older copy of the Worker that doesn't have the newest features.
-  ai.NEEDS_VERSION = 5;
+  ai.NEEDS_VERSION = 6;
   ai.requireCurrent = async function () {
     let hl = null;
     try { hl = await ai.health(); } catch (e) { return; } // unreachable: the real call will report it
@@ -220,6 +233,7 @@
       topic: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '',
       module: { title: mod.title, overview: mod.overview, objectives: mod.objectives },
       assignments: list.map((a) => ({ title: a.title, description: a.description, kind: a.kind, points: a.points })),
+      readings: mod.readings.filter((x) => x.source !== 'placeholder').slice(0, 6).map((x) => ({ title: x.title })),
     }, opts || {});
     if (!S.state.courses.includes(course) || !course.modules.includes(mod)) throw new AIError('gone', 'That module was removed while its assignments were being written.');
     let done = 0;
@@ -227,7 +241,7 @@
       const a = list[i];
       if (!d || !a || !mod.assignments.includes(a)) return;
       if (a.origin === 'ai' || !a.description) { a.description = d.description; a.purpose = ''; } // a person's own wording is kept
-      a.materials = d.materials; a.parts = d.parts; a.format = d.format; a.submit = d.submit; a.estimate = d.estimate; a.steps = [];
+      a.materials = d.materials; a.basis = d.basis; a.parts = d.parts; a.format = d.format; a.submit = d.submit; a.estimate = d.estimate; a.steps = [];
       if (!a.work) { a.rubric = d.rubric; a.criteria = []; } // the grading criteria can't change once work has been submitted
       done++;
     });
@@ -257,8 +271,10 @@
         let r = await ai.findMaterials(course, course.modules[i], { queries: queries[i], signal: run.ctl.signal });
         if (r.missing) r = await ai.findMaterials(course, course.modules[i], { queries: queries[i], signal: run.ctl.signal }); // one automatic second try
         run.steps[i + 1].state = r.missing ? 'warn' : 'done'; if (r.missing) missing++;
-        try { const d = await ai.writeDetails(course, course.modules[i], course.modules[i].assignments, { signal: run.ctl.signal }); if (d.done < d.total) detailsMissing++; }
-        catch (e) { detailsMissing++; if (STOP.includes(e.code)) throw e; }
+        for (let tryN = 0; tryN < 2; tryN++) { // one automatic second try if the first answer was incomplete
+          try { const d = await ai.writeDetails(course, course.modules[i], course.modules[i].assignments.filter((a) => !a.parts.length), { signal: run.ctl.signal }); if (d.done >= d.total) break; if (tryN) detailsMissing++; }
+          catch (e) { if (STOP.includes(e.code)) throw e; if (tryN) detailsMissing++; }
+        }
       } catch (e) {
         run.steps[i + 1].state = 'fail'; problem = e.message;
         if (STOP.includes(e.code)) { for (let j = i + 1; j < course.modules.length; j++) run.steps[j + 1].state = 'skipped'; break; }

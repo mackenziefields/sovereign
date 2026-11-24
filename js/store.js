@@ -2,7 +2,7 @@
 (function (S) {
   'use strict';
 
-  S.BUILD = 13; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
+  S.BUILD = 14; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
   const KEY = 'sovereign.v3';
   const OLD_KEYS = ['sovereign.v2', 'sovereign.v1']; // earlier versions; migrated, never deleted automatically
   S.MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -113,6 +113,12 @@
     if (!x.at) return null;
     return { text: str(x.text, 30000), fileId: str(x.fileId, 60), fileName: str(x.fileName, 200), fileType: str(x.fileType, 100), fileSize: num(x.fileSize) || 0, at: str(x.at, 40), late: x.late === true, feedback: normFeedback(x.feedback) };
   }
+  // Office hours: optional practice feedback on material the learner chose. Up to two rounds, never graded.
+  function normOffice(o) {
+    o = obj(o);
+    const rounds = arr(o.rounds, 2).map(normSub).filter(Boolean);
+    return rounds.length ? { material: str(o.material, 500), rounds } : null;
+  }
   function normWork(w) {
     w = obj(w);
     const first = normSub(w.first), final = normSub(w.final);
@@ -167,7 +173,7 @@
           assignments: arr(m.assignments).map((a) => {
             a = obj(a);
             return { id: id(a.id), title: str(a.title, 300) || 'Untitled assignment', description: str(a.description), due: S.validDate(str(a.due, 10)), points: num(a.points), score: num(a.score), done: a.done === true, kind: ['learn', 'apply', 'demonstrate'].includes(a.kind) ? a.kind : '', origin: a.origin === 'ai' ? 'ai' : 'user', locked: a.locked === true && !!S.validDate(str(a.due, 10)), rubric: normRubric(a.rubric), work: normWork(a.work),
-              purpose: str(a.purpose, 2000), materials: str(a.materials, 6000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'any'].includes(a.format) ? a.format : '',
+              purpose: str(a.purpose, 2000), materials: str(a.materials, 6000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'file', 'any'].includes(a.format) ? a.format : '', basis: a.basis === 'readings' || a.basis === 'scenario' ? a.basis : '', office: normOffice(a.office),
               parts: arr(a.parts, 8).map((p) => { p = obj(p); return { title: str(p.title, 120).trim(), questions: strs(p.questions, 8, 500) }; }).filter((p) => p.title || p.questions.length), submit: str(a.submit, 1000), criteria: strs(a.criteria, 8, 300), estimate: str(a.estimate, 60) };
           }),
         };
@@ -326,7 +332,7 @@
   /* ----- builders and starter content ----- */
 
   const R = (title, url, note) => ({ id: S.uid(), title, url: url || '', note: note || '', done: false });
-  const A = (title, description, o) => ({ id: S.uid(), title, description: description || '', due: '', points: null, score: null, done: false, kind: '', origin: 'user', locked: false, rubric: [], work: null, purpose: '', materials: '', steps: [], format: '', parts: [], submit: '', criteria: [], estimate: '', ...o });
+  const A = (title, description, o) => ({ id: S.uid(), title, description: description || '', due: '', points: null, score: null, done: false, kind: '', origin: 'user', locked: false, rubric: [], work: null, purpose: '', materials: '', steps: [], format: '', basis: '', office: null, parts: [], submit: '', criteria: [], estimate: '', ...o });
   const M = (title, o) => ({ id: S.uid(), title, overview: '', readings: [], keyIdeas: '', reflection: '', extras: [], assignments: [], complete: false, syllabi: [], objectives: [], selfCheck: [], duration: '', origin: 'user', edited: false, ...o });
   const C = (code, title, color, description, modules, o) => ({
     id: S.uid(), code, title, color, description, objective: '', deliverable: '', syllabus: '', outcomes: [], duration: '', pathway: '', licensureNote: '', ai: null, startDate: '', announcements: [], modules, credentials: [],
