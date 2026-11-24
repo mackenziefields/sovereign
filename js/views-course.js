@@ -241,12 +241,19 @@
 
   /* ---------- Assignments (always belong to exactly one module) ---------- */
 
+  const partsText = (a) => a.parts.map((p) => [p.title].concat(p.questions).join('\n')).join('\n\n');
+  const partsFrom = (t) => String(t || '').split(/\n\s*\n/).map((blk) => blk.split('\n').map((x) => x.trim()).filter(Boolean)).filter((l) => l.length).slice(0, 8)
+    .map((l) => ({ title: l[0].slice(0, 120), questions: l.slice(1, 9).map((x) => x.slice(0, 500)) }));
+  // "Text entry", "a PDF", ... for the sentence telling people what form to submit in
+  const FORMAT_NOUN = { text: 'a text entry (typed into the box)', pdf: 'a PDF file', image: 'an image (a photo or scan)', any: 'a text entry, a PDF, or an image' };
+  const FORMAT_SHORT = { text: 'Text entry', pdf: 'PDF upload', image: 'Image upload', any: 'Text entry, PDF, or image' };
+
   function assignmentForm(c, m, a) {
     return h('form', { class: a ? 'inline-edit' : '', onsubmit: (e) => {
       e.preventDefault(); const f = new FormData(e.target);
       const graded = a && a.work && a.work.final && a.work.final.feedback;
       const lines = (k, n) => String(f.get(k) || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, n).map((x) => x.slice(0, 500));
-      const v = { purpose: String(f.get('purpose') || '').trim().slice(0, 2000), steps: lines('steps', 12), submit: String(f.get('submit') || '').trim().slice(0, 1000), criteria: lines('criteria', 8).map((x) => x.slice(0, 300)), estimate: String(f.get('estimate') || '').trim().slice(0, 60), title: f.get('title').trim(), description: f.get('description').trim(), due: a && a.locked ? a.due : S.validDate(f.get('due') || '') };
+      const v = { purpose: String(f.get('purpose') || '').trim().slice(0, 2000), steps: a ? a.steps : [], parts: partsFrom(f.get('parts')), format: ['text', 'pdf', 'image', 'any'].includes(f.get('format')) ? f.get('format') : '', submit: String(f.get('submit') || '').trim().slice(0, 1000), criteria: lines('criteria', 8).map((x) => x.slice(0, 300)), estimate: String(f.get('estimate') || '').trim().slice(0, 60), title: f.get('title').trim(), description: f.get('description').trim(), due: a && a.locked ? a.due : S.validDate(f.get('due') || '') };
       if (!graded) { v.points = num(f.get('points')); v.score = num(f.get('score')); }
       if (a) { Object.assign(a, v); ui.edit = null; }
       else {
@@ -260,7 +267,8 @@
       field('Assignment title', 'title', { value: a ? a.title : '', required: true, placeholder: 'e.g. Writing Exercise 1' }),
       field('Overview / instructions (optional)', 'description', { value: a ? a.description : '', multiline: true, rows: 3 }),
       field('Why you are doing this (optional)', 'purpose', { value: a ? a.purpose : '', multiline: true, rows: 2 }),
-      field('Steps (optional)', 'steps', { value: a ? a.steps.join('\n') : '', multiline: true, rows: 4, hint: 'One step per line.' }),
+      field('Parts and guiding questions (optional)', 'parts', { value: a ? partsText(a) : '', multiline: true, rows: 8, hint: 'Each part: its title on one line, then one question per line. Leave a blank line between parts.' }),
+      select('Submit as', 'format', [['', 'Not specified'], ['text', 'Text entry'], ['pdf', 'PDF'], ['image', 'Image'], ['any', 'Text, PDF, or image']], a ? a.format : ''),
       field('What to submit (optional)', 'submit', { value: a ? a.submit : '', multiline: true, rows: 2 }),
       field('How it is graded (optional)', 'criteria', { value: a ? a.criteria.join('\n') : '', multiline: true, rows: 3, hint: 'One criterion per line. The AI reviews against these.' }),
       field('Estimated time (optional)', 'estimate', { value: a ? a.estimate : '', placeholder: 'e.g. 45 minutes' }),
@@ -312,12 +320,14 @@
         row('Due', a.due ? S.fmtDate(a.due) + (a.locked ? ' (set by your course timeline)' : '') : 'No due date'),
         row('Points', a.points != null ? String(a.points) : 'Not graded'),
         row('Estimated time', a.estimate),
-        row('Submitting', 'Text entry or a file upload (text, PDF, or image)'),
+        row('Submitting', FORMAT_SHORT[a.format] || 'Text entry or a file upload (text, PDF, or image)'),
         row('Status', status)),
       a.description ? sec('Overview', h('p', { class: 'pre' }, a.description)) : null,
       a.purpose ? sec('Why you are doing this', h('p', { class: 'pre' }, a.purpose)) : null,
+      a.parts.map((p, i) => sec('Part ' + (i + 1) + (p.title ? ': ' + p.title : ''), p.questions.length ? h('ul', { class: 'plain' }, p.questions.map((x) => h('li', {}, x))) : null)),
       a.steps.length ? sec('What to do', h('ol', { class: 'steps-list' }, a.steps.map((x) => h('li', {}, x)))) : null,
-      sec('What to submit', h('p', { class: 'pre' }, a.submit || 'Type your answer or upload your work in Your submission below.')),
+      sec('What to submit', a.submit ? h('p', { class: 'pre' }, a.submit) : null,
+        h('p', {}, h('b', {}, a.format ? 'Upload your work as ' + FORMAT_NOUN[a.format] + ' in “Your submission” below.' : 'Type your answer, or upload a text file, PDF, or image, in “Your submission” below.'))),
       a.criteria.length ? sec('How it is graded', h('p', { class: 'small muted' }, (a.points != null ? a.points + ' points. ' : '') + 'The AI reviews your work against these. You get detailed feedback first, then your final grade after you resubmit (or after 72 hours).'), h('ul', { class: 'plain' }, a.criteria.map((x) => h('li', {}, x)))) : null,
       a.due ? h('p', { class: 'small muted' }, 'Late work is accepted and marked late.') : null,
       sec('Your submission', S.workPanel(c, m, a, true)),

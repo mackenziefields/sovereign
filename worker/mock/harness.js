@@ -36,7 +36,7 @@
       keyIdeas: '- Idea one for ' + title + '\n- Idea two\n- Idea three', searchQueries: [title.toLowerCase() + ' for beginners'],
       assignments: [
         { title: 'Read and note: ' + title, description: 'Write five notes on what surprised you.', kind: 'learn', points: 5 },
-        { title: 'Apply: ' + title, description: 'Do the exercise described in the module.', purpose: '[MOCK] This builds the skill of applying ' + title + '.', steps: ['Read the module', 'Do the exercise', 'Write it up'], submit: 'One page of text (about 300 words).', criteria: ['Uses the module concepts correctly', 'Gives a concrete example', 'Is clear and organized'], estimate: '45 minutes', kind: 'apply', points: 15 },
+        { title: 'Apply: ' + title, description: 'Do the exercise described in the module.', purpose: '[MOCK] This builds the skill of applying ' + title + '.', parts: [{ title: 'Hypothesis', questions: ['What do you expect to find, and why?', 'How will you decide what to examine?'] }, { title: 'Audit', questions: ['What did you choose and why?', 'What do you notice?'] }, { title: 'Reflection', questions: ['What surprised you?'] }], format: 'pdf', submit: 'One page of text (about 300 words).', criteria: ['Uses the module concepts correctly', 'Gives a concrete example', 'Is clear and organized'], estimate: '45 minutes', kind: 'apply', points: 15 },
       ],
       selfCheck: ['In your own words, what is the main idea of "' + title + '"?', 'What would you do differently now?'],
       reflection: 'What changed in how you think about starting a business after this module?',

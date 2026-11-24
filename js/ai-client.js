@@ -133,7 +133,7 @@
       modules: o.modules.map((m, mi) => ({
         id: S.uid(), title: m.title, overview: m.overview, keyIdeas: m.keyIdeas, reflection: m.reflection, objectives: m.objectives, selfCheck: m.selfCheck,
         duration: m.duration, origin: 'ai', edited: false, readings: [],
-        assignments: m.assignments.map((a, ai_) => ({ id: S.uid(), title: a.title, description: a.description, purpose: a.purpose, steps: a.steps, submit: a.submit, criteria: a.criteria, estimate: a.estimate, kind: a.kind, points: a.points, origin: 'ai', due: dueFor(start, brief && brief.weeks, o.modules.length, mi, ai_, m.assignments.length), locked: true })),
+        assignments: m.assignments.map((a, ai_) => ({ id: S.uid(), title: a.title, description: a.description, purpose: a.purpose, parts: a.parts, format: a.format, submit: a.submit, criteria: a.criteria, estimate: a.estimate, kind: a.kind, points: a.points, origin: 'ai', due: dueFor(start, brief && brief.weeks, o.modules.length, mi, ai_, m.assignments.length), locked: true })),
       })),
       work: { title: fp.title, criteria: fp.criteria },
       ai: { generated: true, createdAt: now(), status: 'partial', note: 'Course outline saved. Learning materials are still being found.', brief, usage: [] },
