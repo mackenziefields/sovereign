@@ -256,6 +256,7 @@
       h('h1', {}, 'Data & Backup'),
       !S.storageOK ? banner('Your browser is blocking local storage, so nothing can be saved. Export a backup to keep your work.', 'error') : null,
       ui.dataMsg ? banner(ui.dataMsg.text, ui.dataMsg.type) : null,
+      h('p', { class: 'small muted' }, 'App version: build ' + S.BUILD + '. If this is lower than the latest announced, reload with Ctrl+Shift+R (or clear this site’s data in your browser).'),
       h('p', { class: 'lede' }, 'Sovereign has no accounts and no server. Your work is stored only in this browser on this device, and it does not sync to your other devices.'),
       h('p', { class: 'muted' }, 'Clearing your browser’s site data would erase it. To keep a copy or move to another device, export a backup file and import it there.'),
       h('section', {},

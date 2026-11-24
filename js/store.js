@@ -2,6 +2,7 @@
 (function (S) {
   'use strict';
 
+  S.BUILD = 13; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
   const KEY = 'sovereign.v3';
   const OLD_KEYS = ['sovereign.v2', 'sovereign.v1']; // earlier versions; migrated, never deleted automatically
   S.MAX_IMPORT_BYTES = 2 * 1024 * 1024;
