@@ -210,6 +210,7 @@ const obj = (properties) => ({ type: 'object', properties, required: Object.keys
 
 const OUTLINE_SCHEMA = obj({
   title: S_STR, description: S_STR, outcomes: S_LIST, duration: S_STR, pathway: S_STR, syllabus: S_STR, licensureNote: S_STR,
+  credentials: { type: 'array', items: obj({ name: S_STR, issuer: S_STR, note: S_STR }) },
   modules: { type: 'array', items: obj({
     title: S_STR, duration: S_STR, overview: S_STR, objectives: S_LIST, keyIdeas: S_STR, searchQueries: S_LIST,
     assignments: { type: 'array', items: obj({ title: S_STR, description: S_STR, kind: { type: 'string', enum: ['learn', 'apply', 'demonstrate'] }, points: { type: 'integer' } }) },
@@ -229,11 +230,13 @@ function outlinePrompt(b, maxMods) {
   return briefText(b) + '\n\nDesign a complete self-study course for this learner.\n' +
     '- Exactly the number of modules that fits the time available, between 3 and ' + maxMods + ' (fewer is fine for short or narrow goals).\n' +
     '- Sequence modules logically so each builds on the last. Each module follows Learn -> Apply -> Demonstrate, but adapt the form to the subject (for example: case studies and drafting for law, practice problems for math, projects for a craft). Do not force one template on every subject.\n' +
+    '- Write every learner-facing text in the second person, addressing the learner directly as "you" (for example: "A practical six-week course for you, a beginner who wants to..."). Never use a name.\n' +
     '- "syllabus": plain text, 150-300 words: what the course is, how to work through it, how progress is assessed. No URLs.\n' +
     '- "outcomes": 3-6 specific things the learner will be able to do. "pathway": one sentence on what outcome this course points toward (matching their goal).\n' +
     '- "duration": e.g. "6 weeks, about 5 hours per week". Each module has a short "duration" (e.g. "Week 1").\n' +
     '- Each module: 2-4 measurable "objectives", a short "overview", "keyIdeas" (plain text, 3-5 bullet lines starting with "- "), 2-3 "assignments" (kind learn/apply/demonstrate; "points" 5-25), 2-3 "selfCheck" questions, one "reflection" prompt, and 1-2 "searchQueries": short web-search phrases that would find a genuinely useful free beginner-appropriate resource for that module. Do NOT write any URLs or specific resource titles.\n' +
     '- "finalProject": a practical capstone appropriate to the learner\'s goal (' + b.goal + '), with 3-5 "criteria". Make it something they can actually produce.\n' +
+    '- "credentials": 0-3 REAL, well-known licenses, certifications, or similar accolades that are genuinely relevant to this topic and goal' + (b.goalText ? ' (the learner named: ' + b.goalText + ')' : '') + '. Give "name", "issuer", and a "note" saying what to verify (cost, time, eligibility, and that requirements come from the official body and may depend on location). Never invent a credential or its requirements; if you are not confident any exists, return an empty list.\n' +
     '- "licensureNote": only if the goal involves a license, certification, or exam: a plain statement that this course is preparation only and requirements come from the official body. Otherwise an empty string.\n' +
     'Return ONLY a JSON object matching the schema.';
 }
@@ -289,6 +292,10 @@ function sanitizeOutline(o, maxMods) {
   return {
     title: clamp(o.title, 120), description: clamp(o.description, 1000), outcomes: clampList(o.outcomes, 8, 300),
     duration: clamp(o.duration, 80), pathway: clamp(o.pathway, 300), syllabus: clamp(o.syllabus, 4000), licensureNote: clamp(o.licensureNote, 1000),
+    credentials: (Array.isArray(o.credentials) ? o.credentials : []).slice(0, 3).map((k) => {
+      k = k && typeof k === 'object' ? k : {};
+      return { name: clamp(k.name, 200), issuer: clamp(k.issuer, 200), note: clamp(k.note, 600) };
+    }).filter((k) => k.name),
     modules: mods, finalProject: { title: clamp(fp.title, 200), description: clamp(fp.description, 2000), criteria: clampList(fp.criteria, 6, 300) },
   };
 }
@@ -303,7 +310,37 @@ async function handleOutline(env, body) {
   });
   const outline = sanitizeOutline(parseJson(r.text), maxMods);
   if (!outline.title) outline.title = b.topic;
+  const must = b.goal === 'career' || b.goal === 'credential'; // required for these goals; only suggested otherwise
+  outline.credentials.forEach((k) => { k.requirement = must ? 'required' : 'suggested'; });
   return { outline, brief: b, maxModules: maxMods, usage: { step: 'outline', model: cfg(env, 'MODEL_OUTLINE'), ...r.usage } };
+}
+
+/* === 7b. SOURCE TYPES + LINK MATCHING ================================================================ */
+
+// The label comes from the web address (a fixed list), never from the AI's say-so. Lower number = shown first.
+const TIER = { university: 0, government: 1, open: 2, publisher: 3, web: 4 };
+const OPEN_SITES = ['archive.org', 'openstax.org', 'khanacademy.org', 'wikipedia.org', 'wikimedia.org', 'gutenberg.org', 'openlibrary.org', 'libretexts.org', 'oercommons.org', 'arxiv.org', 'ssrn.com', 'doaj.org', 'coursera.org', 'edx.org', 'ted.com'];
+const PUBLISHER_SITES = ['hbr.org', 'forbes.com', 'businessinsider.com', 'nytimes.com', 'wsj.com', 'economist.com', 'ft.com', 'theatlantic.com', 'newyorker.com', 'bbc.com', 'npr.org', 'pbs.org', 'reuters.com', 'bloomberg.com', 'mckinsey.com', 'nature.com', 'sciencedirect.com', 'jstor.org', 'sagepub.com', 'wiley.com', 'oup.com', 'cambridge.org'];
+const GOV_SITES = ['europa.eu', 'who.int', 'un.org', 'worldbank.org', 'oecd.org', 'imf.org', 'nih.gov', 'sba.gov'];
+const UNI_SITES = ['open.ac.uk']; // universities whose names do not end in .edu or ac.xx
+
+function sourceType(raw) {
+  let h = ''; try { h = new URL(raw).hostname.toLowerCase().replace(/^www\./, ''); } catch (e) { return 'web'; }
+  const on = (d) => h === d || h.endsWith('.' + d);
+  if (/\.edu(\.[a-z]{2})?$/.test(h) || /\.ac\.[a-z]{2}$/.test(h) || UNI_SITES.some(on)) return 'university';
+  if (/\.gov(\.[a-z]{2})?$/.test(h) || /\.mil$/.test(h) || GOV_SITES.some(on)) return 'government';
+  if (OPEN_SITES.some(on)) return 'open';
+  if (PUBLISHER_SITES.some(on)) return 'publisher';
+  return 'web';
+}
+
+// Equivalent addresses (trailing slash, www, #fragment, tracking parameters) match each other.
+function urlKey(raw) {
+  try {
+    const u = new URL(raw);
+    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid'].forEach((k) => u.searchParams.delete(k));
+    return u.hostname.toLowerCase().replace(/^www\./, '') + u.pathname.replace(/\/+$/, '') + u.search;
+  } catch (e) { return ''; }
 }
 
 /* === 8. ENDPOINT: /resources (light model + web search + safe link check) ============================ */
@@ -320,25 +357,35 @@ async function handleResources(env, body) {
     tools: [{ type: cfg(env, 'WEB_SEARCH_TOOL'), name: 'web_search', max_uses: 3 }],
     user: '<user_input>\nCourse topic: ' + topic + '\nLevel: ' + level + '\nModule: ' + mod.title + '\nAbout: ' + mod.overview + '\nObjectives: ' + mod.objectives.join('; ') +
       '\nSuggested searches: ' + mod.queries.join(' | ') + '\n</user_input>\n' +
-      'Use web search to find ' + want + ' genuinely useful learning resources for this module, preferring free, reputable, beginner-appropriate sources (universities, public institutions, established publishers, well-known educators). ' +
+      'Use web search to find up to 4 genuinely useful learning resources for this module. Prioritize credible, objective sources, in this order when they fit the module:\n' +
+      '1. University, business-school, law-school and other higher-education materials: open courseware, course pages, lecture videos, faculty publications, working papers, scholarly journals, open textbooks.\n' +
+      '2. Government, standards bodies, and professional associations.\n' +
+      '3. Respected practitioners and notable people in the field (interviews, talks, essays, documentaries, books) and established publishers or reputable journalism.\n' +
+      '4. Crowd-sourced and open archives (for example the Internet Archive, Wikipedia for orientation, Khan Academy).\n' +
+      'Aim for a useful mix (for example one academic source plus one practitioner or multimedia source). Prefer free sources; if a strong one is paywalled, mark access "paid". For books or textbooks, link to the publisher, library, or catalog page, never to copies of the text. ' +
       'Only recommend pages that appeared in your search results; never write a URL from memory. Return ONLY JSON: ' +
       '{"picks":[{"url":"exact URL from search results","kind":"article|book|video|course|tool|document|podcast","creator":"author or organization if shown in the result, else empty","access":"free|paid|unknown","relevance":"one sentence on how it fits this module"}]}',
   });
 
-  // Provenance rule: keep only URLs that the search tool actually returned. Titles come from the search result, not the model.
-  let picks = [];
-  try { picks = parseJson(r.text).picks; } catch (e) { picks = []; }
+  // Provenance rule: keep only URLs that the search tool actually returned (matched ignoring trailing slash, www, #fragment and
+  // tracking parameters). Titles and the stored URL come from the search result, not the model.
+  const found = new Map();
+  for (const [u, t] of r.results) if (!found.has(urlKey(u))) found.set(urlKey(u), { url: u, title: t });
+  let picks = [], parsed = true;
+  try { picks = parseJson(r.text).picks; } catch (e) { parsed = false; }
   const seen = new Set(), candidates = [];
   for (const p of Array.isArray(picks) ? picks : []) {
-    const url = clamp(p && p.url, 2000);
-    if (!url || seen.has(url) || !r.results.has(url)) continue;
-    seen.add(url);
+    const hit = found.get(urlKey(clamp(p && p.url, 2000)));
+    if (!hit || seen.has(hit.url)) continue;
+    seen.add(hit.url);
     candidates.push({
-      title: r.results.get(url) || url, url, kind: ['article', 'book', 'video', 'course', 'tool', 'document', 'podcast'].includes(p.kind) ? p.kind : '',
+      title: hit.title || hit.url, url: hit.url, sourceType: sourceType(hit.url),
+      kind: ['article', 'book', 'video', 'course', 'tool', 'document', 'podcast'].includes(p.kind) ? p.kind : '',
       creator: clamp(p.creator, 200), access: ['free', 'paid'].includes(p.access) ? p.access : 'unknown', relevance: clamp(p.relevance, 400),
     });
     if (candidates.length >= HARD.MAX_PICKS) break;
   }
+  candidates.sort((a, b) => TIER[a.sourceType] - TIER[b.sourceType]); // higher education first; stable otherwise
 
   const resources = [];
   const hostCache = new Map();
@@ -348,6 +395,8 @@ async function handleResources(env, body) {
     resources.push({ ...c, source: 'ai', verification: v });
     if (resources.length >= want) break;
   }
+  // Visible in your Worker's logs only (never sent to the browser): why a module may have come back empty.
+  console.log('resources', JSON.stringify({ module: mod.title, searchResults: r.results.size, picksParsed: parsed, picks: Array.isArray(picks) ? picks.length : 0, matched: candidates.length, kept: resources.length, types: candidates.map((c) => c.sourceType) }));
   const missing = resources.length === 0;
   return {
     resources, missing,

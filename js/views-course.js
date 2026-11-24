@@ -98,6 +98,7 @@
   function pageHome(c) {
     const g = S.grade(c), cs = S.courseStats(c);
     return h('div', {},
+      S.state.name ? h('p', { class: 'lede' }, 'Welcome back, ' + S.state.name + '.') : null,
       h('div', { class: 'progress-row' }, h('strong', {}, cs.pct + '%'), h('span', { class: 'muted' }, cs.done + ' of ' + plural(cs.mods, 'module') + ' complete')),
       progressBar(cs.pct, c.title + ' progress'),
       homeSection(c, 'announcements', 'Announcements', announcementList(c, 2, false)),
@@ -193,6 +194,7 @@
       e.preventDefault(); const f = new FormData(e.target), u = S.cleanUrl(f.get('url'));
       if (u === null) return toast(BAD_LINK);
       const v = { name: f.get('name').trim(), issuer: f.get('issuer').trim(), url: u, note: f.get('note').trim(), status: f.get('status') };
+      if (!k) { v.requirement = ''; v.origin = 'user'; }
       if (k) { Object.assign(k, v); ui.edit = null; } else c.credentials.push({ id: S.uid(), ...v });
       commit();
     } },
@@ -207,8 +209,9 @@
   function credentialItem(c, k) {
     if (ui.edit === k.id) return h('li', { class: 'item' }, credentialForm(c, k));
     return h('li', { class: 'item' }, h('div', { class: 'item-body' },
-      h('div', { class: 'item-title' }, k.url ? h('a', { href: k.url, target: '_blank', rel: 'noopener noreferrer' }, k.name) : k.name, ' ', badge(S.label(S.CRED_STATUS, k.status), k.status === 'earned' ? 'solid' : '')),
+      h('div', { class: 'item-title' }, k.url ? h('a', { href: k.url, target: '_blank', rel: 'noopener noreferrer' }, k.name) : k.name, ' ', badge(S.label(S.CRED_STATUS, k.status), k.status === 'earned' ? 'solid' : ''), k.requirement ? ' ' : null, k.requirement ? badge(k.requirement === 'required' ? 'Required for your goal' : 'Suggested', 'soft') : null),
       k.issuer ? h('div', { class: 'item-note' }, k.issuer) : null,
+      k.origin === 'ai' ? h('div', { class: 'small muted' }, 'Suggested by AI. Check requirements with the official issuer; they can depend on where you live. Marking it earned is self-reported.') : null,
       k.note ? h('div', { class: 'item-note' }, k.note) : null,
       h('div', { class: 'item-actions' }, editBtn(k.id), removeBtn('credential', c.credentials, k))));
   }

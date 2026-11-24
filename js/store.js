@@ -11,14 +11,15 @@
   S.ACCESS = [['unknown', 'Access unknown'], ['free', 'Free'], ['paid', 'Paid']];
   S.VERIFY = ['not-checked', 'reachable', 'unreachable', 'blocked', 'broken'];
   S.WORK_STATUS = [['not-started', 'Not started'], ['in-progress', 'In progress'], ['completed', 'Completed']];
-  S.CRED_STATUS = [['considering', 'Considering'], ['in-progress', 'In progress'], ['earned', 'Earned']];
+  S.CRED_STATUS = [['considering', 'Considering'], ['in-progress', 'In progress'], ['earned', 'Earned'], ['not-applicable', 'Not applicable']];
+  S.SOURCE_TYPES = [['', ''], ['university', 'University'], ['government', 'Government'], ['open', 'Open / archive'], ['publisher', 'Publisher'], ['web', 'Web']];
   S.label = (list, v) => (list.find((x) => x[0] === v) || [, v])[1];
 
   S.uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   S.storageOK = true;
   S.loadWarning = '';
   S.ui = { edit: null, tab: 'next', cal: '', open: new Set(), dataMsg: null };
-  S.state = { version: 3, setup: false, courses: [] };
+  S.state = { version: 3, setup: false, courses: [], name: '' };
 
   /* ----- small helpers ----- */
 
@@ -65,6 +66,7 @@
       out.kind = oneOf(r.kind, S.READING_KINDS, '');
       out.creator = str(r.creator, 300);
       out.access = oneOf(r.access, S.ACCESS, 'unknown');
+      out.sourceType = oneOf(r.sourceType, S.SOURCE_TYPES, '');
       out.relevance = str(r.relevance, 1000);
       out.verification = {
         status: S.VERIFY.includes(v.status) ? v.status : 'not-checked',
@@ -127,7 +129,7 @@
       }),
       credentials: arr(c.credentials, 100).map((k) => {
         k = obj(k);
-        return { id: id(k.id), name: str(k.name, 300) || 'Untitled credential', issuer: str(k.issuer, 300), url: url(k.url), note: str(k.note), status: oneOf(k.status, S.CRED_STATUS, 'considering') };
+        return { id: id(k.id), name: str(k.name, 300) || 'Untitled credential', issuer: str(k.issuer, 300), url: url(k.url), note: str(k.note), status: oneOf(k.status, S.CRED_STATUS, 'considering'), requirement: k.requirement === 'required' || k.requirement === 'suggested' ? k.requirement : '', origin: k.origin === 'ai' ? 'ai' : 'user' };
       }),
       work: { title: str(w.title, 200), criteria: strs(w.criteria, 12, 400), description: str(w.description), reflection: str(w.reflection), status: oneOf(w.status, S.WORK_STATUS, 'not-started'), url: url(w.url) },
     };
@@ -170,7 +172,7 @@
       })] : [];
     } else throw new Error('This file doesn’t look like a Sovereign backup.');
     const courses = list.slice(0, 30).map(normCourse);
-    return { version: 3, setup: courses.length > 0 || d.setup === true, courses };
+    return { version: 3, setup: courses.length > 0 || d.setup === true, courses, name: str(d.name, 60).trim() };
   };
 
   /* ----- storage ----- */
@@ -196,7 +198,7 @@
 
   S.clearAll = function () {
     try { [KEY, ...OLD_KEYS, KEY + '.unreadable'].forEach((k) => localStorage.removeItem(k)); } catch (e) { /* ignore */ }
-    S.state = { version: 3, setup: false, courses: [] };
+    S.state = { version: 3, setup: false, courses: [], name: '' };
     S.loadWarning = '';
     S.ui.open.clear();
   };

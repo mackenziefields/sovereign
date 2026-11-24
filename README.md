@@ -23,6 +23,7 @@ then visit http://localhost:8000. Home-screen install and offline use need `http
 - **Modules** appear as picture tiles with progress bars; each opens its own page with Overview, Readings, Key ideas, Assignments, Reflection, and optional custom sections (such as Discussion questions or Favorite passages).
 - **Assignments belong to exactly one module.** Create them on the module page, or on the course's Assignments page by choosing the module.
 - **Grades**: enter Points and your Score on an assignment; the course shows your average as Current Grade.
+- **Portfolio**: scored assignments, final projects, and earned credentials in one place. Everything in it is recorded by you, not verified by anyone else.
 - **My Work**: each course's final deliverable, with status, description, reflection, and link. Optional licenses and credentials are tracked at the bottom of a course's Modules page.
 - **Data & Backup**: export/import JSON, clear all data.
 
@@ -32,9 +33,12 @@ New courses (Dashboard → New course) offer **Build with AI** or **Build manual
 
 Answer a few plain questions (topic, starting point, goal, time) and an AI drafts a full course: syllabus, outcomes, sequenced modules (Learn → Apply → Demonstrate, adapted to the subject), assignments, self-check questions, and a final project tracked in My Work. It then searches for 1-2 learning resources per module.
 
+* Resource searches favor higher-education materials first (universities, business/law schools, open courseware, scholarly sources), then government and professional bodies, respected practitioners and publishers, then open archives. Each link gets a source-type label (University, Government, Open / archive, Publisher) taken from its web address.
 * Every resource shows whether a program checked the link (**Link responded / not reachable / Site blocks checks / Not checked**), separately from the AI's own opinion of why it fits (always labeled as the AI's opinion). If nothing verifiable is found the module says **Source needed** instead of inventing one.
 * Everything is yours to edit, reorder, replace, or delete. Your edits are never overwritten; **Find materials with AI** only adds suggestions.
 * Only what you type in the form is sent. No documents are uploaded. The service address and access code are kept in this browser only and are not in exports.
+* For career and credential goals the AI suggests real licenses or certifications as **required** milestones for that goal (suggested for other goals). You can mark any “Not applicable”. Marking one earned is self-reported.
+* Your name (optional, Dashboard or Data & Backup) greets you on the dashboard and course Home. It stays in this browser and is never sent to the AI.
 * Data & Backup → AI shows the tokens and estimated cost recorded for each AI course.
 
 ## Your data

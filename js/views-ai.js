@@ -30,6 +30,7 @@
       h('span', { class: 'badge ' + vt[1], title: v.detail || '' }, vt[0]),
       v.status === 'reachable' && v.titleMatch === true ? h('span', { class: 'badge', title: 'The page’s title resembles the expected title. This does not confirm the content.' }, 'Title matches') : null,
       v.status === 'reachable' && v.titleMatch === false ? h('span', { class: 'badge warn', title: 'The page’s title is different from what the search result said.' }, 'Title differs') : null,
+      r.sourceType && r.sourceType !== 'web' ? h('span', { class: 'badge ok', title: 'Type of website, from its address' }, S.label(S.SOURCE_TYPES, r.sourceType)) : null,
       r.kind ? h('span', { class: 'badge' }, S.label(S.READING_KINDS, r.kind)) : null,
       r.access && r.access !== 'unknown' ? h('span', { class: 'badge' }, r.access === 'free' ? 'Free' : 'Paid') : null,
       h('span', { class: 'badge soft' }, 'AI-suggested'),
@@ -51,6 +52,7 @@
       h('summary', {}, 'How this course was built'),
       h('p', { class: 'small' }, 'Drafted by AI on ' + (c.ai.createdAt || '').slice(0, 10) + ' from: “' + b.topic + '”, ' + (S.label(LEVELS, b.level) || b.level).toLowerCase() + ', goal: ' + (S.label(GOALS, b.goal) || b.goal).toLowerCase() + '.'),
       h('p', { class: 'small muted' }, t.calls + ' AI calls · ' + t.inTok.toLocaleString() + ' tokens in · ' + t.outTok.toLocaleString() + ' tokens out · ' + t.searches + ' web searches · estimated cost ' + S.ai.money(t.cost) + '. Estimates use the prices configured on the AI service, not your bill.'),
+      h('p', { class: 'small muted' }, 'Naming a school, publisher, or person as a source does not mean they are affiliated with or endorse Sovereign. Source types come from each link’s web address.'),
       c.ai.usage.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'grades' },
         h('thead', {}, h('tr', {}, ['Step', 'Model', 'In', 'Out', 'Searches', 'Est. cost'].map((x) => h('th', { scope: 'col' }, x)))),
         h('tbody', {}, c.ai.usage.map((u) => h('tr', {}, h('td', {}, u.step), h('td', {}, u.model), h('td', {}, String(u.inTok)), h('td', {}, String(u.outTok)), h('td', {}, String(u.searches)), h('td', {}, S.ai.money(u.cost))))))) : null);

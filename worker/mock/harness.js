@@ -30,6 +30,7 @@
     pathway: 'Prepares you to test a first small business idea.',
     syllabus: '[MOCK] This course is self-paced. Each module has a learn step, an apply step and a short check. You finish by producing a one-page business plan and a first customer test.',
     licensureNote: '',
+    credentials: [{ name: '[MOCK] Certified Small Business Foundations', issuer: 'Mock Institute', note: 'Check cost and eligibility with the issuer.' }, { name: '', issuer: 'x', note: '' }],
     modules: MODULES.map(([title, duration, objectives], i) => ({
       title, duration, overview: '[MOCK] ' + title + ' overview.', objectives,
       keyIdeas: '- Idea one for ' + title + '\n- Idea two\n- Idea three', searchQueries: [title.toLowerCase() + ' for beginners'],
@@ -44,7 +45,9 @@
   });
 
   const PAGES = { // host -> behaviour of the canned "web"
+    'mockuni.edu': { status: 200, title: 'Entrepreneurship course | Mock University (.edu)' },
     'learn.mock-university.org': { status: 200, title: 'Seeing opportunities | Mock University Learning' },
+    'www.learn.mock-university.org': { status: 200, title: 'Seeing opportunities | Mock University Learning' },
     'guide.mock-agency.gov': { status: 200, title: 'Plan your business | Mock Agency' },
     'gone.mock-site.org': { status: 404 },
     'walled.mock-site.org': { status: 403 },
@@ -58,7 +61,7 @@
     return (async () => {
       const code = await (await realFetch('worker/worker.js')).text();
       const internals = new Function(code.replace('export default {', 'const __worker = {') +
-        '\nreturn { worker: __worker, checkUrlShape, isPrivateIPv4, isPrivateIPv6, verifyUrl, sanitizeOutline, titleSimilar, parseJson, costOf, DEFAULTS, safeEqual, hostIsPublic };')();
+        '\nreturn { worker: __worker, checkUrlShape, isPrivateIPv4, isPrivateIPv6, verifyUrl, sanitizeOutline, titleSimilar, parseJson, costOf, sourceType, urlKey, DEFAULTS, safeEqual, hostIsPublic };')();
       const store = new Map();
       const env = Object.assign({
         ANTHROPIC_API_KEY: 'sk-ant-MOCK', ACCESS_CODE: 'mock-code', ALLOWED_ORIGINS: location.origin,
@@ -74,13 +77,15 @@
         if (b.tools) { // resources
           const q = b.messages[0].content;
           const results = [
-            { type: 'web_search_result', url: 'https://learn.mock-university.org/seeing-opportunities', title: 'Seeing opportunities | Mock University Learning', page_age: '2 months ago' },
+            { type: 'web_search_result', url: 'https://www.learn.mock-university.org/seeing-opportunities/?utm_source=x#top', title: 'Seeing opportunities | Mock University Learning', page_age: '2 months ago' },
+            { type: 'web_search_result', url: 'https://mockuni.edu/ocw/entrepreneurship', title: 'Entrepreneurship course | Mock University (.edu)' },
             { type: 'web_search_result', url: 'https://guide.mock-agency.gov/plan', title: 'Plan your business | Mock Agency' },
             { type: 'web_search_result', url: 'https://gone.mock-site.org/old', title: 'An old guide' },
             { type: 'web_search_result', url: 'https://walled.mock-site.org/paywalled', title: 'Premium course' },
           ];
           const picks = o.picks || [
             { url: 'https://learn.mock-university.org/seeing-opportunities', kind: 'article', creator: 'Mock University', access: 'free', relevance: 'Introduces how to spot problems worth solving.' },
+            { url: 'https://mockuni.edu/ocw/entrepreneurship/', kind: 'course', creator: 'Mock University', access: 'free', relevance: 'Open courseware.' },
             { url: 'https://invented.example-fake.com/never-searched', kind: 'book', creator: 'Nobody', access: 'free', relevance: 'MADE UP BY THE MODEL' },
             { url: 'https://gone.mock-site.org/old', kind: 'article', creator: '', access: 'free', relevance: 'dead link' },
             { url: 'https://walled.mock-site.org/paywalled', kind: 'course', creator: 'Mock', access: 'paid', relevance: 'Full course.' },
@@ -125,7 +130,7 @@
         }
         if (url.startsWith('https://api.anthropic.com/')) return anthropic(init);
         if (url.startsWith('https://cloudflare-dns.com/')) return dns(url);
-        if (/^https:\/\/[^/]*\.(org|gov|com)\//.test(url) && !url.includes(location.host)) return page(url, init);
+        if (/^https:\/\/[^/]*\.(org|gov|com|edu)\//.test(url) && !url.includes(location.host)) return page(url, init);
         return realFetch(input, init);
       };
       return { env, calls, store, internals, settle: () => Promise.all(pending), restore: () => { window.fetch = realFetch; } };

@@ -9,7 +9,7 @@
 
   /* ---------- first run ---------- */
 
-  function start(courses, msg) { S.state = { version: 3, setup: true, courses }; S.save(); go('#/'); toast(msg); }
+  function start(courses, msg) { S.state = { version: 3, setup: true, courses, name: S.state.name || '' }; S.save(); go('#/'); toast(msg); }
 
   V.firstRun = function () {
     return h('div', { class: 'narrow' },
@@ -86,6 +86,16 @@
         : h('p', { class: 'empty' }, 'Nothing due this month. Give an assignment a due date to see it here.'));
   }
 
+  // Your name stays in this browser. It is never sent to the AI service.
+  function nameForm() {
+    return h('form', { class: 'panel name-form', onsubmit: (e) => {
+      e.preventDefault(); S.state.name = String(new FormData(e.target).get('name') || '').trim().slice(0, 60); commit();
+    } },
+      h('label', { class: 'field' }, h('span', {}, 'What should we call you? (optional)'), h('input', { type: 'text', name: 'name', value: S.state.name || '', maxlength: '60', autocomplete: 'given-name' }),
+        h('small', {}, 'Used only to greet you. Stays in this browser and is never sent to the AI.')),
+      h('button', { class: 'btn ghost', type: 'submit' }, 'Save name'));
+  }
+
   V.dashboard = function () {
     const cs = S.state.courses;
     const tab = (key, label) => h('button', { class: 'tab', type: 'button', role: 'tab', 'aria-selected': String(ui.tab === key), onclick: () => { ui.tab = key; S.render(false); } }, label);
@@ -122,8 +132,39 @@
         h('div', { role: 'tabpanel', class: 'tabpanel' }, ui.tab === 'cal' ? calendarPanel() : upNextPanel())));
 
     return h('div', { class: 'dash' },
-      h('div', {}, h('h1', {}, 'Dashboard'), h('p', { class: 'lede muted' }, 'Your courses, and what to do next.'), courses, library),
+      h('div', {}, h('h1', {}, S.state.name ? 'Welcome, ' + S.state.name : 'Dashboard'), h('p', { class: 'lede muted' }, 'Your courses, and what to do next.'), S.state.name ? null : nameForm(), courses, library),
       rail);
+  };
+
+  /* ---------- Portfolio ---------- */
+
+  V.portfolio = function () {
+    const cs = S.state.courses;
+    const graded = S.allAssignments().filter(({ a }) => a.points > 0 && a.score != null);
+    const finals = cs.filter((c) => c.work.status === 'completed' || c.work.description);
+    const creds = cs.flatMap((c) => c.credentials.map((k) => ({ c, k })));
+    const earned = creds.filter(({ k }) => k.status === 'earned'), open = creds.filter(({ k }) => k.status !== 'earned' && k.status !== 'not-applicable');
+    const credRow = ({ c, k }) => h('li', { class: 'item' }, h('div', { class: 'item-body' },
+      h('div', { class: 'item-title' }, k.url ? h('a', { href: k.url, target: '_blank', rel: 'noopener noreferrer' }, k.name) : k.name, ' ', badge(S.label(S.CRED_STATUS, k.status), k.status === 'earned' ? 'solid' : ''),
+        k.requirement ? ' ' : null, k.requirement ? badge(k.requirement === 'required' ? 'Required for your goal' : 'Suggested', 'soft') : null),
+      h('div', { class: 'item-note' }, [k.issuer, c.code].filter(Boolean).join(' · ')),
+      h('div', { class: 'item-actions' }, h('a', { class: 'small', href: S.href(c, 'modules') }, 'Manage'))));
+    const empty = (t) => h('p', { class: 'empty' }, t);
+    return h('div', { class: 'narrow' },
+      h('p', { class: 'eyebrow' }, 'Demonstrate'),
+      h('h1', {}, 'Portfolio'),
+      h('p', { class: 'lede muted' }, 'The work and credentials you can point to. Scores and credentials here are recorded by you in this app; they are not verified by anyone else.'),
+      h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, 'Graded work'), h('span', { class: 'count' }, plural(graded.length, 'assignment'))),
+        graded.length ? h('ul', { class: 'items' }, graded.map(({ c, m, a }) => h('li', { class: 'item' }, h('div', { class: 'item-body' },
+          h('div', { class: 'item-title' }, h('a', { href: S.href(c, 'modules', m.id) }, a.title)),
+          h('div', { class: 'item-meta' }, h('span', { class: 'code' }, c.code), h('span', { class: 'due' }, a.score + ' / ' + a.points + ' pts · ' + S.pctOf(a) + '%')))))) : empty('Assignments you have scored will appear here.')),
+      h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, 'Final projects')),
+        finals.length ? h('ul', { class: 'items' }, finals.map((c) => h('li', { class: 'item' }, h('div', { class: 'item-body' },
+          h('div', { class: 'item-title' }, c.work.title || c.deliverable || c.title, ' ', badge(S.label(S.WORK_STATUS, c.work.status), c.work.status === 'completed' ? 'solid' : '')),
+          h('div', { class: 'item-note' }, c.title), h('div', { class: 'item-actions' }, h('a', { class: 'small', href: '#/work' }, 'Open in My Work')))))) : empty('Final projects you have started or finished will appear here.')),
+      h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, 'Certificates, licenses, and credentials'), h('span', { class: 'count' }, earned.length + ' earned')),
+        earned.length ? h('ul', { class: 'items' }, earned.map(credRow)) : empty('Credentials you mark as earned will appear here.'),
+        open.length ? h('div', {}, h('h3', { class: 'minor' }, 'Working toward'), h('ul', { class: 'items' }, open.map(credRow))) : null));
   };
 
   /* ---------- My Work (proof of practice, per course) ---------- */
@@ -200,6 +241,7 @@
         try { next = S.parseImport(reader.result); } catch (e) { return importFail(e.message); }
         const n = S.state.courses.length;
         if (n && !confirm('Replace your current work (' + plural(n, 'course') + ') with ' + plural(next.courses.length, 'course') + ' from this backup? Your current work will be overwritten and cannot be recovered unless you exported it first.')) return;
+        next.name = next.name || S.state.name; // older backups have no name: keep yours
         S.state = next; ui.open.clear(); ui.dataMsg = null; S.save(); go('#/'); toast('Backup imported.');
       };
       reader.readAsText(file);
@@ -221,6 +263,7 @@
           h('button', { class: 'btn', type: 'button', onclick: exportData }, 'Export backup'),
           h('button', { class: 'btn ghost', type: 'button', onclick: pickImport }, 'Import backup')),
         h('p', { class: 'small muted' }, 'Importing replaces your current work, and asks you to confirm first. Files are checked before anything is changed. Backups from earlier versions of Sovereign still import.')),
+      h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, 'Your name')), nameForm(), S.state.name ? h('p', { class: 'small muted' }, 'Currently: ' + S.state.name + '. Save an empty box to remove it.') : null),
       S.aiDataSection(),
       h('section', {},
         h('div', { class: 'section-head' }, h('h2', {}, 'Remove data')),

@@ -109,7 +109,7 @@
   ai.money = (n) => '$' + (n < 0.01 && n > 0 ? n.toFixed(4) : n.toFixed(2));
 
   function readingFrom(r) {
-    return { id: S.uid(), title: r.title, url: r.url, note: '', done: false, source: 'ai', kind: r.kind, creator: r.creator, access: r.access, relevance: r.relevance, verification: r.verification };
+    return { id: S.uid(), title: r.title, url: r.url, note: '', done: false, source: 'ai', kind: r.kind, creator: r.creator, access: r.access, sourceType: r.sourceType, relevance: r.relevance, verification: r.verification };
   }
   const placeholder = (mod, note) => ({ id: S.uid(), title: 'Source needed: ' + mod.title, url: '', note: note || 'No verifiable source was found. Add your own.', done: false, source: 'placeholder' });
 
@@ -119,7 +119,8 @@
       id: S.uid(), code: S.codeFor(o.title), title: o.title, description: o.description, objective: o.pathway,
       deliverable: [fp.title, fp.description].filter(Boolean).join(': '), syllabus: o.syllabus, outcomes: o.outcomes, duration: o.duration, pathway: o.pathway,
       licensureNote: o.licensureNote, color: S.state.courses.length % S.COLORS.length,
-      announcements: [{ id: S.uid(), title: 'Welcome to ' + o.title, date: S.todayISO(), body: 'This course was drafted by AI from what you told it. Treat it as a first draft: rename, reorder, replace, or delete anything. Check every resource yourself, because links are checked by a program, not reviewed by a person.' }],
+      announcements: [{ id: S.uid(), title: 'Welcome' + (S.state.name ? ', ' + S.state.name : '') + ': ' + o.title, date: S.todayISO(), body: 'This course was drafted by AI from what you told it. Treat it as a first draft: rename, reorder, replace, or delete anything. Check every resource yourself, because links are checked by a program, not reviewed by a person.' }],
+      credentials: (o.credentials || []).map((k) => ({ id: S.uid(), name: k.name, issuer: k.issuer, note: k.note, status: 'considering', requirement: k.requirement, origin: 'ai' })),
       modules: o.modules.map((m) => ({
         id: S.uid(), title: m.title, overview: m.overview, keyIdeas: m.keyIdeas, reflection: m.reflection, objectives: m.objectives, selfCheck: m.selfCheck,
         duration: m.duration, origin: 'ai', edited: false, readings: [],
@@ -166,7 +167,8 @@
     for (let i = 0; i < course.modules.length; i++) {
       run.steps[i + 1].state = 'active'; set({});
       try {
-        const r = await ai.findMaterials(course, course.modules[i], { queries: queries[i], signal: run.ctl.signal });
+        let r = await ai.findMaterials(course, course.modules[i], { queries: queries[i], signal: run.ctl.signal });
+        if (r.missing) r = await ai.findMaterials(course, course.modules[i], { queries: queries[i], signal: run.ctl.signal }); // one automatic second try
         run.steps[i + 1].state = r.missing ? 'warn' : 'done'; if (r.missing) missing++;
       } catch (e) {
         run.steps[i + 1].state = 'fail'; problem = e.message;
