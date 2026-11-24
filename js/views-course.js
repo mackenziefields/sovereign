@@ -240,7 +240,9 @@
   function assignmentForm(c, m, a) {
     return h('form', { class: a ? 'inline-edit' : '', onsubmit: (e) => {
       e.preventDefault(); const f = new FormData(e.target);
-      const v = { title: f.get('title').trim(), description: f.get('description').trim(), due: S.validDate(f.get('due') || ''), points: num(f.get('points')), score: num(f.get('score')) };
+      const graded = a && a.work && a.work.final && a.work.final.feedback;
+      const v = { title: f.get('title').trim(), description: f.get('description').trim(), due: a && a.locked ? a.due : S.validDate(f.get('due') || '') };
+      if (!graded) { v.points = num(f.get('points')); v.score = num(f.get('score')); }
       if (a) { Object.assign(a, v); ui.edit = null; }
       else {
         const target = m || c.modules.find((x) => x.id === f.get('module'));
@@ -252,8 +254,8 @@
       !m && !a ? select('Module', 'module', c.modules.map((x) => [x.id, x.title]), c.modules[0] && c.modules[0].id) : null,
       field('Assignment title', 'title', { value: a ? a.title : '', required: true, placeholder: 'e.g. Writing Exercise 1' }),
       field('Instructions (optional)', 'description', { value: a ? a.description : '', multiline: true, rows: 3 }),
-      field('Due date (optional)', 'due', { type: 'date', value: a ? a.due : '' }),
-      h('div', { class: 'two' }, field('Points (optional)', 'points', { type: 'number', value: a ? a.points : '' }), field('Your score (optional)', 'score', { type: 'number', value: a ? a.score : '' })),
+      a && a.locked ? h('p', { class: 'small muted' }, 'Due ' + S.fmtDate(a.due) + '. Set by your course timeline, so it can’t be changed.') : field('Due date (optional)', 'due', { type: 'date', value: a ? a.due : '' }),
+      a && a.work && a.work.final && a.work.final.feedback ? h('p', { class: 'small muted' }, 'Graded by the AI review: ' + a.score + ' / ' + a.points + ' pts. Points and score are fixed once graded.') : h('div', { class: 'two' }, field('Points (optional)', 'points', { type: 'number', value: a ? a.points : '' }), field('Your score (optional)', 'score', { type: 'number', value: a ? a.score : '' })),
       h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'submit' }, a ? 'Save' : 'Add assignment'), a ? cancelBtn() : null));
   }
 
@@ -272,6 +274,8 @@
         h('div', { class: 'item-title' }, o.link ? h('a', { href: href(c, 'modules', m.id) }, a.title) : a.title),
         meta.length ? h('div', { class: 'item-meta' }, meta) : null,
         a.description ? h('div', { class: 'item-note' }, a.description) : null,
+        a.work && a.work.final && a.work.final.feedback && a.work.final.late ? h('div', { class: 'item-meta' }, h('span', { class: 'badge warn' }, 'Late')) : null,
+        o.work ? S.workPanel(c, m, a) : null,
         o.actions ? h('div', { class: 'item-actions' }, editBtn(a.id), o.reorder ? moveBtns(m.assignments, a) : null, removeBtn('assignment', m.assignments, a)) : null));
   }
 
@@ -303,7 +307,8 @@
         const pct = S.pctOf(a);
         const numIn = (key, label) => h('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', value: a[key] == null ? '' : String(a[key]), 'aria-label': label + ': ' + a.title,
           onchange: (e) => { a[key] = num(e.target.value); commit(); } });
-        rows.push(h('tr', {}, h('td', {}, a.title), h('td', {}, numIn('points', 'Points')), h('td', {}, numIn('score', 'Score')), h('td', { class: 'pct' }, pct != null ? pct + '%' : '—')));
+        const aiGraded = !!(a.work && a.work.final && a.work.final.feedback);
+        rows.push(h('tr', {}, h('td', {}, a.title, aiGraded ? h('small', { class: 'muted' }, ' · AI-graded') : null), h('td', {}, aiGraded ? String(a.points) : numIn('points', 'Points')), h('td', {}, aiGraded ? String(a.score) : numIn('score', 'Score')), h('td', { class: 'pct' }, pct != null ? pct + '%' + (aiGraded ? ' · ' + S.letter(pct) : '') : '—')));
       });
     });
     return h('div', {},
@@ -366,7 +371,7 @@
         S.syllabusLabels(y),
         y.sourcedAt ? h('div', { class: 'small' }, y.sourcedCount + ' reading' + (y.sourcedCount === 1 ? '' : 's') + ' added to this module from it on ' + y.sourcedAt.slice(0, 10) + '.') : null,
         h('div', { class: 'item-actions' },
-          y.url ? h('button', { class: 'linkbtn', type: 'button', disabled: working, onclick: async () => {
+          y.url ? h('button', { class: 'btn ghost', type: 'button', disabled: working, onclick: async () => {
             if (!S.ai.ready()) { toast('Add the AI service address and access code first (Data & Backup → AI).'); return; }
             busy.add(y.id); S.render(false);
             try { const r = await S.ai.sourceSyllabus(c, m, y, {}); toast(r.added ? 'Added ' + plural(r.added, 'reading') + ' from this syllabus.' : (r.missing ? 'No readings could be sourced from this syllabus.' : 'Nothing new to add.')); }
@@ -475,7 +480,7 @@
 
       h('section', { class: 'msec' },
         h('div', { class: 'sec-head' }, h('h3', {}, 'Assignments'), h('span', { class: 'count' }, m.assignments.filter((a) => a.done).length + ' of ' + m.assignments.length + ' done')),
-        m.assignments.length ? h('ul', { class: 'items' }, m.assignments.map((a) => assignmentItem(c, m, a, { actions: true, reorder: true }))) : empty('Add practical assignments for this module. They belong to this module only.'),
+        m.assignments.length ? h('ul', { class: 'items' }, m.assignments.map((a) => assignmentItem(c, m, a, { actions: true, reorder: true, work: true }))) : empty('Add practical assignments for this module. They belong to this module only.'),
         h('details', { class: 'add' }, h('summary', {}, 'New assignment'), assignmentForm(c, m, null))),
 
       listSection(m, 'selfCheck', 'Check your understanding', 'One question per line.'),

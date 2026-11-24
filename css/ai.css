@@ -27,3 +27,14 @@
 .callout { background: var(--accent-soft); border-left: 3px solid var(--accent); padding: .75rem 1rem; font-size: .92rem; }
 .find-row { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; margin-top: .75rem; }
 .ai-settings .panel { margin-top: .25rem; }
+
+/* ---- submissions and feedback ---- */
+.work-panel { margin-top: .75rem; border: 1px solid var(--rule); border-radius: 3px; }
+.work-panel > summary { cursor: pointer; padding: .55rem .8rem; font-size: .85rem; font-weight: 600; }
+.work-panel .wp-body { padding: .25rem .9rem .9rem; display: grid; gap: .75rem; }
+.submit-box { display: grid; gap: .75rem; }
+.submit-box textarea { width: 100%; }
+.consent { display: flex; gap: .6rem; align-items: flex-start; font-size: .88rem; }
+.consent input { margin-top: .2rem; flex: none; }
+.feedback h4.minor { margin: .6rem 0 .2rem; }
+.grade-line { font-size: 1.05rem; display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }

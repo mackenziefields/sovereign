@@ -11,6 +11,7 @@
   // Routes: #/  #/work  #/data  #/portfolio  #/new-ai  #/course/<id>[/announcements|syllabus|modules[/<moduleId>]|assignments|grades]
   S.render = function (reset) {
     const y = window.scrollY;
+    S.finalizeExpired();
     const parts = (location.hash || '#/').replace(/^#\/?/, '').split('/');
     let route = 'dash', view, title = 'Dashboard';
 

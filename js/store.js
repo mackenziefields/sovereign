@@ -96,6 +96,33 @@
   }
   S.makeSyllabus = (y) => normSyllabus(y, (v) => str(v, 60) || S.uid(), (v) => S.cleanUrl(str(v, 2000)) || '');
 
+  // Feedback from an AI review of submitted work. The score is an automated assessment, not a human grade.
+  function normFeedback(f) {
+    f = obj(f);
+    if (!f.at && !f.summary) return null;
+    return {
+      summary: str(f.summary, 3000), strengths: strs(f.strengths, 8, 600), improvements: strs(f.improvements, 8, 800), nextSteps: strs(f.nextSteps, 8, 600),
+      criteria: arr(f.criteria, 10).map((k) => { k = obj(k); return { name: str(k.name, 120) || 'Criterion', max: num(k.max) || 0, score: num(k.score) || 0, comment: str(k.comment, 800) }; }),
+      score: num(f.score) || 0, max: num(f.max) || 0, model: str(f.model, 60), at: str(f.at, 40), cost: num(f.cost) || 0,
+    };
+  }
+  // One submission: typed text and/or a file. The file itself lives in IndexedDB (device only); only its details are kept here.
+  function normSub(x) {
+    x = obj(x);
+    if (!x.at) return null;
+    return { text: str(x.text, 30000), fileId: str(x.fileId, 60), fileName: str(x.fileName, 200), fileType: str(x.fileType, 100), fileSize: num(x.fileSize) || 0, at: str(x.at, 40), late: x.late === true, feedback: normFeedback(x.feedback) };
+  }
+  function normWork(w) {
+    w = obj(w);
+    const first = normSub(w.first), final = normSub(w.final);
+    if (!first && !final) return null;
+    const phase = final ? 'final' : 'reviewed';
+    return { phase, deadline: str(w.deadline, 40), first: final ? null : first, final };
+  }
+  function normRubric(r) {
+    return arr(r, 10).map((k) => { k = obj(k); return { name: str(k.name, 120), max: num(k.max) || 0 }; }).filter((k) => k.name && k.max > 0);
+  }
+
   function normAI(a) {
     a = obj(a);
     if (a.generated !== true) return null;
@@ -123,7 +150,7 @@
       deliverable: str(c.deliverable),
       syllabus: str(c.syllabus),
       outcomes: strs(c.outcomes, 12, 400), duration: str(c.duration, 80), pathway: str(c.pathway, 300),
-      licensureNote: str(c.licensureNote, 1000), ai: normAI(c.ai),
+      licensureNote: str(c.licensureNote, 1000), ai: normAI(c.ai), startDate: S.validDate(str(c.startDate, 10)),
       color: Number.isInteger(c.color) && c.color >= 0 && c.color < S.COLORS.length ? c.color : (i || 0) % S.COLORS.length,
       announcements: arr(c.announcements, 200).map((a) => { a = obj(a); return { id: id(a.id), title: str(a.title, 300) || 'Untitled announcement', body: str(a.body), date: S.validDate(str(a.date, 10)) || S.todayISO() }; }),
       modules: arr(c.modules, 100).map((m) => {
@@ -138,7 +165,7 @@
           extras: arr(m.extras, 50).map((x) => { x = obj(x); return { id: id(x.id), title: str(x.title, 200) || 'Untitled section', body: str(x.body) }; }),
           assignments: arr(m.assignments).map((a) => {
             a = obj(a);
-            return { id: id(a.id), title: str(a.title, 300) || 'Untitled assignment', description: str(a.description), due: S.validDate(str(a.due, 10)), points: num(a.points), score: num(a.score), done: a.done === true, kind: ['learn', 'apply', 'demonstrate'].includes(a.kind) ? a.kind : '', origin: a.origin === 'ai' ? 'ai' : 'user' };
+            return { id: id(a.id), title: str(a.title, 300) || 'Untitled assignment', description: str(a.description), due: S.validDate(str(a.due, 10)), points: num(a.points), score: num(a.score), done: a.done === true, kind: ['learn', 'apply', 'demonstrate'].includes(a.kind) ? a.kind : '', origin: a.origin === 'ai' ? 'ai' : 'user', locked: a.locked === true && !!S.validDate(str(a.due, 10)), rubric: normRubric(a.rubric), work: normWork(a.work) };
           }),
         };
       }),
@@ -250,6 +277,41 @@
     return { mods, done, pct: mods ? Math.round((done / mods) * 100) : 0 };
   };
   S.pctOf = (a) => (a.points > 0 && a.score != null ? Math.round((a.score / a.points) * 1000) / 10 : null);
+  // Letter equivalent of a percentage (a plain, common scale; shown next to the points, never instead of them).
+  S.letter = function (pct) {
+    if (pct == null) return '';
+    const t = [[93, 'A'], [90, 'A−'], [87, 'B+'], [83, 'B'], [80, 'B−'], [77, 'C+'], [73, 'C'], [70, 'C−'], [67, 'D+'], [63, 'D'], [60, 'D−']];
+    return (t.find((x) => pct >= x[0]) || [0, 'F'])[1];
+  };
+
+  /* ----- submissions: review rounds, the 72-hour window, and finalizing ----- */
+
+  S.REVIEW_HOURS = 72;
+  S.dueEnd = (a) => (a.due ? new Date(a.due + 'T23:59:59').getTime() : null); // due at the end of the due day, local time
+  S.isLate = (a, atMs) => { const d = S.dueEnd(a); return d != null && atMs > d; };
+  S.hoursLeft = (a, nowMs) => (a.work && a.work.deadline ? (new Date(a.work.deadline).getTime() - (nowMs || Date.now())) / 3600000 : null);
+
+  // Makes this submission the final one: records the points on the Grades page and removes the first round's file and feedback.
+  S.finalizeWork = function (a, sub) {
+    const old = a.work && a.work.first, keep = sub || (a.work && a.work.first);
+    if (!keep || !keep.feedback) return false;
+    a.work = { phase: 'final', deadline: a.work ? a.work.deadline : '', first: null, final: keep };
+    const fb = keep.feedback; // if the points were changed after the review, keep the same percentage
+    a.score = a.points > 0 && fb.max > 0 ? Math.round((fb.score / fb.max) * a.points * 10) / 10 : fb.score;
+    a.done = true;
+    if (old && old !== keep && old.fileId && S.files) S.files.del(old.fileId);
+    return true;
+  };
+  // Anything past its 72 hours is finalized from its first review. Safe to call often.
+  S.finalizeExpired = function (nowMs) {
+    let n = 0;
+    S.allAssignments().forEach(({ a }) => {
+      if (a.work && a.work.phase === 'reviewed' && a.work.deadline && new Date(a.work.deadline).getTime() <= (nowMs || Date.now())) { if (S.finalizeWork(a)) n++; }
+    });
+    if (n) S.save();
+    return n;
+  };
+
   S.grade = function (c) {
     let earned = 0, possible = 0, n = 0;
     c.modules.forEach((m) => m.assignments.forEach((a) => {
@@ -261,10 +323,10 @@
   /* ----- builders and starter content ----- */
 
   const R = (title, url, note) => ({ id: S.uid(), title, url: url || '', note: note || '', done: false });
-  const A = (title, description, o) => ({ id: S.uid(), title, description: description || '', due: '', points: null, score: null, done: false, kind: '', origin: 'user', ...o });
+  const A = (title, description, o) => ({ id: S.uid(), title, description: description || '', due: '', points: null, score: null, done: false, kind: '', origin: 'user', locked: false, rubric: [], work: null, ...o });
   const M = (title, o) => ({ id: S.uid(), title, overview: '', readings: [], keyIdeas: '', reflection: '', extras: [], assignments: [], complete: false, syllabi: [], objectives: [], selfCheck: [], duration: '', origin: 'user', edited: false, ...o });
   const C = (code, title, color, description, modules, o) => ({
-    id: S.uid(), code, title, color, description, objective: '', deliverable: '', syllabus: '', outcomes: [], duration: '', pathway: '', licensureNote: '', ai: null, announcements: [], modules, credentials: [],
+    id: S.uid(), code, title, color, description, objective: '', deliverable: '', syllabus: '', outcomes: [], duration: '', pathway: '', licensureNote: '', ai: null, startDate: '', announcements: [], modules, credentials: [],
     work: { title: '', criteria: [], description: '', reflection: '', status: 'not-started', url: '' }, ...o,
   });
 

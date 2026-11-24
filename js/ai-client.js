@@ -113,18 +113,27 @@
   }
   const placeholder = (mod, note) => ({ id: S.uid(), title: 'Source needed: ' + mod.title, url: '', note: note || 'No verifiable source was found. Add your own.', done: false, source: 'placeholder' });
 
+  const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  ai.addDays = addDays;
+  // Due dates follow the timeline chosen at the start: modules share the weeks evenly, and each module's assignments are spread across its slice.
+  function dueFor(start, weeks, nMods, mi, ai_, nAs) {
+    const total = Math.max(1, (weeks || 6) * 7), slice = total / Math.max(1, nMods);
+    return addDays(start, Math.max(1, Math.round(slice * mi + (slice * (ai_ + 1)) / Math.max(1, nAs))));
+  }
+
   function courseFromOutline(o, brief) {
     const fp = o.finalProject || {};
+    const start = S.validDate(brief && brief.startDate) || S.todayISO();
     const raw = {
       id: S.uid(), code: S.codeFor(o.title), title: o.title, description: o.description, objective: o.pathway,
       deliverable: [fp.title, fp.description].filter(Boolean).join(': '), syllabus: o.syllabus, outcomes: o.outcomes, duration: o.duration, pathway: o.pathway,
-      licensureNote: o.licensureNote, color: S.state.courses.length % S.COLORS.length,
+      licensureNote: o.licensureNote, startDate: start, color: S.state.courses.length % S.COLORS.length,
       announcements: [{ id: S.uid(), title: 'Welcome' + (S.state.name ? ', ' + S.state.name : '') + ': ' + o.title, date: S.todayISO(), body: 'This course was drafted by AI from what you told it. Treat it as a first draft: rename, reorder, replace, or delete anything. Check every resource yourself, because links are checked by a program, not reviewed by a person.' }],
       credentials: (o.credentials || []).map((k) => ({ id: S.uid(), name: k.name, issuer: k.issuer, note: k.note, status: 'considering', requirement: k.requirement, origin: 'ai' })),
-      modules: o.modules.map((m) => ({
+      modules: o.modules.map((m, mi) => ({
         id: S.uid(), title: m.title, overview: m.overview, keyIdeas: m.keyIdeas, reflection: m.reflection, objectives: m.objectives, selfCheck: m.selfCheck,
         duration: m.duration, origin: 'ai', edited: false, readings: [],
-        assignments: m.assignments.map((a) => ({ id: S.uid(), title: a.title, description: a.description, kind: a.kind, points: a.points, origin: 'ai' })),
+        assignments: m.assignments.map((a, ai_) => ({ id: S.uid(), title: a.title, description: a.description, kind: a.kind, points: a.points, origin: 'ai', due: dueFor(start, brief && brief.weeks, o.modules.length, mi, ai_, m.assignments.length), locked: true })),
       })),
       work: { title: fp.title, criteria: fp.criteria },
       ai: { generated: true, createdAt: now(), status: 'partial', note: 'Course outline saved. Learning materials are still being found.', brief, usage: [] },
@@ -171,12 +180,27 @@
     return { added, missing: !(r.resources || []).length };
   };
 
+  // Reviews one submission. Only call this after the person has agreed to send it. The work is passed along and not kept by the service.
+  // payload: { text } or { file: { mime, base64 } }. Round 2 also sends what round 1 asked to change.
+  ai.review = async function (course, mod, a, payload, round, opts) {
+    const first = a.work && a.work.first && a.work.first.feedback;
+    const r = await ai.call('/review', {
+      course: { title: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '' },
+      assignment: { title: a.title, description: a.description, points: a.points },
+      round: round === 2 ? 2 : 1, rubric: a.rubric || [], previousImprovements: round === 2 && first ? first.improvements : [],
+      submission: payload,
+    }, opts || {});
+    if (!S.state.courses.includes(course) || !mod.assignments.includes(a)) throw new AIError('gone', 'That assignment was removed while it was being reviewed.');
+    if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
+    return { ...r.feedback, cost: (r.usage && r.usage.cost) || 0 };
+  };
+
   // Phase 1: outline (saved immediately as a partial course). Phase 2: materials, one module at a time.
   ai.build = async function (brief, run) {
     const set = (patch) => { Object.assign(run, patch); S.render(false); };
     set({ phase: 'running', steps: [{ label: 'Designing your course outline', state: 'active' }], msg: '', courseId: null });
     const out = await ai.call('/outline', brief, { signal: run.ctl.signal });
-    const course = courseFromOutline(out.outline, out.brief || brief);
+    const course = courseFromOutline(out.outline, { ...(out.brief || brief), startDate: brief.startDate });
     course.ai.usage.push(usageRow(out.usage));
     S.state.courses.push(course); S.state.setup = true; S.save();
     run.courseId = course.id;

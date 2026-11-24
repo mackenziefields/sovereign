@@ -88,6 +88,8 @@ Everything has a safe default. Change only when you want to.
 | `MODEL_OUTLINE` | `claude-sonnet-5-5` | Model that writes the syllabus, modules, assignments. Try a stronger model here later with no code changes. |
 | `MODEL_LIGHT` | `claude-haiku-5-5` | Model for follow-up questions and finding resources. |
 | `MAX_MODULES` | `8` | Hard ceiling on modules per course (2-12). The app cannot exceed it. |
+| `MODEL_REVIEW` | *(blank: same as `MODEL_OUTLINE`)* | Model that reviews and grades submitted work. |
+| `LIMIT_REVIEWS_PER_IP_DAY` | `20` | AI reviews of submitted work from one network per day. |
 | `LIMIT_GEN_PER_IP_HOUR` / `_DAY` | `3` / `8` | Courses one network can start. |
 | `LIMIT_REQ_PER_IP_DAY` | `120` | All AI calls from one network per day (a course uses roughly 1 + one per module). |
 | `LIMIT_REQ_GLOBAL_DAY` | `400` | All AI calls from everyone per day. |
@@ -116,3 +118,7 @@ Everything has a safe default. Change only when you want to.
 ## Testing without any accounts
 
 `worker/mock/harness.js` runs the real Worker code inside a browser page with fake storage and **canned** AI/web answers. It tests the Worker's rules and the app's screens. It does **not** test real AI quality or real web search. See the project README.
+
+## Reviews of submitted work (`/review`)
+
+Added for assignment feedback. Text up to 30,000 characters, or one PDF/image (about 2 MB; the Worker rejects more than ~3 MB of base64). The work is passed to Claude and is not stored or logged by the Worker. The score is recomputed by the Worker from the per-criterion scores, never taken from the model's own total. Large uploads cost more Worker CPU than the free plan's 10 ms allows if a request is slow to parse; if real PDF reviews fail with a Cloudflare error (1102 or similar), tell the developer. After pasting the new `worker.js`, nothing else needs to change.

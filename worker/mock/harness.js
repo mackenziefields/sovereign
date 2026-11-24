@@ -118,6 +118,10 @@
             stop_reason: 'end_turn', usage: { input_tokens: 4200, output_tokens: 350, server_tool_use: { web_search_requests: 2 } },
           });
         }
+        if (Array.isArray(b.messages[0].content)) { // /review: round 1 scores 70%, round 2 scores 90% (canned)
+          const txt = b.messages[0].content[0].text, r2 = /review 2 of 2/.test(txt), sc = r2 ? [9, 9, 9] : [6, 7, 8];
+          return json({ content: [{ type: 'text', text: JSON.stringify({ summary: r2 ? 'Much stronger. The argument is now supported.' : 'A solid start with a thin argument.', strengths: ['Clear thesis in paragraph 1'], improvements: r2 ? [] : ['Add one source to support the claim in paragraph 2', 'Cut the repeated point in paragraph 3'], nextSteps: ['Proofread once more'], criteria: ['Argument', 'Evidence', 'Clarity'].map((n, i) => ({ name: n, max: 10, score: sc[i], comment: 'Comment on ' + n })), score: 999 }) }], stop_reason: 'end_turn', usage: { input_tokens: 2500, output_tokens: 900 } });
+        }
         if (/Ask at most 2 short/.test(b.messages[0].content)) {
           return json({ content: [{ type: 'text', text: JSON.stringify({ questions: [{ id: 'a', text: 'What kind of business are you curious about?', choices: ['Online', 'Local service', 'Not sure'] }, { id: 'b', text: 'Any experience with money or sales?', choices: [] }] }) }], stop_reason: 'end_turn', usage: { input_tokens: 300, output_tokens: 120 } });
         }

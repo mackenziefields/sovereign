@@ -112,7 +112,7 @@
     if (f.has('name')) { const nm = String(f.get('name') || '').trim().slice(0, 60); if (nm) { S.state.name = nm; S.save(); } } // stays in this browser; not part of the request
     return {
       topic: String(f.get('topic') || '').trim(), level: f.get('level') || 'beginner', goal: f.get('goal') || 'understand',
-      goalText: String(f.get('goalText') || '').trim(), hours: n('hours', 4), weeks: n('weeks', 6), extra: String(f.get('extra') || '').trim(),
+      goalText: String(f.get('goalText') || '').trim(), hours: n('hours', 4), weeks: n('weeks', 6), extra: String(f.get('extra') || '').trim(), startDate: S.validDate(String(f.get('startDate') || '')) || S.todayISO(),
     };
   }
 
@@ -161,6 +161,7 @@
       h('div', {}, select('What do you want out of it?', 'goal', GOALS, b.goal || 'understand'),
         field('Which one? (only if you chose a license or certification)', 'goalText', { value: b.goalText || '', placeholder: 'e.g. the bar exam, a project-management certificate' })),
       h('div', { class: 'two' }, select('Time you can give it', 'hours', opts(HOURS), String(b.hours || 4)), select('Over about', 'weeks', opts(WEEKS), String(b.weeks || 6))),
+      h('label', { class: 'field' }, h('span', {}, 'Start date'), h('input', { type: 'date', name: 'startDate', value: b.startDate || S.todayISO() }), h('small', {}, 'Assignment due dates are set from this date and the number of weeks, and then stay fixed.')),
       h('label', { class: 'field' }, h('span', {}, 'Anything else I should know? (optional)'),
         h('textarea', { name: 'extra', rows: 3, maxlength: '600', placeholder: 'e.g. I want to start a small online shop. I learn best by doing.' }, b.extra || '')),
       S.state.name ? null : h('label', { class: 'field' }, h('span', {}, 'What should we call you? (optional)'), h('input', { type: 'text', name: 'name', maxlength: '60', autocomplete: 'given-name' }), h('small', {}, 'Used only to greet you. Stays in this browser and is never sent to the AI.')),

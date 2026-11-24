@@ -41,6 +41,16 @@ Answer a few plain questions (topic, starting point, goal, time) and an AI draft
 * Your name (optional, Dashboard or Data & Backup) greets you on the dashboard and course Home. It stays in this browser and is never sent to the AI.
 * Data & Backup → AI shows the tokens and estimated cost recorded for each AI course.
 
+## Submitting work and AI feedback
+
+Open an assignment inside its module (it needs points) and choose **Submit work**.
+
+* Submit text, or a text / PDF / image file. **Nothing is sent until you tick the consent box for that submission.** Audio, video and other file types can be attached as evidence only: no AI feedback and no grade.
+* **Review 1** gives detailed, action-oriented feedback with **no grade shown**. The 72-hour clock starts when that feedback appears.
+* Resubmit within 72 hours for **review 2 and your final grade**. If you don't, review 1's grade becomes final after 72 hours (or choose “Skip resubmitting and see my grade”). When the grade is final, the first submission's file and feedback are deleted; only the final version stays, in the Portfolio and on the Grades page (points, percent, and a letter).
+* AI-built courses start on the date you pick; assignment due dates follow from it and **can't be edited**. Manual courses keep editable due dates. Late work is accepted and marked **Late**.
+* Honest limits: the AI's grade is an automated assessment, not a human grade. There are no accounts, so the 72-hour window, locked dates and "no first record" are enforced only inside the app and can be bypassed by someone who edits their own browser data. Submitted files are kept on this device only (not in backups); text, grades and feedback are in backups. Reviews cost roughly $0.02-0.15 each (shown per review).
+
 ## Your data
 
 Saved in this browser's localStorage (key `sovereign.v3`). It is not synced between browsers or devices, and clearing site data erases it. Export a backup to keep a copy. Importing validates the file and asks before overwriting; deleting or clearing data asks for confirmation. Data saved by earlier versions is converted automatically, and older backups still import.
@@ -55,8 +65,10 @@ css/ai.css             AI wizard and resource labels
 js/config.js           public settings (optional AI service address; never secrets)
 js/store.js            data model, storage, validation, import/export, starter courses
 js/components.js       small DOM helpers
+js/files.js            attachment storage in this browser (IndexedDB)
 js/ai-client.js        talks to the AI service; turns its answers into a saved course
 js/views-ai.js         Build with AI wizard, resource labels, AI settings, usage
+js/views-work.js       submissions, AI feedback, 72-hour window, final grade
 js/views-course.js     course pages and module pages
 js/views-dash.js       first run, Dashboard, My Work, Data & Backup
 js/app.js              router, mobile menu, service worker registration
