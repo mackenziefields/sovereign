@@ -9,7 +9,7 @@
  * SECRETS (Settings -> Variables and Secrets, type "Secret"):  ANTHROPIC_API_KEY, ACCESS_CODE
  * KV NAMESPACE binding named:                                     USAGE
  * OPTIONAL plain variables (all have defaults below):             ALLOWED_ORIGINS, MODEL_OUTLINE, MODEL_LIGHT,
- *   MAX_MODULES, LIMIT_GEN_PER_IP_HOUR, LIMIT_GEN_PER_IP_DAY, LIMIT_REQ_PER_IP_DAY, LIMIT_REQ_GLOBAL_DAY,
+ *   WEB_FETCH_TOOL, MAX_MODULES, LIMIT_GEN_PER_IP_HOUR, LIMIT_GEN_PER_IP_DAY, LIMIT_REQ_PER_IP_DAY, LIMIT_REQ_GLOBAL_DAY,
  *   DAILY_BUDGET_USD, PRICES, SEARCH_COST_USD, WEB_SEARCH_TOOL, EFFORT_OUTLINE, EFFORT_LIGHT, ANTHROPIC_VERSION,
  *   OUTPUT_FORMAT, MAX_OUT_OUTLINE
  *
@@ -197,7 +197,7 @@ async function callClaude(env, o) {
       continue;
     }
     if (data.stop_reason === 'refusal') throw new AppError(422, 'refusal', 'The AI declined to write this course. Try rewording the topic.');
-    if (data.stop_reason === 'max_tokens') throw new AppError(502, 'too_long', 'The AI ran out of room before finishing. Try fewer modules or a narrower topic.');
+    if (data.stop_reason === 'max_tokens') throw new AppError(502, 'too_long', 'The AI’s answer was cut off before it finished. Please try again.');
     return { text, results, fetched, blockTypes, usage: { ...total, cost: costOf(env, o.model, total.inTok, total.outTok, total.searches) } };
   }
   throw new AppError(502, 'upstream', 'The AI search did not finish. Please try again.');
@@ -333,7 +333,10 @@ async function handleOutline(env, body) {
 
 // The label comes from the web address (a fixed list), never from the AI's say-so. Lower number = shown first.
 const TIER = { university: 0, government: 1, open: 2, publisher: 3, web: 4 };
-const OPEN_SITES = ['archive.org', 'openstax.org', 'khanacademy.org', 'wikipedia.org', 'wikimedia.org', 'gutenberg.org', 'openlibrary.org', 'libretexts.org', 'oercommons.org', 'arxiv.org', 'ssrn.com', 'doaj.org', 'coursera.org', 'edx.org', 'ted.com'];
+const OPEN_SITES = ['archive.org', 'openstax.org', 'khanacademy.org', 'gutenberg.org', 'openlibrary.org', 'hathitrust.org', 'libretexts.org', 'oercommons.org', 'pressbooks.pub', 'arxiv.org', 'ssrn.com', 'doaj.org', 'core.ac.uk', 'coursera.org', 'edx.org', 'ted.com'];
+// Never recommended, whatever the AI says: anonymous-edit encyclopedias (unverifiable) and shadow libraries that host pirated copies.
+const BLOCKED_SITES = ['wikipedia.org', 'wikimedia.org', 'wikiwand.com', 'fandom.com', 'annas-archive.org', 'annas-archive.se', 'annas-archive.li', 'libgen.is', 'libgen.rs', 'libgen.li', 'z-lib.org', 'z-library.sk', 'sci-hub.se', 'sci-hub.ru', 'sci-hub.st', '1lib.sk', 'zlibrary.to'];
+const isBlockedSite = (raw) => { try { const h = new URL(raw).hostname.toLowerCase().replace(/^www\./, ''); return BLOCKED_SITES.some((d) => h === d || h.endsWith('.' + d)) || /(^|\.)(libgen|annas-archive|sci-hub|z-lib|zlibrary)\b/.test(h); } catch (e) { return true; } };
 const PUBLISHER_SITES = ['hbr.org', 'forbes.com', 'businessinsider.com', 'nytimes.com', 'wsj.com', 'economist.com', 'ft.com', 'theatlantic.com', 'newyorker.com', 'bbc.com', 'npr.org', 'pbs.org', 'reuters.com', 'bloomberg.com', 'mckinsey.com', 'nature.com', 'sciencedirect.com', 'jstor.org', 'sagepub.com', 'wiley.com', 'oup.com', 'cambridge.org'];
 const GOV_SITES = ['europa.eu', 'who.int', 'un.org', 'worldbank.org', 'oecd.org', 'imf.org', 'nih.gov', 'sba.gov'];
 const UNI_SITES = ['open.ac.uk']; // universities whose names do not end in .edu or ac.xx
@@ -357,87 +360,132 @@ function urlKey(raw) {
   } catch (e) { return ''; }
 }
 
-/* === 8. ENDPOINT: /resources (light model + web search + safe link check) ============================ */
+/* === 8. ENDPOINTS: /resources and /syllabus (light model + web search + safe link check) ============== */
 
-async function handleResources(env, body) {
-  const m = body.module && typeof body.module === 'object' ? body.module : {};
-  const mod = { title: clamp(m.title, 200), overview: clamp(m.overview, 600), objectives: clampList(m.objectives, 4, 200), queries: clampList(m.searchQueries, 2, 120) };
-  const topic = clamp(body.topic, HARD.TOPIC), level = clamp(body.level, 40);
-  if (!mod.title) throw new AppError(400, 'bad_input', 'Missing module title.');
-  const want = Math.min(2, Math.max(1, Math.round(Number(body.count) || 2)));
+const KINDS = ['article', 'book', 'video', 'course', 'tool', 'document', 'podcast'];
+const SYLLABUS_RE = /syllab|course (outline|schedule|description|homepage)|reading list|course reader/i;
+const unverified = (detail) => ({ status: 'not-checked', checkedAt: new Date().toISOString(), pageTitle: '', titleMatch: null, finalUrl: '', detail });
 
-  const r = await callClaude(env, {
-    model: cfg(env, 'MODEL_LIGHT'), maxTokens: 2500, effort: cfg(env, 'EFFORT_LIGHT'), system: SYSTEM_RULES,
-    tools: [{ type: cfg(env, 'WEB_SEARCH_TOOL'), name: 'web_search', max_uses: 3 }].concat(cfg(env, 'WEB_FETCH_TOOL') === 'off' ? [] : [{ type: cfg(env, 'WEB_FETCH_TOOL'), name: 'web_fetch', max_uses: 2 }]),
-    user: '<user_input>\nCourse topic: ' + topic + '\nLevel: ' + level + '\nModule: ' + mod.title + '\nAbout: ' + mod.overview + '\nObjectives: ' + mod.objectives.join('; ') +
-      '\nSuggested searches: ' + mod.queries.join(' | ') + '\n</user_input>\n' +
-      'Use web search to find up to 4 genuinely useful learning resources for this module. Prioritize credible, objective sources, in this order when they fit the module:\n' +
-      '1. University, business-school, law-school and other higher-education materials: open courseware, course pages, lecture videos, faculty publications, working papers, scholarly journals, open textbooks.\n' +
-      '2. Government, standards bodies, and professional associations.\n' +
-      '3. Respected practitioners and notable people in the field (interviews, talks, essays, documentaries, books) and established publishers or reputable journalism.\n' +
-      '4. Crowd-sourced and open archives (for example the Internet Archive, Wikipedia for orientation, Khan Academy).\n' +
-      'IMPORTANT: a course syllabus, course homepage, or reading list is NOT itself a resource, so never recommend one. If a relevant syllabus is found, open it with web_fetch and recommend the specific readings it assigns instead: for each, find that reading\'s own page (publisher, library, open-access copy, archive, or author page) through search, and recommend that. ' +
-      'If you cannot find a page for an assigned reading, you may still list it as a citation with an empty "url", using its title and author exactly as written in the syllabus; never add details that the syllabus does not show. For every pick taken from a syllabus, fill "derivedFrom" (like "Syllabus of Prof. A. Name, Course Title, University Name", only what the page shows) and "derivedUrl" (the syllabus page address).\n' +
-      'Aim for a useful mix (for example one academic source plus one practitioner or multimedia source). Prefer free sources; if a strong one is paywalled, mark access "paid". For books or textbooks, link to the publisher, library, or catalog page, never to copies of the text. ' +
-      'Only recommend pages that appeared in your search results; never write a URL from memory. Return ONLY JSON: ' +
-      '{"picks":[{"title":"title as shown","url":"exact URL from search results or from the opened syllabus, or empty for a citation","kind":"article|book|video|course|tool|document|podcast","creator":"author or organization if shown, else empty","access":"free|paid|unknown","relevance":"one sentence on how it fits this module","derivedFrom":"only if taken from a syllabus, else empty","derivedUrl":"syllabus page address, else empty"}]}',
-  });
-
-  // Provenance rule: keep only URLs that the search tool actually returned (matched ignoring trailing slash, www, #fragment and
-  // tracking parameters). Titles and the stored URL come from the search result, not the model.
-  const found = new Map(); // address -> {url, title}; only addresses the AI genuinely met (search results, or links inside a page it opened)
+// Turns the AI's answer into checked resources. Rules, in order: only addresses the AI genuinely met are kept (search results, or
+// links inside a page it opened); blocked sites are removed; syllabi are never readings (they are returned separately);
+// a citation without a link is kept only if its words appear in a page the AI opened; dead links are dropped.
+async function rankAndVerify(r, o) {
+  const found = new Map();
   for (const [u, t] of r.results) if (!found.has(urlKey(u))) found.set(urlKey(u), { url: u, title: t });
   for (const u of r.fetched.urls) if (!found.has(urlKey(u))) found.set(urlKey(u), { url: u, title: '' });
-  const SYLLABUS = /syllab|course (outline|schedule|description|homepage)|reading list|course reader/i;
   const covers = (title) => { const t = tokens(title); if (t.size < 2) return false; let n = 0; for (const w of t) if (r.fetched.text.includes(w)) n++; return n / t.size >= 0.8; };
-  let picks = [], parsed = true;
-  try { picks = parseJson(r.text).picks; } catch (e) { parsed = false; }
-  const seen = new Set(), candidates = [];
-  for (const p of Array.isArray(picks) ? picks : []) {
+  let j = {}, parsed = true;
+  try { j = parseJson(r.text); } catch (e) { parsed = false; }
+  const picks = Array.isArray(j.picks) ? j.picks : [];
+  const seen = new Set(), candidates = [], syllabusCands = [];
+
+  const addSyllabus = (p, hit) => {
+    if (!hit || seen.has(hit.url) || isBlockedSite(hit.url) || syllabusCands.length >= 2) return;
+    seen.add(hit.url);
+    syllabusCands.push({ title: hit.title || clamp(p.title, 300) || hit.url, url: hit.url, sourceType: sourceType(hit.url), note: clamp(p.derivedFrom || p.description || p.relevance, 300) });
+  };
+  for (const p of Array.isArray(j.syllabi) ? j.syllabi : []) if (p && typeof p === 'object') addSyllabus(p, found.get(urlKey(clamp(p.url, 2000))));
+
+  for (const p of picks) {
     if (!p || typeof p !== 'object') continue;
     const link = clamp(p.url, 2000), title = clamp(p.title, 300);
-    const dUrl = found.get(urlKey(clamp(p.derivedUrl, 2000)));
-    const derived = dUrl ? { derivedFrom: clamp(p.derivedFrom, 300), derivedUrl: dUrl.url } : { derivedFrom: '', derivedUrl: '' };
-    const common = {
-      kind: ['article', 'book', 'video', 'course', 'tool', 'document', 'podcast'].includes(p.kind) ? p.kind : '',
-      creator: clamp(p.creator, 200), access: ['free', 'paid'].includes(p.access) ? p.access : 'unknown', relevance: clamp(p.relevance, 400), ...derived,
-    };
+    const derived = o.derivedUrl ? { derivedFrom: clamp(p.derivedFrom, 300) || 'Syllabus', derivedUrl: o.derivedUrl } : { derivedFrom: '', derivedUrl: '' };
+    const common = { kind: KINDS.includes(p.kind) ? p.kind : '', creator: clamp(p.creator, 200), access: ['free', 'paid'].includes(p.access) ? p.access : 'unknown', relevance: clamp(p.relevance, 400), ...derived };
     if (link) {
       const hit = found.get(urlKey(link));
-      if (!hit || seen.has(hit.url)) continue;
+      if (!hit || seen.has(hit.url) || isBlockedSite(hit.url)) continue;
       const label = hit.title || title || hit.url;
-      if (SYLLABUS.test(label) || SYLLABUS.test(hit.url)) continue; // a syllabus is a place to find readings, never a reading itself
+      if (SYLLABUS_RE.test(label) || SYLLABUS_RE.test(hit.url)) { if (!o.derivedUrl) addSyllabus(p, hit); continue; } // a syllabus is never a reading
       seen.add(hit.url);
       candidates.push({ title: label, url: hit.url, sourceType: sourceType(derived.derivedUrl || hit.url), ...common });
-    } else if (derived.derivedFrom && title && covers(title) && !seen.has('c:' + title.toLowerCase())) {
-      // A citation with no link: kept only if its words really appear in a page the AI opened.
+    } else if (o.derivedUrl && title && covers(title) && !seen.has('c:' + title.toLowerCase())) {
       seen.add('c:' + title.toLowerCase());
-      candidates.push({ title, url: '', citation: true, sourceType: sourceType(derived.derivedUrl), ...common });
+      candidates.push({ title, url: '', citation: true, sourceType: sourceType(o.derivedUrl), ...common });
     }
-    if (candidates.length >= HARD.MAX_PICKS + 2) break;
+    if (candidates.length >= o.maxVerify + 2) break;
   }
   candidates.sort((a, b) => (a.citation ? 1 : 0) - (b.citation ? 1 : 0) || TIER[a.sourceType] - TIER[b.sourceType]); // links before citations; higher education first
 
-  const resources = [];
-  const hostCache = new Map();
-  const linkCands = candidates.filter((c) => !c.citation).slice(0, HARD.MAX_VERIFY);
-  for (const c of linkCands) {
+  const resources = [], syllabi = [], hostCache = new Map();
+  for (const c of candidates.filter((x) => !x.citation).slice(0, o.maxVerify)) {
     const v = await verifyUrl(c.url, c.title, hostCache);
-    if (v.status === 'broken') continue; // a confirmed dead link is dropped, never shown as a resource
+    if (v.status === 'broken') continue;
     resources.push({ ...c, source: 'ai', verification: v });
-    if (resources.length >= want) break;
+    if (resources.length >= o.want) break;
   }
   for (const c of candidates.filter((x) => x.citation)) {
-    if (resources.length >= want) break;
-    resources.push({ ...c, source: 'ai', verification: { status: 'not-checked', checkedAt: new Date().toISOString(), pageTitle: '', titleMatch: null, finalUrl: '', detail: 'Citation read from a syllabus; no link was found.' } });
+    if (resources.length >= o.want) break;
+    resources.push({ ...c, source: 'ai', verification: unverified('Citation read from a syllabus; no link was found.') });
+  }
+  for (const c of syllabusCands) {
+    const v = await verifyUrl(c.url, c.title, hostCache);
+    if (v.status !== 'broken') syllabi.push({ ...c, verification: v });
   }
   // Visible in your Worker's logs only (never sent to the browser): why a module may have come back empty.
-  console.log('resources', JSON.stringify({ module: mod.title, blocks: r.blockTypes, fetchedLinks: r.fetched.urls.size, searchResults: r.results.size, picksParsed: parsed, picks: Array.isArray(picks) ? picks.length : 0, matched: candidates.length, kept: resources.length, types: candidates.map((c) => c.sourceType) }));
+  console.log(o.label, JSON.stringify({ module: o.module, blocks: r.blockTypes, fetchedLinks: r.fetched.urls.size, searchResults: r.results.size, picksParsed: parsed, picks: picks.length, matched: candidates.length, kept: resources.length, syllabi: syllabi.length, types: candidates.map((c) => c.sourceType) }));
+  return { resources, syllabi };
+}
+
+function readModule(body) {
+  const m = body.module && typeof body.module === 'object' ? body.module : {};
+  return { title: clamp(m.title, 200), overview: clamp(m.overview, 600), objectives: clampList(m.objectives, 4, 200), queries: clampList(m.searchQueries, 2, 120) };
+}
+const TOPIC_BLOCK = (b, mod) => '<user_input>\nCourse topic: ' + clamp(b.topic, HARD.TOPIC) + '\nLevel: ' + clamp(b.level, 40) + '\nModule: ' + mod.title + '\nAbout: ' + mod.overview + '\nObjectives: ' + mod.objectives.join('; ') + '\nSuggested searches: ' + mod.queries.join(' | ') + '\n</user_input>\n';
+const JSON_PICK = '{"title":"title as shown","url":"exact URL from the search results (or the opened page)","kind":"article|book|video|course|tool|document|podcast","creator":"author or organization if shown, else empty","access":"free|paid|unknown","relevance":"one sentence on how it fits this module"';
+
+async function handleResources(env, body) {
+  const mod = readModule(body);
+  if (!mod.title) throw new AppError(400, 'bad_input', 'Missing module title.');
+  const want = Math.min(2, Math.max(1, Math.round(Number(body.count) || 2)));
+  const r = await callClaude(env, {
+    model: cfg(env, 'MODEL_LIGHT'), maxTokens: 4000, effort: cfg(env, 'EFFORT_LIGHT'), system: SYSTEM_RULES,
+    tools: [{ type: cfg(env, 'WEB_SEARCH_TOOL'), name: 'web_search', max_uses: 3 }],
+    user: TOPIC_BLOCK(body, mod) +
+      'Use web search to find up to 4 genuinely useful learning resources for this module. Prioritize credible, objective sources, in this order when they fit the module:\n' +
+      '1. University, business-school, law-school and other higher-education materials: open courseware, lecture videos, faculty publications, working papers, scholarly journals, open textbooks.\n' +
+      '2. Government, standards bodies, and professional associations.\n' +
+      '3. Respected practitioners and notable people in the field (interviews, talks, essays, documentaries, books) and established publishers or reputable journalism.\n' +
+      '4. Open archives and libraries (for example the Internet Archive, Open Library, HathiTrust, Project Gutenberg, OpenStax, Khan Academy).\n' +
+      'NEVER recommend Wikipedia or other anonymously edited sites, or any site that hosts pirated copies of books or papers (shadow libraries). ' +
+      'Aim for a useful mix (for example one academic source plus one practitioner or multimedia source). Prefer free sources; if a strong one is paywalled, mark access "paid". For books or textbooks, link to the publisher, library, or catalog page. ' +
+      'A course syllabus, course homepage, or reading list is not a resource: do not put one in "picks". If you come across up to 2 relevant course syllabi, list them separately under "syllabi". ' +
+      'Only use pages that appeared in your search results; never write a URL from memory. Return ONLY JSON: ' +
+      '{"picks":[' + JSON_PICK + '}],"syllabi":[{"title":"as shown","url":"exact URL from search results","description":"instructor, course, and institution, only as shown"}]}',
+  });
+  const { resources, syllabi } = await rankAndVerify(r, { want, maxVerify: HARD.MAX_VERIFY, derivedUrl: '', label: 'resources', module: mod.title });
   const missing = resources.length === 0;
   return {
-    resources, missing,
+    resources, syllabi, missing,
     missingNote: missing ? 'No verifiable source was found for “' + mod.title + '”. Add your own, or try “Find materials” again.' : '',
     usage: { step: 'resources', model: cfg(env, 'MODEL_LIGHT'), ...r.usage },
+  };
+}
+
+// On demand: the person chose to "source" one syllabus. The AI opens it and finds each assigned reading's own page.
+async function handleSyllabus(env, body) {
+  const mod = readModule(body);
+  let syl;
+  try { syl = checkUrlShape(clamp(body.url, 2000)); } catch (e) { throw new AppError(400, 'bad_input', 'That syllabus address can’t be used.'); }
+  if (isBlockedSite(syl.href)) throw new AppError(400, 'bad_input', 'That site can’t be used.');
+  if (cfg(env, 'WEB_FETCH_TOOL') === 'off') throw new AppError(503, 'no_fetch', 'Reading syllabus pages is turned off on this service.');
+  const r = await callClaude(env, {
+    model: cfg(env, 'MODEL_LIGHT'), maxTokens: 8000, effort: cfg(env, 'EFFORT_LIGHT'), system: SYSTEM_RULES,
+    tools: [{ type: cfg(env, 'WEB_SEARCH_TOOL'), name: 'web_search', max_uses: 4 }, { type: cfg(env, 'WEB_FETCH_TOOL'), name: 'web_fetch', max_uses: 2 }],
+    user: TOPIC_BLOCK(body, mod) +
+      'Open this syllabus page with web_fetch: ' + syl.href + '\n' +
+      'Find up to 5 readings or materials it assigns that best fit this module' + (mod.title ? '' : ' (or the course as a whole)') + '. For each, use web search to find that reading\'s own page: a publisher, library, open-access copy, archive (Internet Archive, Open Library, HathiTrust, Project Gutenberg), or author page. ' +
+      'NEVER use Wikipedia, anonymously edited sites, or any site hosting pirated copies (shadow libraries). Do not list the syllabus itself. ' +
+      'If you cannot find a page for an assigned reading, list it as a citation with an empty "url", using its title and author exactly as written in the syllabus; never add details the syllabus does not show. ' +
+      'In "derivedFrom" write only what the syllabus page shows about its source (for example "Syllabus of Prof. A. Name, Course Title, University Name"). ' +
+      'Only use URLs that appeared in your search results or on the syllabus page; never write a URL from memory. Return ONLY JSON: ' +
+      '{"picks":[' + JSON_PICK + ',"derivedFrom":"as described"}]}',
+  });
+  if (!r.fetched.text.trim()) throw new AppError(502, 'unreadable', 'The syllabus page couldn’t be opened, so nothing was sourced from it. Some sites block automated reading; try another syllabus.');
+  const { resources } = await rankAndVerify(r, { want: 5, maxVerify: 4, derivedUrl: syl.href, label: 'syllabus', module: mod.title });
+  return {
+    resources, missing: resources.length === 0,
+    missingNote: resources.length === 0 ? 'No readings could be sourced from that syllabus. It may not list readings, or the page could not be read.' : '',
+    usage: { step: 'syllabus', model: cfg(env, 'MODEL_LIGHT'), ...r.usage },
   };
 }
 
@@ -575,7 +623,7 @@ export default {
       if (req.method === 'GET' && url.pathname === '/health') { // reveals nothing secret: just that the Worker is alive and configured
         return json({ ok: true, configured: !!(env.ANTHROPIC_API_KEY && env.ACCESS_CODE && env.USAGE), maxModules: cfgNum(env, 'MAX_MODULES', 2, 12), models: { outline: cfg(env, 'MODEL_OUTLINE'), light: cfg(env, 'MODEL_LIGHT') } }, 200, cors);
       }
-      if (req.method !== 'POST' || !['/clarify', '/outline', '/resources'].includes(url.pathname)) throw new AppError(404, 'not_found', 'Not found.');
+      if (req.method !== 'POST' || !['/clarify', '/outline', '/resources', '/syllabus'].includes(url.pathname)) throw new AppError(404, 'not_found', 'Not found.');
 
       const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
       await authenticate(req, env, ip);
@@ -586,7 +634,7 @@ export default {
       if (!body || typeof body !== 'object') throw new AppError(400, 'bad_json', 'Bad request.');
 
       await checkAndCount(env, ip, url.pathname === '/outline' ? 'gen' : 'req');
-      const handler = { '/clarify': handleClarify, '/outline': handleOutline, '/resources': handleResources }[url.pathname];
+      const handler = { '/clarify': handleClarify, '/outline': handleOutline, '/resources': handleResources, '/syllabus': handleSyllabus }[url.pathname];
       return streamed(ctx, cors, () => handler(env, body), env);
     } catch (e) {
       if (e instanceof AppError) return json({ error: { code: e.code, message: e.message } }, e.status, cors);

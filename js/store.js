@@ -84,6 +84,18 @@
   // Validate one reading object on its own (used when AI-found materials are added to an existing module).
   S.makeReading = (r) => normReading(obj(r), (v) => str(v, 60) || S.uid(), (v) => S.cleanUrl(str(v, 2000)) || '');
 
+  // A syllabus from another course, kept apart from readings. The AI can later source its assigned readings into the module.
+  function normSyllabus(y, id, url) {
+    y = obj(y); const v = obj(y.verification);
+    return {
+      id: id(y.id), title: str(y.title, 300) || 'Untitled syllabus', url: url(y.url), note: str(y.note, 300), source: y.source === 'ai' ? 'ai' : 'user',
+      sourceType: oneOf(y.sourceType, S.SOURCE_TYPES, ''),
+      verification: { status: S.VERIFY.includes(v.status) ? v.status : 'not-checked', checkedAt: str(v.checkedAt, 40), pageTitle: str(v.pageTitle, 300), titleMatch: v.titleMatch === true ? true : v.titleMatch === false ? false : null, finalUrl: url(v.finalUrl), detail: str(v.detail, 300) },
+      sourcedAt: str(y.sourcedAt, 40), sourcedCount: num(y.sourcedCount) || 0,
+    };
+  }
+  S.makeSyllabus = (y) => normSyllabus(y, (v) => str(v, 60) || S.uid(), (v) => S.cleanUrl(str(v, 2000)) || '');
+
   function normAI(a) {
     a = obj(a);
     if (a.generated !== true) return null;
@@ -119,6 +131,7 @@
         return {
           id: id(m.id), title: str(m.title, 200) || 'Untitled module', overview: str(m.overview),
           keyIdeas: str(m.keyIdeas), reflection: str(m.reflection), complete: m.complete === true,
+          syllabi: arr(m.syllabi, 10).map((y) => normSyllabus(y, id, url)),
           objectives: strs(m.objectives, 12, 400), selfCheck: strs(m.selfCheck, 12, 400), duration: str(m.duration, 60),
           origin: m.origin === 'ai' ? 'ai' : 'user', edited: m.edited === true,
           readings: arr(m.readings).map((r) => { r = obj(r); return normReading(r, id, url); }),
@@ -249,7 +262,7 @@
 
   const R = (title, url, note) => ({ id: S.uid(), title, url: url || '', note: note || '', done: false });
   const A = (title, description, o) => ({ id: S.uid(), title, description: description || '', due: '', points: null, score: null, done: false, kind: '', origin: 'user', ...o });
-  const M = (title, o) => ({ id: S.uid(), title, overview: '', readings: [], keyIdeas: '', reflection: '', extras: [], assignments: [], complete: false, objectives: [], selfCheck: [], duration: '', origin: 'user', edited: false, ...o });
+  const M = (title, o) => ({ id: S.uid(), title, overview: '', readings: [], keyIdeas: '', reflection: '', extras: [], assignments: [], complete: false, syllabi: [], objectives: [], selfCheck: [], duration: '', origin: 'user', edited: false, ...o });
   const C = (code, title, color, description, modules, o) => ({
     id: S.uid(), code, title, color, description, objective: '', deliverable: '', syllabus: '', outcomes: [], duration: '', pathway: '', licensureNote: '', ai: null, announcements: [], modules, credentials: [],
     work: { title: '', criteria: [], description: '', reflection: '', status: 'not-started', url: '' }, ...o,

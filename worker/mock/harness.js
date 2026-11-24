@@ -53,6 +53,7 @@
     'walled.mock-site.org': { status: 403 },
     'slow.mock-site.org': { hang: true },
     'redirect.mock-site.org': { redirect: 'https://learn.mock-university.org/final' },
+    'syllabi.mock-college.edu': { status: 200, title: 'WGS 101 Syllabus 2005 | Mock College' },
     'press.mock-press.org': { status: 200, title: 'Mock Feminist Theory Reader | Mock Press' },
     'sneaky.mock-site.org': { ip: '10.0.0.5', status: 200, title: 'internal page' },
   };
@@ -81,17 +82,23 @@
             { type: 'web_search_result', url: 'https://www.learn.mock-university.org/seeing-opportunities/?utm_source=x#top', title: 'Seeing opportunities | Mock University Learning', page_age: '2 months ago' },
             { type: 'web_search_result', url: 'https://mockuni.edu/ocw/entrepreneurship', title: 'Entrepreneurship course | Mock University (.edu)' },
             { type: 'web_search_result', url: 'https://guide.mock-agency.gov/plan', title: 'Plan your business | Mock Agency' },
+            { type: 'web_search_result', url: 'https://en.wikipedia.org/wiki/Entrepreneurship', title: 'Entrepreneurship - Wikipedia' },
+            { type: 'web_search_result', url: 'https://annas-archive.org/md5/abc', title: 'A pirated book' },
+            { type: 'web_search_result', url: 'https://syllabi.mock-college.edu/wgs101-syllabus-2005', title: 'WGS 101 Syllabus 2005 | Mock College' },
             { type: 'web_search_result', url: 'https://gone.mock-site.org/old', title: 'An old guide' },
             { type: 'web_search_result', url: 'https://walled.mock-site.org/paywalled', title: 'Premium course' },
           ];
           const picks = o.picks || [
             { url: 'https://learn.mock-university.org/seeing-opportunities', kind: 'article', creator: 'Mock University', access: 'free', relevance: 'Introduces how to spot problems worth solving.' },
             { url: 'https://mockuni.edu/ocw/entrepreneurship/', kind: 'course', creator: 'Mock University', access: 'free', relevance: 'Open courseware.' },
+            { url: 'https://en.wikipedia.org/wiki/Entrepreneurship', kind: 'article', creator: 'crowd', access: 'free', relevance: 'MUST BE BLOCKED' },
+            { url: 'https://annas-archive.org/md5/abc', kind: 'book', creator: 'x', access: 'free', relevance: 'MUST BE BLOCKED' },
+            { title: 'WGS 101 Syllabus 2005', url: 'https://syllabi.mock-college.edu/wgs101-syllabus-2005', kind: 'document', relevance: 'syllabus as a pick: must move to syllabi' },
             { url: 'https://invented.example-fake.com/never-searched', kind: 'book', creator: 'Nobody', access: 'free', relevance: 'MADE UP BY THE MODEL' },
             { url: 'https://gone.mock-site.org/old', kind: 'article', creator: '', access: 'free', relevance: 'dead link' },
             { url: 'https://walled.mock-site.org/paywalled', kind: 'course', creator: 'Mock', access: 'paid', relevance: 'Full course.' },
           ];
-          if (o.syllabus) {
+          if (/Open this syllabus page/.test(q)) {
             const sy = 'https://syllabi.mock-college.edu/wgs101-syllabus-2005';
             const picks2 = [
               { title: 'WGS 101 Syllabus 2005', url: sy, kind: 'document', relevance: 'the syllabus itself (must be dropped)' },
@@ -107,7 +114,7 @@
           if (o.noResults) return json({ content: [{ type: 'text', text: '{"picks":[]}' }], stop_reason: 'end_turn', usage: { input_tokens: 900, output_tokens: 80, server_tool_use: { web_search_requests: 1 } } });
           return json({
             content: [{ type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } }, { type: 'web_search_tool_result', tool_use_id: 's1', content: results },
-              { type: 'text', text: '```json\n' + JSON.stringify({ picks }) + '\n```' }],
+              { type: 'text', text: '```json\n' + JSON.stringify({ picks, syllabi: [{ title: 'WGS 101 Syllabus 2005 | Mock College', url: 'https://syllabi.mock-college.edu/wgs101-syllabus-2005', description: 'Prof. Jane Mock, WGS 101, Mock College' }] }) + '\n```' }],
             stop_reason: 'end_turn', usage: { input_tokens: 4200, output_tokens: 350, server_tool_use: { web_search_requests: 2 } },
           });
         }

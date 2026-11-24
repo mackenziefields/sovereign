@@ -144,10 +144,31 @@
     let added = 0;
     (r.resources || []).forEach((x) => { if (!have.has(x.url || 'c:' + x.title.toLowerCase())) { mod.readings.push(S.makeReading(readingFrom(x))); added++; } });
     const found = (r.resources || []).length; // 0 means the search found nothing verifiable; duplicates of existing links are not a failure
-    if (!found && !mod.readings.length) mod.readings.push(S.makeReading(placeholder(mod, r.missingNote)));
+    let sylAdded = 0;
+    (r.syllabi || []).forEach((x) => { if (!mod.syllabi.some((y) => y.url === x.url)) { mod.syllabi.push(S.makeSyllabus({ ...x, source: 'ai' })); sylAdded++; } });
+    if (!found && !mod.readings.length && !mod.syllabi.length) mod.readings.push(S.makeReading(placeholder(mod, r.missingNote)));
     if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
     S.save();
-    return { added, missing: !found };
+    return { added, missing: !found, syllabi: sylAdded };
+  };
+
+  // The person chose to "source" one syllabus: the AI opens it and adds the readings it assigns (each with its own link where one exists).
+  ai.sourceSyllabus = async function (course, mod, syl, opts) {
+    const r = await ai.call('/syllabus', {
+      url: syl.url, topic: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '',
+      module: { title: mod.title, overview: mod.overview, objectives: mod.objectives },
+    }, opts || {});
+    if (!S.state.courses.includes(course) || !course.modules.includes(mod) || !mod.syllabi.includes(syl)) throw new AIError('gone', 'That syllabus was removed while it was being read.');
+    const have = new Set(mod.readings.map((x) => x.url || 'c:' + x.title.toLowerCase()));
+    let added = 0;
+    (r.resources || []).forEach((x) => {
+      const key = x.url || 'c:' + x.title.toLowerCase();
+      if (!have.has(key)) { have.add(key); mod.readings.push(S.makeReading(readingFrom({ ...x, derivedFrom: x.derivedFrom || syl.note || 'Syllabus', derivedUrl: syl.url }))); added++; }
+    });
+    syl.sourcedAt = now(); syl.sourcedCount = (syl.sourcedCount || 0) + added;
+    if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
+    S.save();
+    return { added, missing: !(r.resources || []).length };
   };
 
   // Phase 1: outline (saved immediately as a partial course). Phase 2: materials, one module at a time.

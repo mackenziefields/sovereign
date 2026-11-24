@@ -44,6 +44,16 @@
       v.checkedAt && r.url ? h('div', { class: 'small muted ai-line' }, 'Checked by a program on ' + v.checkedAt.slice(0, 10) + '. A working link does not guarantee it covers this topic well; please look it over.') : null);
   };
 
+  S.syllabusLabels = function (y) {
+    const v = y.verification || {}, vt = VERIFY_TEXT[v.status] || VERIFY_TEXT['not-checked'];
+    return h('div', { class: 'ai-meta' },
+      y.sourceType && y.sourceType !== 'web' ? h('span', { class: 'badge ok' }, S.label(S.SOURCE_TYPES, y.sourceType)) : null,
+      h('span', { class: 'badge ' + vt[1], title: v.detail || '' }, vt[0]),
+      h('span', { class: 'badge soft' }, y.source === 'ai' ? 'Found by AI' : 'Added by you'),
+      y.note ? h('div', { class: 'small muted ai-line' }, y.note) : null,
+      v.checkedAt ? h('div', { class: 'small muted ai-line' }, 'Link checked by a program on ' + v.checkedAt.slice(0, 10) + '.') : null);
+  };
+
   /* ---------- usage summary ---------- */
 
   S.usageBlock = function (c) {

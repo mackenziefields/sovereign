@@ -355,6 +355,39 @@
   }
 
   const busy = new Set();
+  const sylN = (n) => n + (n === 1 ? ' syllabus' : ' syllabi');
+
+  // Syllabi from other courses live here, apart from readings. "Source readings" asks the AI to open one and add what it assigns.
+  function syllabiSection(c, m) {
+    const item = (y) => {
+      const working = busy.has(y.id);
+      return h('li', { class: 'item' }, h('div', { class: 'item-body' },
+        h('div', { class: 'item-title' }, y.url ? h('a', { href: y.url, target: '_blank', rel: 'noopener noreferrer' }, y.title) : y.title),
+        S.syllabusLabels(y),
+        y.sourcedAt ? h('div', { class: 'small' }, y.sourcedCount + ' reading' + (y.sourcedCount === 1 ? '' : 's') + ' added to this module from it on ' + y.sourcedAt.slice(0, 10) + '.') : null,
+        h('div', { class: 'item-actions' },
+          y.url ? h('button', { class: 'linkbtn', type: 'button', disabled: working, onclick: async () => {
+            if (!S.ai.ready()) { toast('Add the AI service address and access code first (Data & Backup → AI).'); return; }
+            busy.add(y.id); S.render(false);
+            try { const r = await S.ai.sourceSyllabus(c, m, y, {}); toast(r.added ? 'Added ' + plural(r.added, 'reading') + ' from this syllabus.' : (r.missing ? 'No readings could be sourced from this syllabus.' : 'Nothing new to add.')); }
+            catch (e) { toast(e.message); }
+            busy.delete(y.id); S.render(false);
+          } }, working ? 'Reading the syllabus…' : (y.sourcedAt ? 'Source again' : 'Source readings from this syllabus')) : null,
+          removeBtn('syllabus', m.syllabi, y))));
+    };
+    return h('section', { class: 'msec' },
+      h('div', { class: 'sec-head' }, h('h3', {}, 'Syllabi from other courses'), h('span', { class: 'count' }, m.syllabi.length ? sylN(m.syllabi.length) : '')),
+      m.syllabi.length ? h('p', { class: 'small muted' }, 'Not readings themselves. Choose “Source readings” and the AI will open a syllabus and add the readings it assigns, noting where they came from.') : null,
+      m.syllabi.length ? h('ul', { class: 'items' }, m.syllabi.map(item)) : null,
+      h('details', { class: 'add' }, h('summary', {}, 'Add a syllabus'),
+        h('form', { onsubmit: (e) => {
+          e.preventDefault(); const f = new FormData(e.target), u = S.cleanUrl(f.get('url'));
+          if (!u) return toast(BAD_LINK);
+          m.syllabi.push(S.makeSyllabus({ title: f.get('title').trim() || u, url: u, note: f.get('note').trim(), source: 'user' })); commit();
+        } },
+          field('Syllabus title', 'title', { placeholder: 'e.g. WGS 101, Prof. Name, University' }), field('Link', 'url', { required: true, placeholder: 'https://' }),
+          field('Note (optional)', 'note', { multiline: true, rows: 2 }), h('button', { class: 'btn', type: 'submit' }, 'Add syllabus'))));
+  }
   function findMaterialsBtn(c, m) {
     const working = busy.has(m.id);
     return h('div', { class: 'find-row' },
@@ -363,7 +396,7 @@
         busy.add(m.id); S.render(false);
         try {
           const r = await S.ai.findMaterials(c, m, {});
-          toast(r.missing ? 'No verifiable source was found for this module.' : 'Added ' + plural(r.added, 'suggested resource') + '.');
+          toast(r.missing && r.syllabi ? 'No readings found, but ' + sylN(r.syllabi) + ' were added below to source from.' : r.missing ? 'No verifiable source was found for this module.' : 'Added ' + plural(r.added, 'suggested resource') + (r.syllabi ? ' and ' + sylN(r.syllabi) : '') + '.');
         } catch (e) { toast(e.message); }
         busy.delete(m.id); S.render(false);
       } }, working ? 'Searching…' : 'Find materials with AI'),
@@ -434,6 +467,8 @@
             field('Link (optional)', 'url', { placeholder: 'https://' }),
             field('Note (optional)', 'note', { multiline: true, rows: 2 }),
             h('button', { class: 'btn', type: 'submit' }, 'Add reading')))),
+
+      syllabiSection(c, m),
 
       textSection(m, 'keyIdeas', 'Key ideas', 'Capture the main ideas, terms, and arguments worth remembering.'),
       m.extras.map((x) => extraSection(m, x)),
