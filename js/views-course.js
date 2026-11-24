@@ -378,7 +378,7 @@
         const urlChanged = u !== r.url;
         r.title = f.get('title').trim(); r.url = u; r.note = f.get('note').trim();
         // Once a person changes the link (or fills in a placeholder), the AI's check and opinion no longer describe it.
-        if (r.source && (urlChanged || r.source === 'placeholder')) { ['source', 'kind', 'creator', 'access', 'relevance', 'verification'].forEach((k) => delete r[k]); }
+        if (r.source && (urlChanged || r.source === 'placeholder')) { ['source', 'kind', 'creator', 'access', 'sourceType', 'derivedFrom', 'derivedUrl', 'relevance', 'verification'].forEach((k) => delete r[k]); }
         ui.edit = null; commit();
       } },
         field('Title', 'title', { value: r.title, required: true }), field('Link (optional)', 'url', { value: r.url, placeholder: 'https://' }),

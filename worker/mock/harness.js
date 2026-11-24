@@ -53,6 +53,7 @@
     'walled.mock-site.org': { status: 403 },
     'slow.mock-site.org': { hang: true },
     'redirect.mock-site.org': { redirect: 'https://learn.mock-university.org/final' },
+    'press.mock-press.org': { status: 200, title: 'Mock Feminist Theory Reader | Mock Press' },
     'sneaky.mock-site.org': { ip: '10.0.0.5', status: 200, title: 'internal page' },
   };
 
@@ -90,6 +91,19 @@
             { url: 'https://gone.mock-site.org/old', kind: 'article', creator: '', access: 'free', relevance: 'dead link' },
             { url: 'https://walled.mock-site.org/paywalled', kind: 'course', creator: 'Mock', access: 'paid', relevance: 'Full course.' },
           ];
+          if (o.syllabus) {
+            const sy = 'https://syllabi.mock-college.edu/wgs101-syllabus-2005';
+            const picks2 = [
+              { title: 'WGS 101 Syllabus 2005', url: sy, kind: 'document', relevance: 'the syllabus itself (must be dropped)' },
+              { title: 'Mock Feminist Theory Reader', url: 'https://press.mock-press.org/feminist-reader', kind: 'book', creator: 'A. Author', access: 'paid', relevance: 'Assigned core reader.', derivedFrom: 'Syllabus of Prof. Jane Mock, WGS 101, Mock College', derivedUrl: sy },
+              { title: 'The Second Mock Essay Collection', url: '', kind: 'book', creator: 'B. Writer', access: 'unknown', relevance: 'Assigned in week 3.', derivedFrom: 'Syllabus of Prof. Jane Mock, WGS 101, Mock College', derivedUrl: sy },
+              { title: 'Totally Invented Book Title Here', url: '', kind: 'book', creator: 'Nobody', access: 'unknown', relevance: 'NOT IN THE SYLLABUS', derivedFrom: 'Syllabus of Prof. Jane Mock', derivedUrl: sy },
+            ];
+            return json({ content: [
+              { type: 'web_search_tool_result', tool_use_id: 's1', content: [{ type: 'web_search_result', url: sy, title: 'WGS 101 Syllabus 2005 | Mock College' }] },
+              { type: 'web_fetch_tool_result', tool_use_id: 'f1', content: { type: 'web_fetch_result', url: sy, content: { type: 'document', source: { type: 'text', data: 'Week 1: Mock Feminist Theory Reader (https://press.mock-press.org/feminist-reader). Week 3: The Second Mock Essay Collection, B. Writer.' } } } },
+              { type: 'text', text: JSON.stringify({ picks: picks2 }) }], stop_reason: 'end_turn', usage: { input_tokens: 6000, output_tokens: 500, server_tool_use: { web_search_requests: 1 } } });
+          }
           if (o.noResults) return json({ content: [{ type: 'text', text: '{"picks":[]}' }], stop_reason: 'end_turn', usage: { input_tokens: 900, output_tokens: 80, server_tool_use: { web_search_requests: 1 } } });
           return json({
             content: [{ type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } }, { type: 'web_search_tool_result', tool_use_id: 's1', content: results },

@@ -109,7 +109,7 @@
   ai.money = (n) => '$' + (n < 0.01 && n > 0 ? n.toFixed(4) : n.toFixed(2));
 
   function readingFrom(r) {
-    return { id: S.uid(), title: r.title, url: r.url, note: '', done: false, source: 'ai', kind: r.kind, creator: r.creator, access: r.access, sourceType: r.sourceType, relevance: r.relevance, verification: r.verification };
+    return { id: S.uid(), title: r.title, url: r.url, note: '', done: false, source: 'ai', kind: r.kind, creator: r.creator, access: r.access, sourceType: r.sourceType, derivedFrom: r.derivedFrom, derivedUrl: r.derivedUrl, relevance: r.relevance, verification: r.verification };
   }
   const placeholder = (mod, note) => ({ id: S.uid(), title: 'Source needed: ' + mod.title, url: '', note: note || 'No verifiable source was found. Add your own.', done: false, source: 'placeholder' });
 
@@ -140,9 +140,9 @@
     }, opts);
     if (!S.state.courses.includes(course) || !course.modules.includes(mod)) throw new AIError('gone', 'That module was removed while searching.');
     mod.readings = mod.readings.filter((x) => x.source !== 'placeholder'); // an older "source needed" marker is replaced; nothing else is touched
-    const have = new Set(mod.readings.map((x) => x.url).filter(Boolean));
+    const have = new Set(mod.readings.map((x) => x.url || 'c:' + x.title.toLowerCase()).filter(Boolean));
     let added = 0;
-    (r.resources || []).forEach((x) => { if (!have.has(x.url)) { mod.readings.push(S.makeReading(readingFrom(x))); added++; } });
+    (r.resources || []).forEach((x) => { if (!have.has(x.url || 'c:' + x.title.toLowerCase())) { mod.readings.push(S.makeReading(readingFrom(x))); added++; } });
     const found = (r.resources || []).length; // 0 means the search found nothing verifiable; duplicates of existing links are not a failure
     if (!found && !mod.readings.length) mod.readings.push(S.makeReading(placeholder(mod, r.missingNote)));
     if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));

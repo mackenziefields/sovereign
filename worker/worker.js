@@ -34,6 +34,7 @@ const DEFAULTS = {
   PRICES: '{"claude-sonnet-5-5":[3,15],"claude-haiku-5-5":[1,5]}',
   SEARCH_COST_USD: '0.01',          // per web search. UNVERIFIED placeholder; check Anthropic's pricing page.
   WEB_SEARCH_TOOL: 'web_search_20260209',
+  WEB_FETCH_TOOL: 'web_fetch_20260209', // lets the AI read a syllabus page to pull out the readings it assigns; 'off' disables
   EFFORT_OUTLINE: 'medium',         // low | medium | high ; '' to omit
   EFFORT_LIGHT: '',
   ANTHROPIC_VERSION: '2023-06-01',
@@ -143,7 +144,9 @@ async function callClaude(env, o) {
 
   const total = { inTok: 0, outTok: 0, searches: 0 };
   const results = new Map(); // url -> title, ONLY urls returned by the search tool (our provenance guarantee)
-  let text = '', retriedWithoutFormat = false;
+  const fetched = { urls: new Set(), text: '' }; // pages the AI actually opened (web_fetch): links and words found inside them
+  const blockTypes = {};
+  let text = '', retriedWithoutFormat = false, retriedWithoutFetch = false;
 
   for (let turn = 0; turn <= HARD.MAX_PAUSES; turn++) {
     let res;
@@ -161,6 +164,9 @@ async function callClaude(env, o) {
       if (res.status === 400 && body.output_config && body.output_config.format && !retriedWithoutFormat) {
         delete body.output_config.format; retriedWithoutFormat = true; turn--; continue; // schema mode rejected: fall back to prompt-only JSON
       }
+      if (res.status === 400 && body.tools && body.tools.length > 1 && !retriedWithoutFetch) {
+        body.tools = body.tools.filter((t) => t.name !== 'web_fetch'); retriedWithoutFetch = true; turn--; continue; // page reading not supported by this model: search only
+      }
       if (res.status === 401 || res.status === 403) throw new AppError(502, 'upstream_auth', 'The AI provider rejected the Worker’s API key. The app owner needs to check ANTHROPIC_API_KEY.');
       if (res.status === 429) throw new AppError(503, 'upstream_busy', 'The AI provider is busy or the account is out of credit. Please try again shortly.');
       if (res.status === 404) throw new AppError(502, 'bad_model', 'A configured model name was not found by the AI provider. The app owner needs to check MODEL_OUTLINE / MODEL_LIGHT.');
@@ -173,6 +179,14 @@ async function callClaude(env, o) {
     total.searches += (u.server_tool_use && u.server_tool_use.web_search_requests) || 0;
 
     for (const b of data.content || []) {
+      blockTypes[b.type] = (blockTypes[b.type] || 0) + 1;
+      if (b.type === 'web_fetch_tool_result' && fetched.text.length < 300000) {
+        // Shape-agnostic on purpose: keep every address and the words found inside the opened page.
+        const raw = JSON.stringify(b.content || '').slice(0, 150000);
+        (raw.match(/https?:\/\/[^\s"'<>\\)\]]+/g) || []).forEach((u) => fetched.urls.add(u.replace(/[.,;]+$/, '')));
+        fetched.text += ' ' + raw.toLowerCase();
+        if (b.content && typeof b.content.url === 'string') fetched.urls.add(b.content.url);
+      }
       if (b.type === 'text') text += b.text;
       if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) {
         for (const r of b.content) if (r && r.type === 'web_search_result' && typeof r.url === 'string') results.set(r.url, clamp(r.title || '', 300));
@@ -184,7 +198,7 @@ async function callClaude(env, o) {
     }
     if (data.stop_reason === 'refusal') throw new AppError(422, 'refusal', 'The AI declined to write this course. Try rewording the topic.');
     if (data.stop_reason === 'max_tokens') throw new AppError(502, 'too_long', 'The AI ran out of room before finishing. Try fewer modules or a narrower topic.');
-    return { text, results, usage: { ...total, cost: costOf(env, o.model, total.inTok, total.outTok, total.searches) } };
+    return { text, results, fetched, blockTypes, usage: { ...total, cost: costOf(env, o.model, total.inTok, total.outTok, total.searches) } };
   }
   throw new AppError(502, 'upstream', 'The AI search did not finish. Please try again.');
 }
@@ -354,7 +368,7 @@ async function handleResources(env, body) {
 
   const r = await callClaude(env, {
     model: cfg(env, 'MODEL_LIGHT'), maxTokens: 2500, effort: cfg(env, 'EFFORT_LIGHT'), system: SYSTEM_RULES,
-    tools: [{ type: cfg(env, 'WEB_SEARCH_TOOL'), name: 'web_search', max_uses: 3 }],
+    tools: [{ type: cfg(env, 'WEB_SEARCH_TOOL'), name: 'web_search', max_uses: 3 }].concat(cfg(env, 'WEB_FETCH_TOOL') === 'off' ? [] : [{ type: cfg(env, 'WEB_FETCH_TOOL'), name: 'web_fetch', max_uses: 2 }]),
     user: '<user_input>\nCourse topic: ' + topic + '\nLevel: ' + level + '\nModule: ' + mod.title + '\nAbout: ' + mod.overview + '\nObjectives: ' + mod.objectives.join('; ') +
       '\nSuggested searches: ' + mod.queries.join(' | ') + '\n</user_input>\n' +
       'Use web search to find up to 4 genuinely useful learning resources for this module. Prioritize credible, objective sources, in this order when they fit the module:\n' +
@@ -362,41 +376,63 @@ async function handleResources(env, body) {
       '2. Government, standards bodies, and professional associations.\n' +
       '3. Respected practitioners and notable people in the field (interviews, talks, essays, documentaries, books) and established publishers or reputable journalism.\n' +
       '4. Crowd-sourced and open archives (for example the Internet Archive, Wikipedia for orientation, Khan Academy).\n' +
+      'IMPORTANT: a course syllabus, course homepage, or reading list is NOT itself a resource, so never recommend one. If a relevant syllabus is found, open it with web_fetch and recommend the specific readings it assigns instead: for each, find that reading\'s own page (publisher, library, open-access copy, archive, or author page) through search, and recommend that. ' +
+      'If you cannot find a page for an assigned reading, you may still list it as a citation with an empty "url", using its title and author exactly as written in the syllabus; never add details that the syllabus does not show. For every pick taken from a syllabus, fill "derivedFrom" (like "Syllabus of Prof. A. Name, Course Title, University Name", only what the page shows) and "derivedUrl" (the syllabus page address).\n' +
       'Aim for a useful mix (for example one academic source plus one practitioner or multimedia source). Prefer free sources; if a strong one is paywalled, mark access "paid". For books or textbooks, link to the publisher, library, or catalog page, never to copies of the text. ' +
       'Only recommend pages that appeared in your search results; never write a URL from memory. Return ONLY JSON: ' +
-      '{"picks":[{"url":"exact URL from search results","kind":"article|book|video|course|tool|document|podcast","creator":"author or organization if shown in the result, else empty","access":"free|paid|unknown","relevance":"one sentence on how it fits this module"}]}',
+      '{"picks":[{"title":"title as shown","url":"exact URL from search results or from the opened syllabus, or empty for a citation","kind":"article|book|video|course|tool|document|podcast","creator":"author or organization if shown, else empty","access":"free|paid|unknown","relevance":"one sentence on how it fits this module","derivedFrom":"only if taken from a syllabus, else empty","derivedUrl":"syllabus page address, else empty"}]}',
   });
 
   // Provenance rule: keep only URLs that the search tool actually returned (matched ignoring trailing slash, www, #fragment and
   // tracking parameters). Titles and the stored URL come from the search result, not the model.
-  const found = new Map();
+  const found = new Map(); // address -> {url, title}; only addresses the AI genuinely met (search results, or links inside a page it opened)
   for (const [u, t] of r.results) if (!found.has(urlKey(u))) found.set(urlKey(u), { url: u, title: t });
+  for (const u of r.fetched.urls) if (!found.has(urlKey(u))) found.set(urlKey(u), { url: u, title: '' });
+  const SYLLABUS = /syllab|course (outline|schedule|description|homepage)|reading list|course reader/i;
+  const covers = (title) => { const t = tokens(title); if (t.size < 2) return false; let n = 0; for (const w of t) if (r.fetched.text.includes(w)) n++; return n / t.size >= 0.8; };
   let picks = [], parsed = true;
   try { picks = parseJson(r.text).picks; } catch (e) { parsed = false; }
   const seen = new Set(), candidates = [];
   for (const p of Array.isArray(picks) ? picks : []) {
-    const hit = found.get(urlKey(clamp(p && p.url, 2000)));
-    if (!hit || seen.has(hit.url)) continue;
-    seen.add(hit.url);
-    candidates.push({
-      title: hit.title || hit.url, url: hit.url, sourceType: sourceType(hit.url),
+    if (!p || typeof p !== 'object') continue;
+    const link = clamp(p.url, 2000), title = clamp(p.title, 300);
+    const dUrl = found.get(urlKey(clamp(p.derivedUrl, 2000)));
+    const derived = dUrl ? { derivedFrom: clamp(p.derivedFrom, 300), derivedUrl: dUrl.url } : { derivedFrom: '', derivedUrl: '' };
+    const common = {
       kind: ['article', 'book', 'video', 'course', 'tool', 'document', 'podcast'].includes(p.kind) ? p.kind : '',
-      creator: clamp(p.creator, 200), access: ['free', 'paid'].includes(p.access) ? p.access : 'unknown', relevance: clamp(p.relevance, 400),
-    });
-    if (candidates.length >= HARD.MAX_PICKS) break;
+      creator: clamp(p.creator, 200), access: ['free', 'paid'].includes(p.access) ? p.access : 'unknown', relevance: clamp(p.relevance, 400), ...derived,
+    };
+    if (link) {
+      const hit = found.get(urlKey(link));
+      if (!hit || seen.has(hit.url)) continue;
+      const label = hit.title || title || hit.url;
+      if (SYLLABUS.test(label) || SYLLABUS.test(hit.url)) continue; // a syllabus is a place to find readings, never a reading itself
+      seen.add(hit.url);
+      candidates.push({ title: label, url: hit.url, sourceType: sourceType(derived.derivedUrl || hit.url), ...common });
+    } else if (derived.derivedFrom && title && covers(title) && !seen.has('c:' + title.toLowerCase())) {
+      // A citation with no link: kept only if its words really appear in a page the AI opened.
+      seen.add('c:' + title.toLowerCase());
+      candidates.push({ title, url: '', citation: true, sourceType: sourceType(derived.derivedUrl), ...common });
+    }
+    if (candidates.length >= HARD.MAX_PICKS + 2) break;
   }
-  candidates.sort((a, b) => TIER[a.sourceType] - TIER[b.sourceType]); // higher education first; stable otherwise
+  candidates.sort((a, b) => (a.citation ? 1 : 0) - (b.citation ? 1 : 0) || TIER[a.sourceType] - TIER[b.sourceType]); // links before citations; higher education first
 
   const resources = [];
   const hostCache = new Map();
-  for (const c of candidates.slice(0, HARD.MAX_VERIFY)) {
+  const linkCands = candidates.filter((c) => !c.citation).slice(0, HARD.MAX_VERIFY);
+  for (const c of linkCands) {
     const v = await verifyUrl(c.url, c.title, hostCache);
     if (v.status === 'broken') continue; // a confirmed dead link is dropped, never shown as a resource
     resources.push({ ...c, source: 'ai', verification: v });
     if (resources.length >= want) break;
   }
+  for (const c of candidates.filter((x) => x.citation)) {
+    if (resources.length >= want) break;
+    resources.push({ ...c, source: 'ai', verification: { status: 'not-checked', checkedAt: new Date().toISOString(), pageTitle: '', titleMatch: null, finalUrl: '', detail: 'Citation read from a syllabus; no link was found.' } });
+  }
   // Visible in your Worker's logs only (never sent to the browser): why a module may have come back empty.
-  console.log('resources', JSON.stringify({ module: mod.title, searchResults: r.results.size, picksParsed: parsed, picks: Array.isArray(picks) ? picks.length : 0, matched: candidates.length, kept: resources.length, types: candidates.map((c) => c.sourceType) }));
+  console.log('resources', JSON.stringify({ module: mod.title, blocks: r.blockTypes, fetchedLinks: r.fetched.urls.size, searchResults: r.results.size, picksParsed: parsed, picks: Array.isArray(picks) ? picks.length : 0, matched: candidates.length, kept: resources.length, types: candidates.map((c) => c.sourceType) }));
   const missing = resources.length === 0;
   return {
     resources, missing,

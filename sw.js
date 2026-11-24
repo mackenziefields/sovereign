@@ -1,7 +1,7 @@
 /* sovereign. — service worker: caches the app files so it opens offline.
    Your curriculum data lives in localStorage, not here.
    When you change any app file, bump CACHE so installed copies pick up the update. */
-const CACHE = 'sovereign-v3-6';
+const CACHE = 'sovereign-v3-7';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/styles.css', 'css/courses.css', 'css/ai.css',
   'js/config.js', 'js/store.js', 'js/components.js', 'js/ai-client.js', 'js/views-ai.js', 'js/views-course.js', 'js/views-dash.js', 'js/app.js',
@@ -19,16 +19,13 @@ self.addEventListener('activate', (e) => {
       .then(() => self.clients.claim()));
 });
 
-// Serve from cache first (fast, works offline), refresh the cache in the background.
+// Network first, so a new version shows up on the next open; the cache is the fallback that makes it work offline.
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   e.respondWith(
-    caches.match(req, { ignoreSearch: true }).then((hit) => {
-      const net = fetch(req).then((res) => {
-        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
-        return res;
-      }).catch(() => hit || caches.match('index.html'));
-      return hit || net;
-    }));
+    fetch(req).then((res) => {
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
+      return res;
+    }).catch(() => caches.match(req, { ignoreSearch: true }).then((hit) => hit || caches.match('index.html'))));
 });

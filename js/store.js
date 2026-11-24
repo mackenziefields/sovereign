@@ -67,6 +67,8 @@
       out.creator = str(r.creator, 300);
       out.access = oneOf(r.access, S.ACCESS, 'unknown');
       out.sourceType = oneOf(r.sourceType, S.SOURCE_TYPES, '');
+      out.derivedFrom = str(r.derivedFrom, 300);
+      out.derivedUrl = url(r.derivedUrl);
       out.relevance = str(r.relevance, 1000);
       out.verification = {
         status: S.VERIFY.includes(v.status) ? v.status : 'not-checked',

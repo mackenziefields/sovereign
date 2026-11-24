@@ -25,7 +25,7 @@
   S.readingLabels = function (r) {
     if (r.source === 'placeholder') return h('div', { class: 'ai-meta' }, h('span', { class: 'badge warn' }, 'Source needed'), h('span', { class: 'small muted' }, 'No verifiable source was found. Edit this to add your own.'));
     if (r.source !== 'ai') return null;
-    const v = r.verification || {}, vt = VERIFY_TEXT[v.status] || VERIFY_TEXT['not-checked'];
+    const v = r.verification || {}, vt = !r.url ? ['Citation only: no link found', 'warn'] : (VERIFY_TEXT[v.status] || VERIFY_TEXT['not-checked']);
     const tags = [
       h('span', { class: 'badge ' + vt[1], title: v.detail || '' }, vt[0]),
       v.status === 'reachable' && v.titleMatch === true ? h('span', { class: 'badge', title: 'The page’s title resembles the expected title. This does not confirm the content.' }, 'Title matches') : null,
@@ -37,10 +37,11 @@
     ].filter(Boolean);
     return h('div', { class: 'ai-meta' }, tags,
       r.creator ? h('div', { class: 'small muted ai-line' }, 'By ' + r.creator) : null,
+      r.derivedFrom ? h('div', { class: 'small ai-line' }, 'Derived from: ', r.derivedUrl ? h('a', { href: r.derivedUrl, target: '_blank', rel: 'noopener noreferrer' }, r.derivedFrom) : r.derivedFrom, '. Taken from that course’s reading list by AI.') : null,
       r.relevance ? h('div', { class: 'small ai-line' }, h('b', {}, 'Why it fits (AI’s opinion): '), r.relevance) : null,
       v.pageTitle ? h('div', { class: 'small muted ai-line' }, 'Page title: ' + v.pageTitle) : null,
       v.detail ? h('div', { class: 'small muted ai-line' }, v.detail) : null,
-      v.checkedAt ? h('div', { class: 'small muted ai-line' }, 'Checked by a program on ' + v.checkedAt.slice(0, 10) + '. A working link does not guarantee it covers this topic well; please look it over.') : null);
+      v.checkedAt && r.url ? h('div', { class: 'small muted ai-line' }, 'Checked by a program on ' + v.checkedAt.slice(0, 10) + '. A working link does not guarantee it covers this topic well; please look it over.') : null);
   };
 
   /* ---------- usage summary ---------- */
@@ -98,6 +99,7 @@
   function readForm(form) {
     const f = new FormData(form);
     const n = (k, d) => parseInt(f.get(k), 10) || d;
+    if (f.has('name')) { const nm = String(f.get('name') || '').trim().slice(0, 60); if (nm) { S.state.name = nm; S.save(); } } // stays in this browser; not part of the request
     return {
       topic: String(f.get('topic') || '').trim(), level: f.get('level') || 'beginner', goal: f.get('goal') || 'understand',
       goalText: String(f.get('goalText') || '').trim(), hours: n('hours', 4), weeks: n('weeks', 6), extra: String(f.get('extra') || '').trim(),
@@ -151,6 +153,7 @@
       h('div', { class: 'two' }, select('Time you can give it', 'hours', opts(HOURS), String(b.hours || 4)), select('Over about', 'weeks', opts(WEEKS), String(b.weeks || 6))),
       h('label', { class: 'field' }, h('span', {}, 'Anything else I should know? (optional)'),
         h('textarea', { name: 'extra', rows: 3, maxlength: '600', placeholder: 'e.g. I want to start a small online shop. I learn best by doing.' }, b.extra || '')),
+      S.state.name ? null : h('label', { class: 'field' }, h('span', {}, 'What should we call you? (optional)'), h('input', { type: 'text', name: 'name', maxlength: '60', autocomplete: 'given-name' }), h('small', {}, 'Used only to greet you. Stays in this browser and is never sent to the AI.')),
       h('p', { class: 'small muted' }, 'Only what you type on this page is sent to the AI service. Nothing else from your device is uploaded, and no documents are used.'),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn', type: 'submit' }, 'Build my course'),
