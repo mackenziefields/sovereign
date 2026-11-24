@@ -217,7 +217,7 @@
   };
 
   // Refuses to start AI work against an older copy of the Worker that doesn't have the newest features.
-  ai.NEEDS_VERSION = 6;
+  ai.NEEDS_VERSION = 7;
   ai.requireCurrent = async function () {
     let hl = null;
     try { hl = await ai.health(); } catch (e) { return; } // unreachable: the real call will report it
@@ -226,12 +226,13 @@
 
   // Writes the full one-stop page for assignments in one module: overview, scenario, steps, format, weighted grading. Never touches work already submitted.
   ai.writeDetails = async function (course, mod, targets, opts) {
-    const list = targets.filter((a) => a.points > 0 && mod.assignments.includes(a));
-    if (!list.length) throw new AIError('bad_input', 'Add points to the assignment first.');
+    const list = targets.filter((a) => a.points > 0 && !a.work && mod.assignments.includes(a)); // work already submitted is never rewritten
+    if (!list.length) throw new AIError('bad_input', 'Assignments need points, and ones you have already submitted work for are never rewritten.');
     await ai.requireCurrent();
     const r = await ai.call('/details', {
       topic: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '',
       module: { title: mod.title, overview: mod.overview, objectives: mod.objectives },
+      goal: [(course.ai && course.ai.brief && course.ai.brief.goal) || '', (course.ai && course.ai.brief && course.ai.brief.goalText) || ''].filter(Boolean).join(': '),
       assignments: list.map((a) => ({ title: a.title, description: a.description, kind: a.kind, points: a.points })),
       readings: mod.readings.filter((x) => x.source !== 'placeholder').slice(0, 6).map((x) => ({ title: x.title })),
     }, opts || {});
@@ -241,7 +242,7 @@
       const a = list[i];
       if (!d || !a || !mod.assignments.includes(a)) return;
       if (a.origin === 'ai' || !a.description) { a.description = d.description; a.purpose = ''; } // a person's own wording is kept
-      a.materials = d.materials; a.basis = d.basis; a.parts = d.parts; a.format = d.format; a.submit = d.submit; a.estimate = d.estimate; a.steps = [];
+      a.materials = d.materials; a.basis = d.basis; a.portfolioNote = d.portfolioNote || ''; a.parts = d.parts; a.format = d.format; a.submit = d.submit; a.estimate = d.estimate; a.steps = [];
       if (!a.work) { a.rubric = d.rubric; a.criteria = []; } // the grading criteria can't change once work has been submitted
       done++;
     });

@@ -152,6 +152,27 @@
     return h('p', {}, slot);
   }
 
+  // Save a finished piece to this course's Portfolio (or take it out). Demonstrate work is saved by default when it is finalized.
+  S.portfolioToggle = function (a) {
+    return h('div', { class: 'callout' },
+      h('label', { class: 'consent' }, h('input', { type: 'checkbox', checked: a.portfolio, onchange: (e) => { a.portfolio = e.target.checked; commit(); toast(a.portfolio ? 'Saved to this course’s Portfolio.' : 'Removed from the Portfolio.'); } }),
+        h('span', {}, 'Show this piece in this course’s Portfolio.' + (a.kind === 'demonstrate' ? ' (Saved by default for demonstrate work.)' : ''))),
+      h('p', { class: 'small muted' }, 'Portfolios stay in this browser. Files are kept on this device only and aren’t included in backups.'));
+  };
+
+  // How a saved piece appears in the Portfolio: what it shows, the work itself, and its AI-reviewed result.
+  S.portfolioPiece = function (c, m, a) {
+    const f = a.work && a.work.final, fb = f && f.feedback, pct = fb ? S.pctOf(a) : null;
+    return h('li', { class: 'item' }, h('div', { class: 'item-body' },
+      h('div', { class: 'item-title' }, h('a', { href: S.href(c, 'assignments', a.id) }, a.title), ' ', badge(a.kind ? S.label([['learn', 'Learn'], ['apply', 'Apply'], ['demonstrate', 'Demonstrate']], a.kind) : 'Assignment', 'soft')),
+      a.portfolioNote ? h('div', { class: 'item-note' }, a.portfolioNote) : null,
+      h('div', { class: 'item-meta' }, h('span', { class: 'code' }, c.code), h('span', { class: 'due' }, 'Module: ' + m.title),
+        fb ? h('span', { class: 'due' }, a.score + ' / ' + a.points + ' pts · ' + pct + '% · ' + S.letter(pct)) : null,
+        fb ? h('span', { class: 'badge soft' }, 'AI-reviewed') : null, f && f.late ? h('span', { class: 'badge warn' }, 'Late') : null),
+      h('details', { class: 'work-panel' }, h('summary', {}, 'The work' + (fb ? ' and feedback' : '')),
+        h('div', { class: 'wp-body' }, f && f.text ? h('p', { class: 'pre' }, f.text) : null, fileLine(f), fb ? feedbackView(fb, true) : null))));
+  };
+
   S.finalFeedback = (a) => h('div', {}, feedbackView(a.work.final.feedback, true), fileLine(a.work.final));
 
   // Optional, ungraded: practice on a real article, reading, or example the learner chose.

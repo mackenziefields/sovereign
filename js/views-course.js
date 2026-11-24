@@ -310,14 +310,14 @@
   function writeBtn(c, m, a) {
     const busy = writing.has(a.id);
     return h('div', { class: 'callout' },
-      h('p', { class: 'small' }, 'This assignment doesn’t have its full page yet (scenario, steps, and weighted grading). The AI can write it.' + (a.origin === 'ai' ? ' It will replace the AI-drafted overview. Anything you wrote yourself is kept.' : '')),
+      h('p', { class: 'small' }, a.parts.length ? 'This demonstrate assignment was written before portfolio assignments existed. The AI can rewrite it as a substantive portfolio piece for your field (new overview, steps, and grading). Nothing you have submitted is affected.' : 'This assignment doesn’t have its full page yet (scenario, steps, and weighted grading). The AI can write it.' + (a.origin === 'ai' ? ' It will replace the AI-drafted overview. Anything you wrote yourself is kept.' : '')),
       h('button', { class: 'btn ghost', type: 'button', disabled: busy, onclick: async () => {
         if (!S.ai.ready()) { toast('Add the AI service address and access code first (Data & Backup → AI).'); return; }
         writing.add(a.id); S.render(false);
         try { const r = await S.ai.writeDetails(c, m, [a], {}); toast(r.done ? 'Assignment written.' : 'The AI’s answer was incomplete. Please try again.'); }
         catch (e) { toast(e.message); }
         writing.delete(a.id); S.render(false);
-      } }, busy ? 'Writing…' : 'Write full assignment with AI'));
+      } }, busy ? 'Writing…' : (a.parts.length ? 'Rewrite as a portfolio assignment with AI' : 'Write full assignment with AI')));
   }
 
   function pageAssignment(c, m, a) {
@@ -338,8 +338,9 @@
         row('Submitting', FORMAT_SHORT[a.format] || 'Text entry or a file upload (text, PDF, or image)'),
         row('Status', status)),
       a.description || a.purpose ? sec('Overview', a.description ? h('p', { class: 'pre' }, a.description) : null, a.purpose ? h('p', { class: 'pre' }, a.purpose) : null) : null,
-      a.basis === 'readings' ? sec('Draw on this module’s readings',
-        h('p', { class: 'small muted' }, 'This assignment is graded on how well you understand the readings and key ideas of this module. Use them, and name what you draw on.'),
+      a.basis === 'portfolio' && a.portfolioNote ? sec('Portfolio piece', h('p', { class: 'pre' }, a.portfolioNote), h('p', { class: 'small muted' }, 'This is demonstrate work: aim for something you could show to a professor, employer, client, or collaborator. Finished pieces can be saved to this course’s Portfolio.')) : null,
+      a.basis === 'readings' || a.basis === 'portfolio' ? sec(a.basis === 'portfolio' ? 'Readings and key ideas to draw on' : 'Draw on this module’s readings',
+        h('p', { class: 'small muted' }, a.basis === 'portfolio' ? 'Your work should draw on this module’s readings and key ideas. Name what you use.' : 'This assignment is graded on how well you understand the readings and key ideas of this module. Use them, and name what you draw on.'),
         m.readings.filter((x) => x.source !== 'placeholder').length ? h('ul', { class: 'plain' }, m.readings.filter((x) => x.source !== 'placeholder').map((x) => h('li', {}, x.url ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.title) : x.title))) : h('p', { class: 'small' }, 'No readings have been added to this module yet. Add some on the ', h('a', { href: href(c, 'modules', m.id) }, 'module page'), '.'),
         h('p', {}, h('a', { href: href(c, 'modules', m.id) }, 'Open the module →'))) : null,
       a.materials ? sec('Scenario and materials', h('p', { class: 'pre' }, a.materials)) : null,
@@ -350,7 +351,8 @@
         h('ul', { class: 'plain' }, a.rubric.map((k) => h('li', {}, k.name + ': ', h('b', {}, k.max + ' / ' + a.points + ' points'))))) : null,
       !a.rubric.length && a.criteria.length ? sec('How it is graded', h('p', { class: 'small muted' }, (a.points != null ? a.points + ' points. ' : '') + 'The AI reviews your work against these. You get detailed feedback first, then your final grade after you resubmit (or after 72 hours).'), h('ul', { class: 'plain' }, a.criteria.map((x) => h('li', {}, x)))) : null,
       a.due ? h('p', { class: 'small muted' }, 'Late work is accepted and marked late.') : null,
-      !a.parts.length && !a.materials && a.points > 0 && !a.work ? writeBtn(c, m, a) : null,
+      a.points > 0 && !a.work && (!a.parts.length && !a.materials || a.kind === 'demonstrate' && a.parts.length && a.basis !== 'portfolio') ? writeBtn(c, m, a) : null,
+      a.work && a.work.final ? S.portfolioToggle(a) : null,
       sec('Your submission', S.workPanel(c, m, a, true)),
       a.points > 0 ? S.officePanel(c, m, a) : null,
       h('div', { class: 'item-actions' }, editBtn(a.id, 'Edit this assignment')));

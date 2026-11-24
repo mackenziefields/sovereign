@@ -140,6 +140,7 @@
 
   V.portfolio = function (course) {
     const cs = [course];
+    const pieces = S.allAssignments().filter((x) => x.c === course && x.a.portfolio && x.a.work && x.a.work.final);
     const graded = S.allAssignments().filter(({ a }) => a.points > 0 && a.score != null);
     const finals = cs.filter((c) => c.work.status === 'completed' || c.work.description);
     const creds = cs.flatMap((c) => c.credentials.map((k) => ({ c, k })));
@@ -153,6 +154,8 @@
     return h('div', { class: 'narrow' },
       h('h2', {}, 'Portfolio'),
       h('p', { class: 'lede muted' }, 'The work and credentials you can point to for this course. Only final versions appear here. AI-reviewed scores are automated assessments, and credentials are self-reported; none of it is verified by anyone else.'),
+      h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, 'Portfolio pieces'), h('span', { class: 'count' }, plural(pieces.length, 'piece'))),
+        pieces.length ? h('ul', { class: 'items' }, pieces.map(({ c, m, a }) => S.portfolioPiece(c, m, a))) : empty('Finished demonstrate assignments are saved here as you complete them. You can add or remove any finished assignment from its own page.')),
       h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, 'Graded work'), h('span', { class: 'count' }, plural(graded.length, 'assignment'))),
         graded.length ? h('ul', { class: 'items' }, graded.map(({ c, m, a }) => h('li', { class: 'item' }, h('div', { class: 'item-body' },
           h('div', { class: 'item-title' }, h('a', { href: S.href(c, 'modules', m.id) }, a.title)),

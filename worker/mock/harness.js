@@ -36,6 +36,7 @@
       keyIdeas: '- Idea one for ' + title + '\n- Idea two\n- Idea three', searchQueries: [title.toLowerCase() + ' for beginners'],
       assignments: [
         { title: 'Read and note: ' + title, description: 'Write five notes on what surprised you.', kind: 'learn', points: 5 },
+        { title: 'Demonstrate: ' + title, description: 'Produce a brief.', kind: 'demonstrate', points: 30 },
         { title: 'Apply: ' + title, description: 'Do the exercise described in the module.', purposeX: '[MOCK] This builds the skill of applying ' + title + '.', parts: [{ title: 'Hypothesis', questions: ['What do you expect to find, and why?', 'How will you decide what to examine?'] }, { title: 'Audit', questions: ['What did you choose and why?', 'What do you notice?'] }, { title: 'Reflection', questions: ['What surprised you?'] }], format: 'pdf', submit: 'One page of text (about 300 words).', criteria: ['Uses the module concepts correctly', 'Gives a concrete example', 'Is clear and organized'], estimate: '45 minutes', kind: 'apply', points: 15 },
       ],
       selfCheck: ['In your own words, what is the main idea of "' + title + '"?', 'What would you do differently now?'],
@@ -124,7 +125,7 @@
         }
         if (/Write the complete assignment page/.test(b.messages[0].content)) { // /details (canned)
           const n = (b.messages[0].content.match(/^\d+\. /gm) || []).length;
-          const mk = (i) => ({ title: 'T' + i, basis: i % 2 ? 'scenario' : 'readings', overview: '[MOCK] Para one why it matters.\n\nPara two the situation and what you produce.', materials: '[MOCK] Fictional company Northwind Ltd has a flexible-work policy: ...', steps: [{ title: 'Hypothesis', questions: ['What do you expect?', 'Why?'] }, { title: 'Analysis', questions: ['Who benefits?'] }], format: i % 3 === 2 ? 'file' : i % 2 ? 'any' : 'text', submit: 'A 450-word analysis with two recommendations.', estimate: '60 minutes', criteria: [{ text: 'Considers gender with two other factors', points: 6 }, { text: 'Avoids stereotyping', points: 4 }, { text: 'Recommendations follow', points: 5 }] });
+          const mk = (i) => ({ title: 'T' + i, basis: 'scenario', portfolioNote: 'A policy brief you could show to advocacy employers.', overview: '[MOCK] Para one why it matters.\n\nPara two the situation and what you produce.', materials: '[MOCK] Fictional company Northwind Ltd has a flexible-work policy: ...', steps: [{ title: 'Hypothesis', questions: ['What do you expect?', 'Why?'] }, { title: 'Analysis', questions: ['Who benefits?'] }], format: i % 3 === 2 ? 'file' : i % 2 ? 'any' : 'text', submit: 'A 450-word analysis with two recommendations.', estimate: '60 minutes', criteria: [{ text: 'Considers gender with two other factors', points: 6 }, { text: 'Avoids stereotyping', points: 4 }, { text: 'Recommendations follow', points: 5 }] });
           if (o.detailsFail) return json({ content: [{ type: 'text', text: JSON.stringify({ assignments: [] }) }], stop_reason: 'end_turn', usage: { input_tokens: 500, output_tokens: 20 } });
           return json({ content: [{ type: 'text', text: JSON.stringify({ assignments: Array.from({ length: n }, (_, i) => mk(i)) }) }], stop_reason: 'end_turn', usage: { input_tokens: 900, output_tokens: 3000 } });
         }
