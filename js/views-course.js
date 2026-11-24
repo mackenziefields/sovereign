@@ -5,7 +5,7 @@
   const V = (S.views = S.views || {});
   const ui = S.ui;
   const BAD_LINK = 'That link doesn’t look valid. Use an http(s) address.';
-  const SECTIONS = [['home', 'Home'], ['announcements', 'Announcements'], ['syllabus', 'Syllabus'], ['modules', 'Modules'], ['assignments', 'Assignments'], ['grades', 'Grades']];
+  const SECTIONS = [['home', 'Home'], ['announcements', 'Announcements'], ['syllabus', 'Syllabus'], ['modules', 'Modules'], ['assignments', 'Assignments'], ['grades', 'Grades'], ['portfolio', 'Portfolio']];
 
   const href = (c, sec, sub) => '#/course/' + c.id + (sec && sec !== 'home' ? '/' + sec + (sub ? '/' + sub : '') : '');
   S.href = href;
@@ -70,8 +70,12 @@
         const m = sub && c.modules.find((x) => x.id === sub);
         body = m ? pageModule(c, m) : pageModules(c); break;
       }
-      case 'assignments': body = pageAssignments(c); break;
+      case 'assignments': {
+        const f = sub && c.modules.flatMap((m) => m.assignments.map((a) => ({ m, a }))).find((x) => x.a.id === sub);
+        body = f ? pageAssignment(c, f.m, f.a) : pageAssignments(c); break;
+      }
       case 'grades': body = pageGrades(c); break;
+      case 'portfolio': body = V.portfolio(c); break;
       default: body = pageHome(c); current = 'home';
     }
     return h('div', { class: 'course' },
@@ -241,7 +245,8 @@
     return h('form', { class: a ? 'inline-edit' : '', onsubmit: (e) => {
       e.preventDefault(); const f = new FormData(e.target);
       const graded = a && a.work && a.work.final && a.work.final.feedback;
-      const v = { title: f.get('title').trim(), description: f.get('description').trim(), due: a && a.locked ? a.due : S.validDate(f.get('due') || '') };
+      const lines = (k, n) => String(f.get(k) || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, n).map((x) => x.slice(0, 500));
+      const v = { purpose: String(f.get('purpose') || '').trim().slice(0, 2000), steps: lines('steps', 12), submit: String(f.get('submit') || '').trim().slice(0, 1000), criteria: lines('criteria', 8).map((x) => x.slice(0, 300)), estimate: String(f.get('estimate') || '').trim().slice(0, 60), title: f.get('title').trim(), description: f.get('description').trim(), due: a && a.locked ? a.due : S.validDate(f.get('due') || '') };
       if (!graded) { v.points = num(f.get('points')); v.score = num(f.get('score')); }
       if (a) { Object.assign(a, v); ui.edit = null; }
       else {
@@ -253,7 +258,12 @@
     } },
       !m && !a ? select('Module', 'module', c.modules.map((x) => [x.id, x.title]), c.modules[0] && c.modules[0].id) : null,
       field('Assignment title', 'title', { value: a ? a.title : '', required: true, placeholder: 'e.g. Writing Exercise 1' }),
-      field('Instructions (optional)', 'description', { value: a ? a.description : '', multiline: true, rows: 3 }),
+      field('Overview / instructions (optional)', 'description', { value: a ? a.description : '', multiline: true, rows: 3 }),
+      field('Why you are doing this (optional)', 'purpose', { value: a ? a.purpose : '', multiline: true, rows: 2 }),
+      field('Steps (optional)', 'steps', { value: a ? a.steps.join('\n') : '', multiline: true, rows: 4, hint: 'One step per line.' }),
+      field('What to submit (optional)', 'submit', { value: a ? a.submit : '', multiline: true, rows: 2 }),
+      field('How it is graded (optional)', 'criteria', { value: a ? a.criteria.join('\n') : '', multiline: true, rows: 3, hint: 'One criterion per line. The AI reviews against these.' }),
+      field('Estimated time (optional)', 'estimate', { value: a ? a.estimate : '', placeholder: 'e.g. 45 minutes' }),
       a && a.locked ? h('p', { class: 'small muted' }, 'Due ' + S.fmtDate(a.due) + '. Set by your course timeline, so it can’t be changed.') : field('Due date (optional)', 'due', { type: 'date', value: a ? a.due : '' }),
       a && a.work && a.work.final && a.work.final.feedback ? h('p', { class: 'small muted' }, 'Graded by the AI review: ' + a.score + ' / ' + a.points + ' pts. Points and score are fixed once graded.') : h('div', { class: 'two' }, field('Points (optional)', 'points', { type: 'number', value: a ? a.points : '' }), field('Your score (optional)', 'score', { type: 'number', value: a ? a.score : '' })),
       h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'submit' }, a ? 'Save' : 'Add assignment'), a ? cancelBtn() : null));
@@ -266,16 +276,16 @@
     const meta = [
       a.kind ? h('span', { class: 'badge soft' }, a.kind === 'learn' ? 'Learn' : a.kind === 'apply' ? 'Apply' : 'Demonstrate') : null,
       a.due ? h('span', { class: 'due' + (late ? ' late' : '') }, (late ? 'Overdue · ' : 'Due ') + S.fmtDate(a.due)) : null,
+      a.work && a.work.phase === 'reviewed' ? h('span', { class: 'badge soft' }, 'Feedback ready') : null,
       a.points != null ? h('span', { class: 'due' }, a.score != null ? a.score + ' / ' + a.points + ' pts' + (pct != null ? ' · ' + pct + '%' : '') : a.points + ' pts') : null,
     ].filter(Boolean);
     return h('li', { class: 'item' + (a.done ? ' is-done' : '') },
       checkbox(a.done, 'Mark completed: ' + a.title, (v) => { a.done = v; commit(); }),
       h('div', { class: 'item-body' },
-        h('div', { class: 'item-title' }, o.link ? h('a', { href: href(c, 'modules', m.id) }, a.title) : a.title),
+        h('div', { class: 'item-title' }, h('a', { href: href(c, 'assignments', a.id) }, a.title)),
         meta.length ? h('div', { class: 'item-meta' }, meta) : null,
         a.description ? h('div', { class: 'item-note' }, a.description) : null,
         a.work && a.work.final && a.work.final.feedback && a.work.final.late ? h('div', { class: 'item-meta' }, h('span', { class: 'badge warn' }, 'Late')) : null,
-        o.work ? S.workPanel(c, m, a) : null,
         o.actions ? h('div', { class: 'item-actions' }, editBtn(a.id), o.reorder ? moveBtns(m.assignments, a) : null, removeBtn('assignment', m.assignments, a)) : null));
   }
 
@@ -284,6 +294,34 @@
       h('h3', { class: 'minor' }, h('a', { href: href(c, 'modules', m.id) }, 'Module ' + (i + 1) + ' · ' + m.title)),
       h('ul', { class: 'items' }, m.assignments.map((a) => assignmentItem(c, m, a, { link: false, actions: manage })))) : null)).filter(Boolean);
     return groups.length ? h('div', {}, groups) : empty('No assignments yet. Assignments are created inside a module, so each one belongs to the module it is for.');
+  }
+
+  // One assignment on its own page: what it is, why, how, what to hand in, how it is graded, and where to submit it.
+  function pageAssignment(c, m, a) {
+    const mi = c.modules.indexOf(m) + 1, w = a.work;
+    const status = !w ? 'Not submitted' : w.phase === 'reviewed' ? 'Feedback ready (grade after final review)' : w.final.feedback ? 'Final grade: ' + a.score + ' / ' + a.points + ' pts' : 'Attached as evidence';
+    const sec = (title, ...kids) => h('section', { class: 'msec' }, h('div', { class: 'sec-head' }, h('h3', {}, title)), ...kids);
+    const row = (k, v) => v ? h('div', { class: 'ameta-i' }, h('span', { class: 'ameta-k' }, k), h('span', {}, v)) : null;
+    if (ui.edit === a.id) return h('div', {}, h('p', { class: 'crumbs' }, h('a', { href: href(c, 'assignments') }, '← All assignments')), h('div', { class: 'panel' }, assignmentForm(c, m, a)));
+    const hasAI = a.points > 0;
+    return h('div', { class: 'apage' },
+      h('p', { class: 'crumbs' }, h('a', { href: href(c, 'assignments') }, '← All assignments'), ' · ', h('a', { href: href(c, 'modules', m.id) }, 'Module ' + mi + ': ' + m.title)),
+      h('p', { class: 'eyebrow' }, a.kind ? S.label([['learn', 'Learn'], ['apply', 'Apply'], ['demonstrate', 'Demonstrate']], a.kind) : 'Assignment'),
+      h('h2', { class: 'mod-h' }, a.title),
+      h('div', { class: 'ameta' },
+        row('Due', a.due ? S.fmtDate(a.due) + (a.locked ? ' (set by your course timeline)' : '') : 'No due date'),
+        row('Points', a.points != null ? String(a.points) : 'Not graded'),
+        row('Estimated time', a.estimate),
+        row('Submitting', 'Text entry or a file upload (text, PDF, or image)'),
+        row('Status', status)),
+      a.description ? sec('Overview', h('p', { class: 'pre' }, a.description)) : null,
+      a.purpose ? sec('Why you are doing this', h('p', { class: 'pre' }, a.purpose)) : null,
+      a.steps.length ? sec('What to do', h('ol', { class: 'steps-list' }, a.steps.map((x) => h('li', {}, x)))) : null,
+      sec('What to submit', h('p', { class: 'pre' }, a.submit || 'Type your answer or upload your work in Your submission below.')),
+      a.criteria.length ? sec('How it is graded', h('p', { class: 'small muted' }, (a.points != null ? a.points + ' points. ' : '') + 'The AI reviews your work against these. You get detailed feedback first, then your final grade after you resubmit (or after 72 hours).'), h('ul', { class: 'plain' }, a.criteria.map((x) => h('li', {}, x)))) : null,
+      a.due ? h('p', { class: 'small muted' }, 'Late work is accepted and marked late.') : null,
+      sec('Your submission', S.workPanel(c, m, a, true)),
+      h('div', { class: 'item-actions' }, editBtn(a.id, 'Edit this assignment')));
   }
 
   function pageAssignments(c) {
@@ -480,7 +518,7 @@
 
       h('section', { class: 'msec' },
         h('div', { class: 'sec-head' }, h('h3', {}, 'Assignments'), h('span', { class: 'count' }, m.assignments.filter((a) => a.done).length + ' of ' + m.assignments.length + ' done')),
-        m.assignments.length ? h('ul', { class: 'items' }, m.assignments.map((a) => assignmentItem(c, m, a, { actions: true, reorder: true, work: true }))) : empty('Add practical assignments for this module. They belong to this module only.'),
+        m.assignments.length ? h('ul', { class: 'items' }, m.assignments.map((a) => assignmentItem(c, m, a, { actions: true, reorder: true }))) : empty('Add practical assignments for this module. They belong to this module only.'),
         h('details', { class: 'add' }, h('summary', {}, 'New assignment'), assignmentForm(c, m, null))),
 
       listSection(m, 'selfCheck', 'Check your understanding', 'One question per line.'),

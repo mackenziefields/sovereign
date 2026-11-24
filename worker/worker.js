@@ -233,7 +233,7 @@ const OUTLINE_SCHEMA = obj({
   credentials: { type: 'array', items: obj({ name: S_STR, issuer: S_STR, note: S_STR }) },
   modules: { type: 'array', items: obj({
     title: S_STR, duration: S_STR, overview: S_STR, objectives: S_LIST, keyIdeas: S_STR, searchQueries: S_LIST,
-    assignments: { type: 'array', items: obj({ title: S_STR, description: S_STR, kind: { type: 'string', enum: ['learn', 'apply', 'demonstrate'] }, points: { type: 'integer' } }) },
+    assignments: { type: 'array', items: obj({ title: S_STR, description: S_STR, purpose: S_STR, steps: S_LIST, submit: S_STR, criteria: S_LIST, estimate: S_STR, kind: { type: 'string', enum: ['learn', 'apply', 'demonstrate'] }, points: { type: 'integer' } }) },
     selfCheck: S_LIST, reflection: S_STR,
   }) },
   finalProject: obj({ title: S_STR, description: S_STR, criteria: S_LIST }),
@@ -254,7 +254,7 @@ function outlinePrompt(b, maxMods) {
     '- "syllabus": plain text, 150-300 words: what the course is, how to work through it, how progress is assessed. No URLs.\n' +
     '- "outcomes": 3-6 specific things the learner will be able to do. "pathway": one sentence on what outcome this course points toward (matching their goal).\n' +
     '- "duration": e.g. "6 weeks, about 5 hours per week". Each module has a short "duration" (e.g. "Week 1").\n' +
-    '- Each module: 2-4 measurable "objectives", a short "overview", "keyIdeas" (plain text, 3-5 bullet lines starting with "- "), 2-3 "assignments" (kind learn/apply/demonstrate; "points" 5-25), 2-3 "selfCheck" questions, one "reflection" prompt, and 1-2 "searchQueries": short web-search phrases that would find a genuinely useful free beginner-appropriate resource for that module. Do NOT write any URLs or specific resource titles.\n' +
+    '- Each module: 2-4 measurable "objectives", a short "overview", "keyIdeas" (plain text, 3-5 bullet lines starting with "- "), 2-3 "assignments" (kind learn/apply/demonstrate; "points" 5-25; each is a one-stop page, so also give: "description" = a short overview of the task, "purpose" = 1-2 sentences on why you are doing it and what it builds, "steps" = 3-6 short action steps, "submit" = exactly what to hand in (form, length, contents) as plain text that can be typed or uploaded as text, PDF or image, "criteria" = 3-4 short statements of what a strong submission shows, "estimate" = e.g. "45 minutes"), 2-3 "selfCheck" questions, one "reflection" prompt, and 1-2 "searchQueries": short web-search phrases that would find a genuinely useful free beginner-appropriate resource for that module. Do NOT write any URLs or specific resource titles.\n' +
     '- "finalProject": a practical capstone appropriate to the learner\'s goal (' + b.goal + '), with 3-5 "criteria". Make it something they can actually produce.\n' +
     '- "credentials": 0-3 REAL, well-known licenses, certifications, or similar accolades that are genuinely relevant to this topic and goal' + (b.goalText ? ' (the learner named: ' + b.goalText + ')' : '') + '. Give "name", "issuer", and a "note" saying what to verify (cost, time, eligibility, and that requirements come from the official body and may depend on location). Never invent a credential or its requirements; if you are not confident any exists, return an empty list.\n' +
     '- "licensureNote": only if the goal involves a license, certification, or exam: a plain statement that this course is preparation only and requirements come from the official body. Otherwise an empty string.\n' +
@@ -302,7 +302,7 @@ function sanitizeOutline(o, maxMods) {
       assignments: (Array.isArray(m.assignments) ? m.assignments : []).slice(0, 4).map((a) => {
         a = a && typeof a === 'object' ? a : {};
         const pts = Math.round(Number(a.points)); // untrusted output: validated, never trusted
-        return { title: clamp(a.title, 200) || 'Assignment', description: clamp(a.description, 1500), kind: ['learn', 'apply', 'demonstrate'].includes(a.kind) ? a.kind : 'apply', points: pts > 0 && pts <= 1000 ? pts : null };
+        return { title: clamp(a.title, 200) || 'Assignment', description: clamp(a.description, 1500), purpose: clamp(a.purpose, 800), steps: clampList(a.steps, 8, 300), submit: clamp(a.submit, 600), criteria: clampList(a.criteria, 5, 250), estimate: clamp(a.estimate, 60), kind: ['learn', 'apply', 'demonstrate'].includes(a.kind) ? a.kind : 'apply', points: pts > 0 && pts <= 1000 ? pts : null };
       }),
       selfCheck: clampList(m.selfCheck, 4, 300), reflection: clamp(m.reflection, 600),
     };

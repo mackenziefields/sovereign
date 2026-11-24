@@ -133,7 +133,7 @@
       modules: o.modules.map((m, mi) => ({
         id: S.uid(), title: m.title, overview: m.overview, keyIdeas: m.keyIdeas, reflection: m.reflection, objectives: m.objectives, selfCheck: m.selfCheck,
         duration: m.duration, origin: 'ai', edited: false, readings: [],
-        assignments: m.assignments.map((a, ai_) => ({ id: S.uid(), title: a.title, description: a.description, kind: a.kind, points: a.points, origin: 'ai', due: dueFor(start, brief && brief.weeks, o.modules.length, mi, ai_, m.assignments.length), locked: true })),
+        assignments: m.assignments.map((a, ai_) => ({ id: S.uid(), title: a.title, description: a.description, purpose: a.purpose, steps: a.steps, submit: a.submit, criteria: a.criteria, estimate: a.estimate, kind: a.kind, points: a.points, origin: 'ai', due: dueFor(start, brief && brief.weeks, o.modules.length, mi, ai_, m.assignments.length), locked: true })),
       })),
       work: { title: fp.title, criteria: fp.criteria },
       ai: { generated: true, createdAt: now(), status: 'partial', note: 'Course outline saved. Learning materials are still being found.', brief, usage: [] },
@@ -182,12 +182,20 @@
 
   // Reviews one submission. Only call this after the person has agreed to send it. The work is passed along and not kept by the service.
   // payload: { text } or { file: { mime, base64 } }. Round 2 also sends what round 1 asked to change.
+  // The criteria shown on the assignment page become the rubric (points split evenly) unless a rubric already exists.
+  function rubricFor(a) {
+    if (a.rubric && a.rubric.length) return a.rubric;
+    const cr = (a.criteria || []).slice(0, 8), n = cr.length;
+    if (!n || !(a.points > 0)) return [];
+    const each = Math.floor((a.points / n) * 10) / 10;
+    return cr.map((t, i) => ({ name: t.slice(0, 120), max: i === n - 1 ? Math.round((a.points - each * (n - 1)) * 10) / 10 : each }));
+  }
   ai.review = async function (course, mod, a, payload, round, opts) {
     const first = a.work && a.work.first && a.work.first.feedback;
     const r = await ai.call('/review', {
       course: { title: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '' },
       assignment: { title: a.title, description: a.description, points: a.points },
-      round: round === 2 ? 2 : 1, rubric: a.rubric || [], previousImprovements: round === 2 && first ? first.improvements : [],
+      round: round === 2 ? 2 : 1, rubric: rubricFor(a), previousImprovements: round === 2 && first ? first.improvements : [],
       submission: payload,
     }, opts || {});
     if (!S.state.courses.includes(course) || !mod.assignments.includes(a)) throw new AIError('gone', 'That assignment was removed while it was being reviewed.');

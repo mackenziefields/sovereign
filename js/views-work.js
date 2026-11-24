@@ -120,7 +120,7 @@
   S.finalFeedback = (a) => h('div', {}, feedbackView(a.work.final.feedback, true), fileLine(a.work.final));
 
   // The panel on a module's assignment: submit, review, resubmit, final grade.
-  S.workPanel = function (c, m, a) {
+  S.workPanel = function (c, m, a, forceOpen) {
     const w = a.work, key = 'wp:' + a.id;
     const ready = S.ai && S.ai.ready && S.ai.ready();
     const canReview = a.points > 0;
@@ -163,7 +163,7 @@
       ];
     }
     const label = !w ? 'Submit work' : w.phase === 'reviewed' ? 'Feedback ready' : (w.final.feedback ? 'Final grade' : 'Attached');
-    const d = h('details', { class: 'work-panel', open: S.ui.open.has(key) || (dr(a).busy) || (!!dr(a).err) }, h('summary', {}, label), h('div', { class: 'wp-body' }, body));
+    const d = h('details', { class: 'work-panel', open: forceOpen || S.ui.open.has(key) || (dr(a).busy) || (!!dr(a).err) }, h('summary', {}, label), h('div', { class: 'wp-body' }, body));
     d.addEventListener('toggle', () => { if (d.open) S.ui.open.add(key); else S.ui.open.delete(key); });
     return d;
   };

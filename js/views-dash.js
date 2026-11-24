@@ -53,7 +53,7 @@
       h('ul', { class: 'items todo' }, shown.map(({ c, m, a }) => h('li', { class: 'item' },
         checkbox(a.done, 'Mark completed: ' + a.title, (v) => { a.done = v; commit(); }),
         h('div', { class: 'item-body' },
-          h('div', { class: 'item-title' }, h('a', { href: S.href(c, 'modules', m.id) }, a.title)),
+          h('div', { class: 'item-title' }, h('a', { href: S.href(c, 'assignments', a.id) }, a.title)),
           h('div', { class: 'item-meta' }, h('span', { class: 'code' }, c.code), dueLabel(a)))))),
       list.length > shown.length ? h('p', { class: 'small muted' }, '+ ' + (list.length - shown.length) + ' more. See each course’s Assignments page.') : null);
   }
@@ -138,8 +138,8 @@
 
   /* ---------- Portfolio ---------- */
 
-  V.portfolio = function () {
-    const cs = S.state.courses;
+  V.portfolio = function (course) {
+    const cs = [course];
     const graded = S.allAssignments().filter(({ a }) => a.points > 0 && a.score != null);
     const finals = cs.filter((c) => c.work.status === 'completed' || c.work.description);
     const creds = cs.flatMap((c) => c.credentials.map((k) => ({ c, k })));
@@ -151,9 +151,8 @@
       h('div', { class: 'item-actions' }, h('a', { class: 'small', href: S.href(c, 'modules') }, 'Manage'))));
     const empty = (t) => h('p', { class: 'empty' }, t);
     return h('div', { class: 'narrow' },
-      h('p', { class: 'eyebrow' }, 'Demonstrate'),
-      h('h1', {}, 'Portfolio'),
-      h('p', { class: 'lede muted' }, 'The work and credentials you can point to. Only final versions appear here. AI-reviewed scores are automated assessments, and credentials are self-reported; none of it is verified by anyone else.'),
+      h('h2', {}, 'Portfolio'),
+      h('p', { class: 'lede muted' }, 'The work and credentials you can point to for this course. Only final versions appear here. AI-reviewed scores are automated assessments, and credentials are self-reported; none of it is verified by anyone else.'),
       h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, 'Graded work'), h('span', { class: 'count' }, plural(graded.length, 'assignment'))),
         graded.length ? h('ul', { class: 'items' }, graded.map(({ c, m, a }) => h('li', { class: 'item' }, h('div', { class: 'item-body' },
           h('div', { class: 'item-title' }, h('a', { href: S.href(c, 'modules', m.id) }, a.title)),

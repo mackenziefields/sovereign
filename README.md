@@ -23,7 +23,7 @@ then visit http://localhost:8000. Home-screen install and offline use need `http
 - **Modules** appear as picture tiles with progress bars; each opens its own page with Overview, Readings, Key ideas, Assignments, Reflection, and optional custom sections (such as Discussion questions or Favorite passages).
 - **Assignments belong to exactly one module.** Create them on the module page, or on the course's Assignments page by choosing the module.
 - **Grades**: enter Points and your Score on an assignment; the course shows your average as Current Grade.
-- **Portfolio**: scored assignments, final projects, and earned credentials in one place. Everything in it is recorded by you, not verified by anyone else.
+- **Portfolio** (in each course's menu): that course's graded assignments, final project, and credentials. AI scores are automated; credentials are self-reported.
 - **My Work**: each course's final deliverable, with status, description, reflection, and link. Optional licenses and credentials are tracked at the bottom of a course's Modules page.
 - **Data & Backup**: export/import JSON, clear all data.
 
@@ -43,7 +43,7 @@ Answer a few plain questions (topic, starting point, goal, time) and an AI draft
 
 ## Submitting work and AI feedback
 
-Open an assignment inside its module (it needs points) and choose **Submit work**.
+Each assignment has its own page (click its title): overview, why you're doing it, steps, what to submit, how it's graded, and the submission box. AI-built courses fill these in; manual ones can add them with **Edit this assignment**. Courses made before this update only have the overview until you edit them. To submit, the assignment needs points.
 
 * Submit text, or a text / PDF / image file. **Nothing is sent until you tick the consent box for that submission.** Audio, video and other file types can be attached as evidence only: no AI feedback and no grade.
 * **Review 1** gives detailed, action-oriented feedback with **no grade shown**. The 72-hour clock starts when that feedback appears.

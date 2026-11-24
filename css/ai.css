@@ -38,3 +38,11 @@
 .consent input { margin-top: .2rem; flex: none; }
 .feedback h4.minor { margin: .6rem 0 .2rem; }
 .grade-line { font-size: 1.05rem; display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+
+/* ---- assignment page ---- */
+.ameta { display: grid; gap: .35rem; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: .75rem 0; margin: 1rem 0 1.5rem; font-size: .92rem; }
+.ameta-i { display: flex; gap: .75rem; }
+.ameta-k { flex: 0 0 8.5rem; font-weight: 600; }
+.steps-list { padding-left: 1.3rem; display: grid; gap: .4rem; }
+.apage .work-panel > summary { font-size: .95rem; }
+@media (max-width: 480px) { .ameta-i { flex-direction: column; gap: 0; } .ameta-k { flex: none; } }
