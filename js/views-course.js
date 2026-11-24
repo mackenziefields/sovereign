@@ -245,7 +245,7 @@
   const partsFrom = (t) => String(t || '').split(/\n\s*\n/).map((blk) => blk.split('\n').map((x) => x.trim()).filter(Boolean)).filter((l) => l.length).slice(0, 8)
     .map((l) => ({ title: l[0].slice(0, 120), questions: l.slice(1, 9).map((x) => x.slice(0, 500)) }));
   // "Text entry", "a PDF", ... for the sentence telling people what form to submit in
-  const FORMAT_NOUN = { text: 'a text entry (typed into the box)', pdf: 'a PDF file', image: 'an image (a photo or scan)', any: 'a text entry, a PDF, or an image' };
+  const FORMAT_SENTENCE = { text: 'Submit as a text box entry.', pdf: 'Submit as a PDF.', image: 'Submit as an image.', any: 'No preferred file type: submit as a text box entry, PDF, or image.' };
   const FORMAT_SHORT = { text: 'Text entry', pdf: 'PDF upload', image: 'Image upload', any: 'Text entry, PDF, or image' };
 
   function assignmentForm(c, m, a) {
@@ -253,7 +253,7 @@
       e.preventDefault(); const f = new FormData(e.target);
       const graded = a && a.work && a.work.final && a.work.final.feedback;
       const lines = (k, n) => String(f.get(k) || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, n).map((x) => x.slice(0, 500));
-      const v = { purpose: String(f.get('purpose') || '').trim().slice(0, 2000), steps: a ? a.steps : [], parts: partsFrom(f.get('parts')), format: ['text', 'pdf', 'image', 'any'].includes(f.get('format')) ? f.get('format') : '', submit: String(f.get('submit') || '').trim().slice(0, 1000), criteria: lines('criteria', 8).map((x) => x.slice(0, 300)), estimate: String(f.get('estimate') || '').trim().slice(0, 60), title: f.get('title').trim(), description: f.get('description').trim(), due: a && a.locked ? a.due : S.validDate(f.get('due') || '') };
+      const v = { materials: String(f.get('materials') || '').trim().slice(0, 6000), steps: a ? a.steps : [], parts: partsFrom(f.get('parts')), format: ['text', 'pdf', 'image', 'any'].includes(f.get('format')) ? f.get('format') : '', submit: String(f.get('submit') || '').trim().slice(0, 1000), criteria: lines('criteria', 8).map((x) => x.slice(0, 300)), estimate: String(f.get('estimate') || '').trim().slice(0, 60), title: f.get('title').trim(), description: f.get('description').trim(), due: a && a.locked ? a.due : S.validDate(f.get('due') || '') };
       if (!graded) { v.points = num(f.get('points')); v.score = num(f.get('score')); }
       if (a) { Object.assign(a, v); ui.edit = null; }
       else {
@@ -266,11 +266,11 @@
       !m && !a ? select('Module', 'module', c.modules.map((x) => [x.id, x.title]), c.modules[0] && c.modules[0].id) : null,
       field('Assignment title', 'title', { value: a ? a.title : '', required: true, placeholder: 'e.g. Writing Exercise 1' }),
       field('Overview / instructions (optional)', 'description', { value: a ? a.description : '', multiline: true, rows: 3 }),
-      field('Why you are doing this (optional)', 'purpose', { value: a ? a.purpose : '', multiline: true, rows: 2 }),
+      field('Scenario and materials (optional)', 'materials', { value: a ? a.materials : '', multiline: true, rows: 8, hint: 'The case, document, or data the work is based on.' }),
       field('Parts and guiding questions (optional)', 'parts', { value: a ? partsText(a) : '', multiline: true, rows: 8, hint: 'Each part: its title on one line, then one question per line. Leave a blank line between parts.' }),
       select('Submit as', 'format', [['', 'Not specified'], ['text', 'Text entry'], ['pdf', 'PDF'], ['image', 'Image'], ['any', 'Text, PDF, or image']], a ? a.format : ''),
       field('What to submit (optional)', 'submit', { value: a ? a.submit : '', multiline: true, rows: 2 }),
-      field('How it is graded (optional)', 'criteria', { value: a ? a.criteria.join('\n') : '', multiline: true, rows: 3, hint: 'One criterion per line. The AI reviews against these.' }),
+      a && a.rubric.length ? h('p', { class: 'small muted' }, 'Grading criteria are weighted and fixed for AI review: ' + a.rubric.map((k) => k.name + ' (' + k.max + ')').join('; ')) : field('How it is graded (optional)', 'criteria', { value: a ? a.criteria.join('\n') : '', multiline: true, rows: 3, hint: 'One criterion per line. The AI reviews against these.' }),
       field('Estimated time (optional)', 'estimate', { value: a ? a.estimate : '', placeholder: 'e.g. 45 minutes' }),
       a && a.locked ? h('p', { class: 'small muted' }, 'Due ' + S.fmtDate(a.due) + '. Set by your course timeline, so it can’t be changed.') : field('Due date (optional)', 'due', { type: 'date', value: a ? a.due : '' }),
       a && a.work && a.work.final && a.work.final.feedback ? h('p', { class: 'small muted' }, 'Graded by the AI review: ' + a.score + ' / ' + a.points + ' pts. Points and score are fixed once graded.') : h('div', { class: 'two' }, field('Points (optional)', 'points', { type: 'number', value: a ? a.points : '' }), field('Your score (optional)', 'score', { type: 'number', value: a ? a.score : '' })),
@@ -305,6 +305,21 @@
   }
 
   // One assignment on its own page: what it is, why, how, what to hand in, how it is graded, and where to submit it.
+  const writing = new Set();
+  // For assignments without the full page (older courses, or when the first try failed): the AI writes it, after the person agrees.
+  function writeBtn(c, m, a) {
+    const busy = writing.has(a.id);
+    return h('div', { class: 'callout' },
+      h('p', { class: 'small' }, 'This assignment doesn’t have its full page yet (scenario, steps, and weighted grading). The AI can write it.' + (a.origin === 'ai' ? ' It will replace the AI-drafted overview. Anything you wrote yourself is kept.' : '')),
+      h('button', { class: 'btn ghost', type: 'button', disabled: busy, onclick: async () => {
+        if (!S.ai.ready()) { toast('Add the AI service address and access code first (Data & Backup → AI).'); return; }
+        writing.add(a.id); S.render(false);
+        try { const r = await S.ai.writeDetails(c, m, [a], {}); toast(r.done ? 'Assignment written.' : 'The AI’s answer was incomplete. Please try again.'); }
+        catch (e) { toast(e.message); }
+        writing.delete(a.id); S.render(false);
+      } }, busy ? 'Writing…' : 'Write full assignment with AI'));
+  }
+
   function pageAssignment(c, m, a) {
     const mi = c.modules.indexOf(m) + 1, w = a.work;
     const status = !w ? 'Not submitted' : w.phase === 'reviewed' ? 'Feedback ready (grade after final review)' : w.final.feedback ? 'Final grade: ' + a.score + ' / ' + a.points + ' pts' : 'Attached as evidence';
@@ -322,14 +337,16 @@
         row('Estimated time', a.estimate),
         row('Submitting', FORMAT_SHORT[a.format] || 'Text entry or a file upload (text, PDF, or image)'),
         row('Status', status)),
-      a.description ? sec('Overview', h('p', { class: 'pre' }, a.description)) : null,
-      a.purpose ? sec('Why you are doing this', h('p', { class: 'pre' }, a.purpose)) : null,
-      a.parts.map((p, i) => sec('Part ' + (i + 1) + (p.title ? ': ' + p.title : ''), p.questions.length ? h('ul', { class: 'plain' }, p.questions.map((x) => h('li', {}, x))) : null)),
+      a.description || a.purpose ? sec('Overview', a.description ? h('p', { class: 'pre' }, a.description) : null, a.purpose ? h('p', { class: 'pre' }, a.purpose) : null) : null,
+      a.materials ? sec('Scenario and materials', h('p', { class: 'pre' }, a.materials)) : null,
+      a.parts.map((p, i) => sec('Step ' + (i + 1) + (p.title ? ': ' + p.title : ''), p.questions.length ? h('ul', { class: 'plain' }, p.questions.map((x) => h('li', {}, x))) : null)),
       a.steps.length ? sec('What to do', h('ol', { class: 'steps-list' }, a.steps.map((x) => h('li', {}, x)))) : null,
-      sec('What to submit', a.submit ? h('p', { class: 'pre' }, a.submit) : null,
-        h('p', {}, h('b', {}, a.format ? 'Upload your work as ' + FORMAT_NOUN[a.format] + ' in “Your submission” below.' : 'Type your answer, or upload a text file, PDF, or image, in “Your submission” below.'))),
-      a.criteria.length ? sec('How it is graded', h('p', { class: 'small muted' }, (a.points != null ? a.points + ' points. ' : '') + 'The AI reviews your work against these. You get detailed feedback first, then your final grade after you resubmit (or after 72 hours).'), h('ul', { class: 'plain' }, a.criteria.map((x) => h('li', {}, x)))) : null,
+      sec('What to submit', h('p', { class: 'pre' }, (a.submit ? a.submit.replace(/\s*$/, '') + ' ' : '') + FORMAT_SENTENCE[a.format || 'any'])),
+      a.rubric.length ? sec('How it is graded', h('p', { class: 'small muted' }, 'The AI reviews your work against these, weighted as shown. You get detailed feedback first, then your final grade after you resubmit (or after 72 hours).'),
+        h('ul', { class: 'plain' }, a.rubric.map((k) => h('li', {}, k.name + ': ', h('b', {}, k.max + ' / ' + a.points + ' points'))))) : null,
+      !a.rubric.length && a.criteria.length ? sec('How it is graded', h('p', { class: 'small muted' }, (a.points != null ? a.points + ' points. ' : '') + 'The AI reviews your work against these. You get detailed feedback first, then your final grade after you resubmit (or after 72 hours).'), h('ul', { class: 'plain' }, a.criteria.map((x) => h('li', {}, x)))) : null,
       a.due ? h('p', { class: 'small muted' }, 'Late work is accepted and marked late.') : null,
+      !a.parts.length && !a.materials && a.points > 0 && !a.work ? writeBtn(c, m, a) : null,
       sec('Your submission', S.workPanel(c, m, a, true)),
       h('div', { class: 'item-actions' }, editBtn(a.id, 'Edit this assignment')));
   }

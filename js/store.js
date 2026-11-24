@@ -120,7 +120,7 @@
     return { phase, deadline: str(w.deadline, 40), first: final ? null : first, final };
   }
   function normRubric(r) {
-    return arr(r, 10).map((k) => { k = obj(k); return { name: str(k.name, 120), max: num(k.max) || 0 }; }).filter((k) => k.name && k.max > 0);
+    return arr(r, 10).map((k) => { k = obj(k); return { name: str(k.name, 200), max: num(k.max) || 0 }; }).filter((k) => k.name && k.max > 0);
   }
 
   function normAI(a) {
@@ -166,7 +166,7 @@
           assignments: arr(m.assignments).map((a) => {
             a = obj(a);
             return { id: id(a.id), title: str(a.title, 300) || 'Untitled assignment', description: str(a.description), due: S.validDate(str(a.due, 10)), points: num(a.points), score: num(a.score), done: a.done === true, kind: ['learn', 'apply', 'demonstrate'].includes(a.kind) ? a.kind : '', origin: a.origin === 'ai' ? 'ai' : 'user', locked: a.locked === true && !!S.validDate(str(a.due, 10)), rubric: normRubric(a.rubric), work: normWork(a.work),
-              purpose: str(a.purpose, 2000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'any'].includes(a.format) ? a.format : '',
+              purpose: str(a.purpose, 2000), materials: str(a.materials, 6000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'any'].includes(a.format) ? a.format : '',
               parts: arr(a.parts, 8).map((p) => { p = obj(p); return { title: str(p.title, 120).trim(), questions: strs(p.questions, 8, 500) }; }).filter((p) => p.title || p.questions.length), submit: str(a.submit, 1000), criteria: strs(a.criteria, 8, 300), estimate: str(a.estimate, 60) };
           }),
         };
@@ -325,7 +325,7 @@
   /* ----- builders and starter content ----- */
 
   const R = (title, url, note) => ({ id: S.uid(), title, url: url || '', note: note || '', done: false });
-  const A = (title, description, o) => ({ id: S.uid(), title, description: description || '', due: '', points: null, score: null, done: false, kind: '', origin: 'user', locked: false, rubric: [], work: null, purpose: '', steps: [], format: '', parts: [], submit: '', criteria: [], estimate: '', ...o });
+  const A = (title, description, o) => ({ id: S.uid(), title, description: description || '', due: '', points: null, score: null, done: false, kind: '', origin: 'user', locked: false, rubric: [], work: null, purpose: '', materials: '', steps: [], format: '', parts: [], submit: '', criteria: [], estimate: '', ...o });
   const M = (title, o) => ({ id: S.uid(), title, overview: '', readings: [], keyIdeas: '', reflection: '', extras: [], assignments: [], complete: false, syllabi: [], objectives: [], selfCheck: [], duration: '', origin: 'user', edited: false, ...o });
   const C = (code, title, color, description, modules, o) => ({
     id: S.uid(), code, title, color, description, objective: '', deliverable: '', syllabus: '', outcomes: [], duration: '', pathway: '', licensureNote: '', ai: null, startDate: '', announcements: [], modules, credentials: [],

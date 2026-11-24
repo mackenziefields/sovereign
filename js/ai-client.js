@@ -133,7 +133,7 @@
       modules: o.modules.map((m, mi) => ({
         id: S.uid(), title: m.title, overview: m.overview, keyIdeas: m.keyIdeas, reflection: m.reflection, objectives: m.objectives, selfCheck: m.selfCheck,
         duration: m.duration, origin: 'ai', edited: false, readings: [],
-        assignments: m.assignments.map((a, ai_) => ({ id: S.uid(), title: a.title, description: a.description, purpose: a.purpose, parts: a.parts, format: a.format, submit: a.submit, criteria: a.criteria, estimate: a.estimate, kind: a.kind, points: a.points, origin: 'ai', due: dueFor(start, brief && brief.weeks, o.modules.length, mi, ai_, m.assignments.length), locked: true })),
+        assignments: m.assignments.map((a, ai_) => ({ id: S.uid(), title: a.title, description: a.description, kind: a.kind, points: a.points, origin: 'ai', due: dueFor(start, brief && brief.weeks, o.modules.length, mi, ai_, m.assignments.length), locked: true })),
       })),
       work: { title: fp.title, criteria: fp.criteria },
       ai: { generated: true, createdAt: now(), status: 'partial', note: 'Course outline saved. Learning materials are still being found.', brief, usage: [] },
@@ -203,26 +203,62 @@
     return { ...r.feedback, cost: (r.usage && r.usage.cost) || 0 };
   };
 
+  // Refuses to start AI work against an older copy of the Worker that doesn't have the newest features.
+  ai.NEEDS_VERSION = 5;
+  ai.requireCurrent = async function () {
+    let hl = null;
+    try { hl = await ai.health(); } catch (e) { return; } // unreachable: the real call will report it
+    if (!(hl && hl.version >= ai.NEEDS_VERSION)) throw new AIError('outdated', 'The AI service is an older version than this app needs. Paste the latest worker.js into your Cloudflare Worker (Edit code, replace everything, Deploy), then try again.');
+  };
+
+  // Writes the full one-stop page for assignments in one module: overview, scenario, steps, format, weighted grading. Never touches work already submitted.
+  ai.writeDetails = async function (course, mod, targets, opts) {
+    const list = targets.filter((a) => a.points > 0 && mod.assignments.includes(a));
+    if (!list.length) throw new AIError('bad_input', 'Add points to the assignment first.');
+    await ai.requireCurrent();
+    const r = await ai.call('/details', {
+      topic: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '',
+      module: { title: mod.title, overview: mod.overview, objectives: mod.objectives },
+      assignments: list.map((a) => ({ title: a.title, description: a.description, kind: a.kind, points: a.points })),
+    }, opts || {});
+    if (!S.state.courses.includes(course) || !course.modules.includes(mod)) throw new AIError('gone', 'That module was removed while its assignments were being written.');
+    let done = 0;
+    (r.details || []).forEach((d, i) => {
+      const a = list[i];
+      if (!d || !a || !mod.assignments.includes(a)) return;
+      if (a.origin === 'ai' || !a.description) { a.description = d.description; a.purpose = ''; } // a person's own wording is kept
+      a.materials = d.materials; a.parts = d.parts; a.format = d.format; a.submit = d.submit; a.estimate = d.estimate; a.steps = [];
+      if (!a.work) { a.rubric = d.rubric; a.criteria = []; } // the grading criteria can't change once work has been submitted
+      done++;
+    });
+    if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
+    S.save();
+    return { done, total: list.length };
+  };
+
   // Phase 1: outline (saved immediately as a partial course). Phase 2: materials, one module at a time.
   ai.build = async function (brief, run) {
     const set = (patch) => { Object.assign(run, patch); S.render(false); };
     set({ phase: 'running', steps: [{ label: 'Designing your course outline', state: 'active' }], msg: '', courseId: null });
+    await ai.requireCurrent();
     const out = await ai.call('/outline', brief, { signal: run.ctl.signal });
     const course = courseFromOutline(out.outline, { ...(out.brief || brief), startDate: brief.startDate });
     course.ai.usage.push(usageRow(out.usage));
     S.state.courses.push(course); S.state.setup = true; S.save();
     run.courseId = course.id;
     const queries = out.outline.modules.map((m) => m.searchQueries || []);
-    set({ steps: [{ label: 'Course outline saved', state: 'done' }].concat(course.modules.map((m, i) => ({ label: 'Finding materials: ' + m.title, state: i === 0 ? 'active' : 'todo' }))) });
+    set({ steps: [{ label: 'Course outline saved', state: 'done' }].concat(course.modules.map((m, i) => ({ label: 'Materials and assignments: ' + m.title, state: i === 0 ? 'active' : 'todo' }))) });
 
     const STOP = ['budget', 'global_limit', 'ip_limit', 'hour_limit', 'day_limit', 'bad_code', 'locked', 'not_configured', 'no_code', 'cancelled', 'upstream_auth', 'bad_model'];
-    let problem = '', missing = 0;
+    let problem = '', missing = 0, detailsMissing = 0;
     for (let i = 0; i < course.modules.length; i++) {
       run.steps[i + 1].state = 'active'; set({});
       try {
         let r = await ai.findMaterials(course, course.modules[i], { queries: queries[i], signal: run.ctl.signal });
         if (r.missing) r = await ai.findMaterials(course, course.modules[i], { queries: queries[i], signal: run.ctl.signal }); // one automatic second try
         run.steps[i + 1].state = r.missing ? 'warn' : 'done'; if (r.missing) missing++;
+        try { const d = await ai.writeDetails(course, course.modules[i], course.modules[i].assignments, { signal: run.ctl.signal }); if (d.done < d.total) detailsMissing++; }
+        catch (e) { detailsMissing++; if (STOP.includes(e.code)) throw e; }
       } catch (e) {
         run.steps[i + 1].state = 'fail'; problem = e.message;
         if (STOP.includes(e.code)) { for (let j = i + 1; j < course.modules.length; j++) run.steps[j + 1].state = 'skipped'; break; }
@@ -233,7 +269,7 @@
     course.ai.status = failed ? 'partial' : 'complete';
     course.ai.note = failed
       ? failed + ' of ' + course.modules.length + ' modules still need learning materials (' + problem + ') Open a module and choose “Find materials with AI” to try again, or add your own.'
-      : (missing ? missing + ' module' + (missing === 1 ? '' : 's') + ' had no verifiable source; they are marked “Source needed”.' : '');
+      : [missing ? missing + ' module' + (missing === 1 ? '' : 's') + ' had no verifiable source; they are marked “Source needed”.' : '', detailsMissing ? detailsMissing + ' module' + (detailsMissing === 1 ? '' : 's') + ' still need their assignment details: open the assignment and choose “Write full assignment with AI”.' : ''].filter(Boolean).join(' ');
     S.save();
     set({ phase: 'done', courseId: course.id, problem: failed ? course.ai.note : '' });
     return course;

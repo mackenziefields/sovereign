@@ -43,7 +43,7 @@ Answer a few plain questions (topic, starting point, goal, time) and an AI draft
 
 ## Submitting work and AI feedback
 
-Each assignment has its own page (click its title): overview, why you're doing it, steps, what to submit, how it's graded, and the submission box. AI-built courses fill these in; manual ones can add them with **Edit this assignment**. Courses made before this update only have the overview until you edit them. To submit, the assignment needs points.
+Each assignment has its own page (click its title): overview, why you're doing it, steps, what to submit, how it's graded, and the submission box. The AI writes a full page for every assignment in an AI-built course: an overview, a ready-made fictional scenario (it never asks you to find your own case), numbered steps with guiding questions, exactly what to submit and in which format, and grading criteria with points for each. Older assignments get a **Write full assignment with AI** button; manual ones can be filled in with **Edit this assignment**. To submit, the assignment needs points.
 
 * Submit text, or a text / PDF / image file. **Nothing is sent until you tick the consent box for that submission.** Audio, video and other file types can be attached as evidence only: no AI feedback and no grade.
 * **Review 1** gives detailed, action-oriented feedback with **no grade shown**. The 72-hour clock starts when that feedback appears.
