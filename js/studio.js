@@ -146,7 +146,7 @@
     const vc = X(), tasks = inStage(m, 'learn'), done = m.readings.filter((r) => r.done).length;
     return h('div', { class: 'room room-learn' },
       stageIntro(STAGES[0], S.stageProgress(m, 'learn')),
-      vc.textSection(m, 'keyIdeas', 'Key ideas', 'Capture the main ideas, terms, and arguments worth remembering.'),
+      h('div', { class: 'room-cols' }, h('div', { class: 'room-main' },
       h('section', { class: 'msec room-sec' },
         h('div', { class: 'sec-head' }, h('h3', {}, 'Resources'), h('span', { class: 'count' }, done + ' of ' + m.readings.length + ' read')),
         m.readings.length ? h('ul', { class: 'rcards' }, m.readings.map((r, i) => resourceCard(m, r, i))) : vc.empty('Add readings, videos, links, or notes to study.'),
@@ -159,12 +159,14 @@
           } },
             field('Title', 'title', { required: true, placeholder: 'e.g. Chapter 1, or a link title' }), field('Link (optional)', 'url', { placeholder: 'https://' }),
             field('Note (optional)', 'note', { multiline: true, rows: 2 }), h('button', { class: 'btn', type: 'submit' }, 'Add resource')))),
-      vc.syllabiSection(c, m),
-      selfCheck(m),
       h('section', { class: 'msec room-sec' },
         h('div', { class: 'sec-head' }, h('h3', {}, 'Study tasks'), h('span', { class: 'count' }, tasks.filter((a) => a.done).length + ' of ' + tasks.length + ' done')),
         tasks.length ? h('ul', { class: 'items' }, tasks.map((a) => vc.assignmentItem(c, m, a, { actions: true, reorder: true }))) : vc.empty('No study tasks. These are short assignments that stay with the reading, such as a summary or a set of notes.'),
-        newActivity(c, m, 'learn', 'New study task')),
+        newActivity(c, m, 'learn', 'New study task'))),
+      h('aside', { class: 'room-aside' },
+        vc.textSection(m, 'keyIdeas', 'Key ideas', 'Capture the main ideas, terms, and arguments worth remembering.'),
+        vc.syllabiSection(c, m),
+        selfCheck(m))),
       stageFoot(c, m, 'learn'));
   }
 

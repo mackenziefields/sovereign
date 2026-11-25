@@ -6,7 +6,7 @@ The production Worker (`sovereign-ai`) is not touched. Never paste an API key or
 ## What you do (about 10 minutes, in the Cloudflare and Anthropic dashboards)
 
 1. **Anthropic Console.** Create a new workspace (for example "sovereign-test") with a **spend limit of $3**, and create a new API key in it. Keep it for the next step only.
-2. **Cloudflare, Workers & Pages.** Create a new Worker named `sovereign-ai-test`. Replace its code with the whole contents of `worker/worker.js` from this folder (it is `VERSION = 9`). Deploy.
+2. **Cloudflare, Workers & Pages.** Create a new Worker named `sovereign-ai-test`. Replace its code with the whole contents of `worker/worker.js` from this folder (it is `VERSION = 10`). Deploy.
 3. **KV.** Create a new KV namespace (for example `sovereign-test-usage`) and bind it to the Worker with the variable name **USAGE**. (A new namespace, so production counters and budget are unaffected.)
 4. **Secrets** (type *Secret*): `ANTHROPIC_API_KEY` = the new test key; `ACCESS_CODE` = a new throwaway code you invent.
 5. **Plain variables:**
@@ -20,7 +20,7 @@ The production Worker (`sovereign-ai`) is not touched. Never paste an API key or
    | `MAX_MODULES` | `3` |
    | `LIMIT_REVIEWS_PER_IP_DAY` | `3` |
 
-6. Open `https://sovereign-ai-test.<your-subdomain>.workers.dev/health` in a browser. It should show `"ok": true`, `"version": 9`, `"configured": true`, `"maxModules": 3`.
+6. Open `https://sovereign-ai-test.<your-subdomain>.workers.dev/health` in a browser. It should show `"ok": true`, `"version": 10`, `"configured": true`, `"maxModules": 3`.
 7. Tell me the Worker URL (not the code or key). Then in the preview app (Data & Backup, AI settings) you type the URL and the access code yourself.
 
 ## What I do after you say it is ready

@@ -6,7 +6,7 @@
   'use strict';
   const { h, checkbox, plural, toast, commit } = S;
   const ui = S.ui;
-  const REF = [['brief', 'Brief'], ['materials', 'Materials'], ['rubric', 'Rubric']];
+  const REF = [['brief', 'Brief'], ['materials', 'Materials'], ['steps', 'Steps'], ['rubric', 'Rubric']];
   const WORK = [['submit', 'Submission'], ['feedback', 'Feedback'], ['office', 'Office hours']];
   const REFK = REF.map((t) => t[0]), WORKK = WORK.map((t) => t[0]);
   const wbState = (ui.wb = ui.wb || {}); // which tab each pane last showed, per assignment (this visit only)
@@ -37,6 +37,11 @@
 
   function briefTab(c, m, a) {
     const vc = S.vc, parts = [];
+    const rv = a.revisions && a.revisions[a.revisions.length - 1];
+    if (rv) parts.push(h('aside', { class: 'wb-notice', 'aria-label': 'Revised assignment' },
+      h('p', { class: 'wb-notice-k' }, 'Revised on ' + S.fmtDate(rv.at.slice(0, 10))),
+      h('p', {}, (rv.readings.length ? 'Updated to use: ' + rv.readings.join('; ') + '. ' : '') + (rv.note || '') + ' Points, grading criteria and any work you submitted are unchanged.'),
+      h('button', { class: 'linkbtn', type: 'button', onclick: () => { if (S.ai.restoreRevision(a)) { toast('Earlier wording restored.'); commit(); } } }, 'Restore the earlier wording')));
     if (a.description || a.purpose) parts.push(sec('Overview', a.description ? h('p', { class: 'pre wb-lead' }, a.description) : null, a.purpose ? h('p', { class: 'pre' }, a.purpose) : null));
     if (a.basis === 'portfolio' && a.portfolioNote) parts.push(sec('The portfolio piece', h('p', { class: 'pre' }, a.portfolioNote),
       h('p', { class: 'small muted' }, 'Aim for something you could show a professor, employer, client, or collaborator. Finished pieces can be saved to this course’s Portfolio.')));
@@ -47,13 +52,20 @@
         rs.length ? h('ul', { class: 'plain' }, rs.map((x) => h('li', {}, x.url ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.title) : x.title)))
           : h('p', { class: 'small' }, 'No readings have been added to this module yet. Add some in the ', h('a', { href: S.href(c, 'modules', m.id + '/learn') }, 'Reading Room'), '.')));
     }
-    if (a.parts.length) parts.push(sec('Steps', h('ol', { class: 'wb-steps' }, a.parts.map((p, i) => h('li', {},
-      h('span', { class: 'wb-stepno', 'aria-hidden': 'true' }, String(i + 1).padStart(2, '0')),
-      h('div', {}, p.title ? h('h4', {}, p.title) : null, p.questions.length ? h('ul', { class: 'plain' }, p.questions.map((x) => h('li', {}, x))) : null))))));
-    if (a.steps.length) parts.push(sec('What to do', h('ol', { class: 'steps-list' }, a.steps.map((x) => h('li', {}, x)))));
     parts.push(sec('What to submit', h('p', { class: 'pre' }, (a.submit ? a.submit.replace(/\s*$/, '') + ' ' : '') + vc.FORMAT_SENTENCE[a.format || 'any']),
       a.due ? h('p', { class: 'small muted' }, 'Late work is accepted and marked late.') : null));
     return parts;
+  }
+
+  // The steps of the assignment: their own tab, between Materials and Rubric. Same content as before, moved out of the Brief.
+  function stepsTab(c, m, a) {
+    const out = [];
+    if (a.parts.length) out.push(sec('Steps', h('ol', { class: 'wb-steps' }, a.parts.map((p, i) => h('li', {},
+      h('span', { class: 'wb-stepno', 'aria-hidden': 'true' }, String(i + 1).padStart(2, '0')),
+      h('div', {}, p.title ? h('h4', {}, p.title) : null, p.questions.length ? h('ul', { class: 'plain' }, p.questions.map((x) => h('li', {}, x))) : null))))));
+    if (a.steps.length) out.push(sec('What to do', h('ol', { class: 'steps-list' }, a.steps.map((x) => h('li', {}, x)))));
+    if (!out.length) out.push(empty('No steps have been written for this assignment. Use Edit to add your own.'));
+    return out;
   }
 
   function materialsTab(c, m, a) {
@@ -156,7 +168,7 @@
         h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', onclick: () => { ui.edit = a.id; S.render(false); } }, 'Add details yourself')),
         canWrite ? vc.writeBtn(c, m, a) : (a.points > 0 ? null : h('p', { class: 'small muted' }, 'The AI can write details only for assignments with points.'))) : (canWrite ? vc.writeBtn(c, m, a) : null);
 
-      const refBody = { brief: briefTab, materials: materialsTab, rubric: rubricTab }[refTab](c, m, a);
+      const refBody = { brief: briefTab, materials: materialsTab, steps: stepsTab, rubric: rubricTab }[refTab](c, m, a);
       const workBody = { submit: () => submitTab(c, m, a, p), feedback: () => p.feedback, office: () => officeTab(c, m, a) }[workTab]();
       const flags = { feedback: p.state === 'reviewed' ? 'Feedback ready' : p.state === 'graded' ? 'Graded' : '', submit: p.state === 'reviewed' ? 'Resubmit open' : '' };
       const pane = (id, label, tabs, body, cls) => h('section', { class: 'wb-pane wb-' + id + (focusPane === id ? ' is-focus' : '') + (cls || ''), 'aria-label': label },

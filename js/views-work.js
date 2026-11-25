@@ -139,14 +139,18 @@
         d.file ? h('button', { class: 'btn ghost', type: 'button', disabled: d.busy, onclick: () => { d.file = null; S.render(false); } }, 'Clear file') : null));
   }
 
-  function feedbackView(f, showScore, office) {
+  // The Worker used to cut a criterion name at 120 characters, though assignment criteria run to 200. Show the full rubric wording when a saved name is a cut-off start of it.
+  let curRubric = [];
+  const fullName = (k, rubric) => { const r = (rubric || curRubric).find((x) => x.name === k.name || (k.name.length >= 100 && x.name.startsWith(k.name))); return r ? r.name : k.name; };
+  function feedbackView(f, showScore, office, a) {
+    const rub = a && a.rubric && a.rubric.length ? a.rubric : curRubric;
     return h('div', { class: 'feedback' },
       f.summary ? h('p', {}, f.summary) : null,
       f.strengths.length ? h('div', {}, h('h4', { class: 'minor' }, 'What’s working'), list(f.strengths)) : null,
       f.improvements.length ? h('div', {}, h('h4', { class: 'minor' }, 'What to change'), list(f.improvements)) : null,
       f.nextSteps.length ? h('div', {}, h('h4', { class: 'minor' }, 'Next steps'), list(f.nextSteps)) : null,
       f.criteria.length ? h('div', {}, h('h4', { class: 'minor' }, showScore ? 'By criterion' : 'Criteria this was reviewed against'),
-        h('ul', { class: 'plain' }, f.criteria.map((k) => h('li', {}, h('b', {}, k.name), showScore ? ' · ' + k.score + ' / ' + k.max : '', k.comment ? ' — ' + k.comment : '')))) : null,
+        h('ul', { class: 'plain' }, f.criteria.map((k) => h('li', {}, h("b", {}, fullName(k, rub)), showScore ? ' · ' + k.score + ' / ' + k.max : '', k.comment ? ' — ' + k.comment : '')))) : null,
       h('p', { class: 'small muted' }, 'Reviewed by AI on ' + when(f.at) + (f.cost ? ' · about ' + money(f.cost) : '') + (office ? '. Practice feedback only: nothing here is graded.' : '. This is an automated assessment, not a human grade.')));
   }
 
@@ -184,7 +188,9 @@
         h('div', { class: 'wp-body' }, f && f.text ? h('p', { class: 'pre' }, f.text) : null, fileLine(f), fb ? feedbackView(fb, true) : null)));
   };
 
-  S.finalFeedback = (a) => h('div', {}, feedbackView(a.work.final.feedback, true), fileLine(a.work.final));
+  S.fileLine = fileLine;
+  S.finalFeedbackOnly = (a) => feedbackView(a.work.final.feedback, true, false, a);
+  S.finalFeedback = (a) => h("div", {}, feedbackView(a.work.final.feedback, true, false, a), fileLine(a.work.final));
 
   // Optional, ungraded: practice on a real article, reading, or example the learner chose.
   S.officePanel = function (c, m, a, bare) {
@@ -210,6 +216,7 @@
   // The submission experience, split in two so the Assignment Workbench can put them on separate tabs:
   // submit: what to do now (write, send, resubmit); feedback: what came back. Behaviour is unchanged from the single panel.
   S.workParts = function (c, m, a) {
+    curRubric = a.rubric || [];
     const w = a.work, fileOnly = a.format === 'file';
     const ready = S.ai && S.ai.ready && S.ai.ready();
     const canReview = a.points > 0;

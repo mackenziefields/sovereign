@@ -65,7 +65,7 @@
     let body, current = section;
     switch (section) {
       case 'announcements': body = pageAnnouncements(c); break;
-      case 'syllabus': body = pageSyllabus(c); break;
+      case 'syllabus': body = S.academic.syllabus(c); break;
       case 'modules': {
         const m = sub && c.modules.find((x) => x.id === sub);
         body = m ? S.studio.page(c, m, sub2) : pageModules(c); break;
@@ -75,8 +75,8 @@
         if (f) return S.workbench.page(c, f.m, f.a, sub2); // the Assignment Workbench has its own full-width layout
         body = pageAssignments(c); break;
       }
-      case 'grades': body = pageGrades(c); break;
-      case 'portfolio': body = V.portfolio(c); break;
+      case 'grades': body = S.academic.grades(c); break;
+      case 'portfolio': body = S.academic.portfolio(c); break;
       default: body = pageHome(c); current = 'home';
     }
     return h('div', { class: 'course', 'data-theme': c.designTheme },
@@ -122,20 +122,48 @@
       content);
   }
 
+  // The two most actionable assignments of this course: unfinished ones, soonest due first, undated ones in module order.
+  // Nothing is invented: a missing due date stays missing.
+  function nextTwo(c) {
+    return c.modules.flatMap((m, mi) => m.assignments.map((a) => ({ m, a, mi })))
+      .filter((x) => !x.a.done && !(x.a.work && x.a.work.final)).map((x, i) => ({ ...x, i }))
+      .sort((p, q) => (p.a.due && q.a.due ? p.a.due.localeCompare(q.a.due) : p.a.due ? -1 : q.a.due ? 1 : 0) || p.i - q.i).slice(0, 2);
+  }
+
+  function upNextPanel(c) {
+    const two = nextTwo(c);
+    const card = (x, role) => {
+      const st = S.assignState(x.a), stage = S.STAGES.find((s) => s.key === S.stageOf(x.a)), late = x.a.due && x.a.due < S.todayISO();
+      return h('a', { class: 'next-card ' + role, href: href(c, 'assignments', x.a.id) },
+        h('span', { class: 'next-role' }, role === 'now' ? 'Current' : 'Next up'),
+        h('span', { class: 'next-title' }, x.a.title),
+        h('span', { class: 'next-meta' },
+          h('span', {}, 'Module ' + (x.mi + 1) + ' · ' + x.m.title),
+          h('span', { class: late ? 'late' : '' }, x.a.due ? (late ? 'Was due ' : 'Due ') + S.fmtDate(x.a.due) : 'No due date'),
+          stage ? h('span', {}, stage.name) : null),
+        h('span', { class: 'status status-' + st.key }, st.label));
+    };
+    return h('section', { class: 'home-sec up-next' },
+      h('div', { class: 'section-head' }, h('h2', {}, 'Your next assignments'), h('a', { class: 'small', href: href(c, 'assignments') }, 'All assignments →')),
+      two.length
+        ? h('div', { class: 'next-grid' }, two.map((x, i) => card(x, i === 0 ? 'now' : 'later')))
+        : empty(c.modules.some((m) => m.assignments.length) ? 'Every assignment in this course is complete.' : 'No assignments yet. Add one under Assignments.'));
+  }
+
   function pageHome(c) {
-    const g = S.grade(c), cs = S.courseStats(c);
-    return h('div', {},
-      c.objective ? h('p', { class: 'standfirst' }, c.objective) : null,
-      S.state.name ? h('p', { class: 'lede' }, 'Welcome back, ' + S.state.name + '.') : null,
-      h('div', { class: 'progress-row' }, h('strong', {}, cs.pct + '%'), h('span', { class: 'muted' }, cs.done + ' of ' + plural(cs.mods, 'module') + ' complete')),
-      progressBar(cs.pct, c.title + ' progress'),
-      homeSection(c, 'announcements', 'Announcements', announcementList(c, 2, false)),
-      homeSection(c, 'syllabus', 'Syllabus', syllabusSummary(c)),
-      homeSection(c, 'modules', 'Modules', moduleTiles(c, false)),
-      homeSection(c, 'assignments', 'Assignments', assignmentGroups(c, false)),
-      homeSection(c, 'grades', 'Grades', g
-        ? h('div', {}, h('div', { class: 'grade-big' }, g.pct + '%'), h('p', { class: 'muted' }, 'Current Grade, from ' + plural(g.n, 'graded assignment') + '.'))
-        : empty('No scores yet. Enter points and your score on an assignment to see your Current Grade.')));
+    const cs = S.courseStats(c);
+    return h('div', { class: 'home' },
+      h('div', { class: 'home-main' },
+        c.objective ? h('p', { class: 'standfirst' }, c.objective) : null,
+        upNextPanel(c),
+        homeSection(c, 'modules', 'Modules', moduleTiles(c, false))),
+      h('aside', { class: 'home-side', 'aria-label': 'Course overview' },
+        h('div', { class: 'side-card' },
+          S.state.name ? h('p', { class: 'small muted' }, 'Welcome back, ' + S.state.name + '.') : null,
+          h('div', { class: 'progress-row' }, h('strong', {}, cs.pct + '%'), h('span', { class: 'muted' }, cs.done + ' of ' + plural(cs.mods, 'module') + ' complete')),
+          progressBar(cs.pct, c.title + ' progress')),
+        h('div', { class: 'side-card' }, h('div', { class: 'section-head' }, h('h2', {}, 'Announcements'), h('a', { class: 'small', href: href(c, 'announcements') }, 'Open →')), announcementList(c, 2, false)),
+        h('div', { class: 'side-card' }, h('div', { class: 'section-head' }, h('h2', {}, 'Syllabus'), h('a', { class: 'small', href: href(c, 'syllabus') }, 'Open →')), syllabusSummary(c))));
   }
 
   /* ---------- Announcements ---------- */
@@ -427,24 +455,18 @@
   // Syllabi from other courses live here, apart from readings. "Source readings" asks the AI to open one and add what it assigns.
   function syllabiSection(c, m) {
     const item = (y) => {
-      const working = busy.has(y.id);
       return h('li', { class: 'item' }, h('div', { class: 'item-body' },
         h('div', { class: 'item-title' }, y.url ? h('a', { href: y.url, target: '_blank', rel: 'noopener noreferrer' }, y.title) : y.title),
         S.syllabusLabels(y),
         y.sourcedAt ? h('div', { class: 'small' }, y.sourcedCount + ' reading' + (y.sourcedCount === 1 ? '' : 's') + ' added to this module from it on ' + y.sourcedAt.slice(0, 10) + '.') : null,
         h('div', { class: 'item-actions' },
-          y.url ? h('button', { class: 'btn ghost', type: 'button', disabled: working, onclick: async () => {
-            if (!S.ai.ready()) { toast('Add the AI service address and access code first (Data & Backup → AI).'); return; }
-            busy.add(y.id); S.render(false);
-            try { const r = await S.ai.sourceSyllabus(c, m, y, {}); toast(r.added ? 'Added ' + plural(r.added, 'reading') + ' from this syllabus.' : (r.missing ? 'No readings could be sourced from this syllabus.' : 'Nothing new to add.')); }
-            catch (e) { toast(e.message); }
-            busy.delete(y.id); S.render(false);
-          } }, working ? 'Reading the syllabus…' : (y.sourcedAt ? 'Source again' : 'Source readings from this syllabus')) : null,
-          removeBtn('syllabus', m.syllabi, y))));
+          S.syl.button(c, m, y),
+          removeBtn('syllabus', m.syllabi, y)),
+        S.syl.panel(c, m, y)));
     };
     return h('section', { class: 'msec' },
       h('div', { class: 'sec-head' }, h('h3', {}, 'Syllabi from other courses'), h('span', { class: 'count' }, m.syllabi.length ? sylN(m.syllabi.length) : '')),
-      m.syllabi.length ? h('p', { class: 'small muted' }, 'Not readings themselves. Choose “Source readings” and the AI will open a syllabus and add the readings it assigns, noting where they came from.') : null,
+      m.syllabi.length ? h('p', { class: 'small muted' }, 'Not readings themselves. Choose “Read this syllabus” to see which readings it lists and how far each could be checked. Nothing is added until you tick it.') : null,
       m.syllabi.length ? h('ul', { class: 'items' }, m.syllabi.map(item)) : null,
       h('details', { class: 'add' }, h('summary', {}, 'Add a syllabus'),
         h('form', { onsubmit: (e) => {
@@ -453,7 +475,8 @@
           m.syllabi.push(S.makeSyllabus({ title: f.get('title').trim() || u, url: u, note: f.get('note').trim(), source: 'user' })); commit();
         } },
           field('Syllabus title', 'title', { placeholder: 'e.g. WGS 101, Prof. Name, University' }), field('Link', 'url', { required: true, placeholder: 'https://' }),
-          field('Note (optional)', 'note', { multiline: true, rows: 2 }), h('button', { class: 'btn', type: 'submit' }, 'Add syllabus'))));
+          field('Note (optional)', 'note', { multiline: true, rows: 2 }), h('button', { class: 'btn', type: 'submit' }, 'Add syllabus'))),
+      S.syl.paste(c, m));
   }
   function findMaterialsBtn(c, m) {
     const working = busy.has(m.id);

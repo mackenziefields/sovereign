@@ -99,6 +99,19 @@
             { url: 'https://gone.mock-site.org/old', kind: 'article', creator: '', access: 'free', relevance: 'dead link' },
             { url: 'https://walled.mock-site.org/paywalled', kind: 'course', creator: 'Mock', access: 'paid', relevance: 'Full course.' },
           ];
+          // Build 21 syllabus scenarios (mock): pasted text, a failed fetch (o.fetchError), a PDF the AI read itself (o.pdf)
+          const spy = 'https://syllabi.mock-college.edu/wgs101-syllabus-2005', usage0 = { input_tokens: 3000, output_tokens: 300, server_tool_use: { web_search_requests: 1 } };
+          if (/Syllabus text supplied by the learner/.test(q)) return json({ content: [{ type: 'text', text: JSON.stringify({ picks: [
+            { title: 'Mock Feminist Theory Reader', url: '', kind: 'book', creator: 'A. Author', access: 'unknown', relevance: 'Assigned core reader.' },
+            { title: 'Totally Invented Book Title Here', url: '', kind: 'book', creator: 'Nobody', access: 'unknown', relevance: 'NOT IN THE TEXT' }] }) }], stop_reason: 'end_turn', usage: usage0 });
+          if (/Open this syllabus page/.test(q) && o.fetchError) return json({ content: [
+            { type: 'web_search_tool_result', tool_use_id: 's1', content: [{ type: 'web_search_result', url: 'https://press.mock-press.org/feminist-reader', title: 'Mock Feminist Theory Reader | Mock Press' }] },
+            { type: 'web_fetch_tool_result', tool_use_id: 'f1', content: { type: 'web_fetch_tool_error', error_code: o.fetchError } },
+            { type: 'text', text: JSON.stringify({ picks: [{ title: 'Mock Feminist Theory Reader', url: 'https://press.mock-press.org/feminist-reader', kind: 'book', creator: 'A. Author', derivedFrom: 'x' }] }) }], stop_reason: 'end_turn', usage: usage0 });
+          if (/Open this syllabus page/.test(q) && o.pdf) return json({ content: [
+            { type: 'web_search_tool_result', tool_use_id: 's1', content: [{ type: 'web_search_result', url: 'https://press.mock-press.org/feminist-reader', title: 'Mock Feminist Theory Reader | Mock Press' }] },
+            { type: 'web_fetch_tool_result', tool_use_id: 'f1', content: { type: 'web_fetch_result', url: spy, content: { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'JVBERi0xLjQK' } } } },
+            { type: 'text', text: JSON.stringify({ picks: [{ title: 'The Second Mock Essay Collection', url: '', kind: 'book', creator: 'B. Writer', derivedFrom: 'Syllabus PDF', derivedUrl: spy }] }) }], stop_reason: 'end_turn', usage: usage0 });
           if (/Open this syllabus page/.test(q)) {
             const sy = 'https://syllabi.mock-college.edu/wgs101-syllabus-2005';
             const picks2 = [
@@ -107,8 +120,9 @@
               { title: 'The Second Mock Essay Collection', url: '', kind: 'book', creator: 'B. Writer', access: 'unknown', relevance: 'Assigned in week 3.', derivedFrom: 'Syllabus of Prof. Jane Mock, WGS 101, Mock College', derivedUrl: sy },
               { title: 'Totally Invented Book Title Here', url: '', kind: 'book', creator: 'Nobody', access: 'unknown', relevance: 'NOT IN THE SYLLABUS', derivedFrom: 'Syllabus of Prof. Jane Mock', derivedUrl: sy },
             ];
+            if (o.extraPick) picks2.push({ title: 'Seeing Opportunities', url: 'https://learn.mock-university.org/seeing-opportunities', kind: 'article', creator: 'Mock University', access: 'free', relevance: 'found by searching, not in the syllabus', derivedFrom: 'x', derivedUrl: sy });
             return json({ content: [
-              { type: 'web_search_tool_result', tool_use_id: 's1', content: [{ type: 'web_search_result', url: sy, title: 'WGS 101 Syllabus 2005 | Mock College' }] },
+              { type: 'web_search_tool_result', tool_use_id: 's1', content: [{ type: 'web_search_result', url: sy, title: 'WGS 101 Syllabus 2005 | Mock College' }].concat(o.extraPick ? [{ type: 'web_search_result', url: 'https://learn.mock-university.org/seeing-opportunities', title: 'Seeing opportunities | Mock University Learning' }] : []) },
               { type: 'web_fetch_tool_result', tool_use_id: 'f1', content: { type: 'web_fetch_result', url: sy, content: { type: 'document', source: { type: 'text', data: 'Week 1: Mock Feminist Theory Reader (https://press.mock-press.org/feminist-reader). Week 3: The Second Mock Essay Collection, B. Writer.' } } } },
               { type: 'text', text: JSON.stringify({ picks: picks2 }) }], stop_reason: 'end_turn', usage: { input_tokens: 6000, output_tokens: 500, server_tool_use: { web_search_requests: 1 } } });
           }
@@ -122,6 +136,10 @@
         if (Array.isArray(b.messages[0].content)) { // /review: round 1 scores 70%, round 2 scores 90% (canned)
           const txt = b.messages[0].content[0].text, r2 = /review 2 of 2/.test(txt), sc = r2 ? [9, 9, 9] : [6, 7, 8];
           return json({ content: [{ type: 'text', text: JSON.stringify({ summary: r2 ? 'Much stronger. The argument is now supported.' : 'A solid start with a thin argument.', strengths: ['Clear thesis in paragraph 1'], improvements: r2 ? [] : ['Add one source to support the claim in paragraph 2', 'Cut the repeated point in paragraph 3'], nextSteps: ['Proofread once more'], criteria: ['Argument', 'Evidence', 'Clarity'].map((n, i) => ({ name: n, max: 10, score: sc[i], comment: 'Comment on ' + n })), score: 999 }) }], stop_reason: 'end_turn', usage: { input_tokens: 2500, output_tokens: 900 } });
+        }
+        if (/Revise each assignment above/.test(b.messages[0].content)) { // /revise (canned): one revision per listed assignment
+          const n = (b.messages[0].content.match(/^\d+\. .*\[(learn|apply|demonstrate)/gm) || []).length;
+          return json({ content: [{ type: 'text', text: JSON.stringify({ assignments: Array.from({ length: n }, () => ({ description: '[MOCK REVISED] This task now draws on the Mock Feminist Theory Reader.', materials: 'Northwind Ltd, adjusted for the new reading.', changeNote: 'Added the new reading to step one.', steps: [{ title: 'Read the new reading', questions: ['What is its main claim?'] }, { title: 'Apply it', questions: ['How does it change the case?'] }] })) }) }], stop_reason: 'end_turn', usage: { input_tokens: 1800, output_tokens: 1500 } });
         }
         if (/Write the complete assignment page/.test(b.messages[0].content)) { // /details (canned)
           const n = (b.messages[0].content.match(/^\d+\. /gm) || []).length;

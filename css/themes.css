@@ -18,29 +18,29 @@
 /* ---------- design tokens ---------- */
 [data-theme="modernist"] {
   --t-font: "Inter Tight", "Helvetica Neue", Helvetica, Arial, sans-serif; --t-w: 800; --t-style: normal; --t-case: none; --t-track: -.045em; --t-lh: .92;
-  --t-bg: #f6f1e5; --t-fg: #15130f; --t-accent: #6a1a27; --t-hscale: .95;
-  --t-tile-bg: #15130f; --t-tile-fg: #f6f1e5;
+  --t-bg: #eceff4; --t-fg: #101b32; --t-accent: #2643d8; --t-hscale: .95;
+  --t-tile-bg: #101b32; --t-tile-fg: #f5f6f7;
   --t-sf-font: "Inter Tight", "Helvetica Neue", Helvetica, Arial, sans-serif; --t-sf-w: 700; --t-sf-style: normal; --t-sf-size: 1.4rem; --t-sf-track: -.025em; --t-sf-lh: 1.2;
   --cap-cover: 27; --cap-head: 15;
 }
 [data-theme="editorial"] {
   --t-font: "Playfair Display", Georgia, "Times New Roman", serif; --t-w: 400; --t-style: normal; --t-case: none; --t-track: -.02em; --t-lh: 1.02;
-  --t-bg: #f8f2e6; --t-fg: #6a1a27; --t-accent: #6a1a27; --t-hscale: .9;
-  --t-tile-bg: #6a1a27; --t-tile-fg: #f8f2e6;
+  --t-bg: #f7f3f5; --t-fg: #681632; --t-accent: #681632; --t-hscale: .9;
+  --t-tile-bg: #681632; --t-tile-fg: #f7f3f5;
   --t-sf-font: "Playfair Display", Georgia, serif; --t-sf-w: 400; --t-sf-style: italic; --t-sf-size: 1.5rem; --t-sf-track: 0; --t-sf-lh: 1.35;
   --cap-cover: 22; --cap-head: 12;
 }
 [data-theme="intellectual"] {
   --t-font: "Instrument Serif", Georgia, "Times New Roman", serif; --t-w: 400; --t-style: normal; --t-case: none; --t-track: -.025em; --t-lh: .94;
-  --t-bg: #f3eee2; --t-fg: #23262b; --t-accent: #1f3a8a; --t-hscale: 1.2;
-  --t-tile-bg: #23262b; --t-tile-fg: #f3eee2;
+  --t-bg: #e9edfa; --t-fg: #101b32; --t-accent: #2643d8; --t-hscale: 1.2;
+  --t-tile-bg: #101b32; --t-tile-fg: #f5f6f7;
   --t-sf-font: "Instrument Serif", Georgia, serif; --t-sf-w: 400; --t-sf-style: normal; --t-sf-size: 1.9rem; --t-sf-track: -.01em; --t-sf-lh: 1.1;
   --cap-cover: 34; --cap-head: 20;
 }
 [data-theme="institution"] {
   --t-font: "Cinzel", "Trajan Pro", "Palatino Linotype", Georgia, serif; --t-w: 600; --t-style: normal; --t-case: uppercase; --t-track: .08em; --t-lh: 1.18;
-  --t-bg: #5c1220; --t-fg: #f6efe0; --t-accent: #6a1a27; --t-hscale: .6;
-  --t-tile-bg: #5c1220; --t-tile-fg: #f6efe0;
+  --t-bg: #073e35; --t-fg: #f5f6f7; --t-accent: #6687a1; --t-hscale: .6;
+  --t-tile-bg: #073e35; --t-tile-fg: #f5f6f7;
   --t-sf-font: "Cormorant Garamond", Garamond, Georgia, serif; --t-sf-w: 500; --t-sf-style: italic; --t-sf-size: 1.6rem; --t-sf-track: 0; --t-sf-lh: 1.3;
   --cap-cover: 13; --cap-head: 7.5;
 }
@@ -130,7 +130,7 @@
 .tile[data-theme] .tile-num { font-family: var(--t-font); font-weight: var(--t-w); font-style: var(--t-style); letter-spacing: var(--t-track); color: var(--t-tile-fg); text-transform: none; }
 .tile[data-theme="modernist"] .tile-art { border-bottom: 6px solid var(--t-accent); }
 .tile[data-theme="institution"] .tile-num { font-size: 2.2rem; letter-spacing: .04em; }
-.tile[data-theme="institution"] .tile-art { box-shadow: inset 0 0 0 .4rem var(--t-tile-bg), inset 0 0 0 calc(.4rem + 1px) rgba(246, 239, 224, .5); }
+.tile[data-theme="institution"] .tile-art { box-shadow: inset 0 0 0 .4rem var(--t-tile-bg), inset 0 0 0 calc(.4rem + 1px) rgba(245, 246, 247, .5); }
 .tile[data-theme="intellectual"] .tile-art { border-bottom: 6px solid var(--t-accent); }
 
 /* ---------- major headings inside a course (headings only; body text stays in the system faces) ---------- */

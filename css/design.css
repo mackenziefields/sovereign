@@ -3,16 +3,16 @@
    Palette: paper, oxblood, near-black, and one cobalt accent used sparingly (Apply, links in focus). */
 
 :root {
-  --paper: #f3eee2;
-  --card: #faf7ef;
-  --ink: #15130f;
-  --muted: #5b5446;
-  --rule: #d5ccb7;
-  --accent: #6a1a27;          /* oxblood */
-  --accent-soft: #ece0d6;
-  --accent-ink: #faf7ef;
-  --cobalt: #1f3a8a;
-  --danger: #8a1a28;
+  --paper: #f5f6f7;
+  --card: #fcfcfd;
+  --ink: #101b32;
+  --muted: #47526a;
+  --rule: #d4d9e2;
+  --accent: #2643d8;          /* oxblood */
+  --accent-soft: #e8ecf8;
+  --accent-ink: #fcfcfd;
+  --cobalt: #2643d8;
+  --danger: #9b1c31;
   --font: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif;
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
   --measure: 40rem;
@@ -83,26 +83,26 @@ section { margin-top: 3.5rem; }
 
 /* course covers: each course is a small publication */
 .covers { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr)); }
-.cover, .course-head { position: relative; isolation: isolate; overflow: hidden; background: var(--c); color: #faf7ef; }
+.cover, .course-head { position: relative; isolation: isolate; overflow: hidden; background: var(--c); color: #fcfcfd; }
 .cover { display: flex; flex-direction: column; justify-content: space-between; min-height: 19rem; padding: 1.25rem; text-decoration: none; }
-.cover:hover { color: #faf7ef; }
+.cover:hover { color: #fcfcfd; }
 .cover:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 .cover-top { display: flex; justify-content: space-between; gap: 1rem; font-size: .66rem; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; }
 .cover-title { font-family: var(--serif); font-weight: 400; font-size: clamp(1.6rem, 5vw, 2rem); line-height: 1.08; letter-spacing: -.01em; margin: 1.5rem 0 1.5rem; max-width: 12em; overflow-wrap: anywhere; }
 .cover:hover .cover-title { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
-.cover-foot { border-top: 1px solid rgba(250, 247, 239, .55); padding-top: .8rem; }
+.cover-foot { border-top: 1px solid rgba(245, 246, 247, .55); padding-top: .8rem; }
 .cover-pct { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; }
 .cover-pct strong { font-size: 2.6rem; font-weight: 300; letter-spacing: -.05em; line-height: 1; text-transform: none; }
-.cover .progress { background: rgba(250, 247, 239, .3); height: 3px; border-radius: 0; margin-top: .6rem; }
-.cover .progress > span { background: #faf7ef; }
+.cover .progress { background: rgba(245, 246, 247, .3); height: 3px; border-radius: 0; margin-top: .6rem; }
+.cover .progress > span { background: #fcfcfd; }
 /* one restrained geometric mark per color; shared by covers and course headers */
 .cover::before, .course-head::before { content: ""; position: absolute; z-index: -1; pointer-events: none; }
-.art-0::before { width: 14rem; height: 14rem; border-radius: 50%; right: -4.5rem; top: -4.5rem; border: 2.2rem solid rgba(250, 247, 239, .13); }
-.art-1::before { width: 13rem; height: 13rem; right: 0; bottom: 0; border-radius: 100% 0 0 0; background: rgba(250, 247, 239, .1); }
-.art-2::before { width: 7rem; height: 10rem; right: 1.25rem; top: 0; background: repeating-linear-gradient(90deg, rgba(250, 247, 239, .16) 0 .55rem, transparent .55rem 1.1rem); }
-.art-3::before { width: 8.5rem; height: 8.5rem; right: 1rem; top: 3rem; background-image: radial-gradient(circle, rgba(250, 247, 239, .24) 3px, transparent 3.5px); background-size: 1.2rem 1.2rem; }
-.art-4::before { width: 11rem; height: 11rem; right: 0; top: 0; border-radius: 0 0 0 100%; background: rgba(250, 247, 239, .11); }
-.art-5::before { width: 9rem; height: 100%; right: 0; top: 0; background: rgba(250, 247, 239, .1); clip-path: polygon(55% 0, 100% 0, 100% 100%, 0 100%); }
+.art-0::before { width: 14rem; height: 14rem; border-radius: 50%; right: -4.5rem; top: -4.5rem; border: 2.2rem solid rgba(245, 246, 247, .13); }
+.art-1::before { width: 13rem; height: 13rem; right: 0; bottom: 0; border-radius: 100% 0 0 0; background: rgba(245, 246, 247, .1); }
+.art-2::before { width: 7rem; height: 10rem; right: 1.25rem; top: 0; background: repeating-linear-gradient(90deg, rgba(245, 246, 247, .16) 0 .55rem, transparent .55rem 1.1rem); }
+.art-3::before { width: 8.5rem; height: 8.5rem; right: 1rem; top: 3rem; background-image: radial-gradient(circle, rgba(245, 246, 247, .24) 3px, transparent 3.5px); background-size: 1.2rem 1.2rem; }
+.art-4::before { width: 11rem; height: 11rem; right: 0; top: 0; border-radius: 0 0 0 100%; background: rgba(245, 246, 247, .11); }
+.art-5::before { width: 9rem; height: 100%; right: 0; top: 0; background: rgba(245, 246, 247, .1); clip-path: polygon(55% 0, 100% 0, 100% 100%, 0 100%); }
 .cover.art-0, .cover.art-1, .cover.art-2, .cover.art-3, .cover.art-4, .cover.art-5 { background-image: none; }
 
 /* module tiles: contents-page entries */
@@ -113,7 +113,7 @@ section { margin-top: 3.5rem; }
 .tile-art, .art-0.tile-art, .art-1.tile-art, .art-2.tile-art, .art-3.tile-art, .art-4.tile-art, .art-5.tile-art { height: 6rem; background-color: var(--c); background-image: none; display: flex; align-items: flex-end; justify-content: space-between; padding: .75rem 1rem; }
 .tile-art::before { content: none; }
 .tile-label { position: static; font-size: .64rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; align-self: flex-start; }
-.tile-num { font-family: var(--serif); font-size: 3rem; line-height: .85; color: #faf7ef; letter-spacing: -.03em; }
+.tile-num { font-family: var(--serif); font-size: 3rem; line-height: .85; color: #fcfcfd; letter-spacing: -.03em; }
 .tile-badge { top: .7rem; right: .75rem; border-radius: 0; }
 .tile-title { font-family: var(--serif); font-weight: 400; font-size: 1.3rem; line-height: 1.15; letter-spacing: -.005em; }
 .tile-meta { font-size: .74rem; letter-spacing: .04em; }
@@ -140,7 +140,7 @@ section { margin-top: 3.5rem; }
 .course-head::before { z-index: -1; }
 .ch-code { margin: 0 0 1.25rem; font-size: .68rem; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
 .course-head h1 { font-family: var(--serif); font-weight: 400; letter-spacing: -.02em; line-height: 1.02; font-size: clamp(2.2rem, 8vw, 4.4rem); margin: 0; max-width: 16em; overflow-wrap: anywhere; }
-.ch-meta { display: flex; flex-wrap: wrap; gap: .25rem 1.5rem; margin: 1.5rem 0 0; padding-top: .8rem; border-top: 1px solid rgba(250, 247, 239, .55); font-size: .66rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.ch-meta { display: flex; flex-wrap: wrap; gap: .25rem 1.5rem; margin: 1.5rem 0 0; padding-top: .8rem; border-top: 1px solid rgba(245, 246, 247, .55); font-size: .66rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
 .crumbs { font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; }
 .course-menu a { font-size: .68rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
 .course-menu ul { border-bottom-width: 2px; }
@@ -182,7 +182,7 @@ section { margin-top: 3.5rem; }
   .apage .msec > :not(.sec-head) { grid-column: 2; }
 }
 /* supplied material reads as a document, apart from the instructions */
-.s-scenario-and-materials { background: #ece5d2; padding: 1.1rem 1.25rem 1.4rem; border-bottom: 1px solid var(--rule); }
+.s-scenario-and-materials { background: #e8ecf8; padding: 1.1rem 1.25rem 1.4rem; border-bottom: 1px solid var(--rule); }
 .s-scenario-and-materials .pre { font-family: var(--serif); font-size: 1.08rem; line-height: 1.7; }
 .s-scenario-and-materials .sec-head h3::after { content: "Supplied material"; display: block; margin-top: .35rem; font-size: .6rem; letter-spacing: .14em; color: var(--cobalt); }
 .s-portfolio-piece { border-top-color: var(--accent); }

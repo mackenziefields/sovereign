@@ -2,7 +2,7 @@
 (function (S) {
   'use strict';
 
-  S.BUILD = 19; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
+  S.BUILD = 21; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
   const KEY = 'sovereign.v3';
   const OLD_KEYS = ['sovereign.v2', 'sovereign.v1']; // earlier versions; migrated, never deleted automatically
   S.MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -18,7 +18,7 @@
     let n; try { const a = new Uint32Array(1); crypto.getRandomValues(a); n = a[0]; } catch (e) { n = Math.floor(Math.random() * 4294967296); }
     return S.THEMES[n % S.THEMES.length][0];
   };
-  S.COLORS = ['#6a1a27', '#1f4a4d', '#1f3a8a', '#4f5226', '#4a2a4c', '#7d4f17'];
+  S.COLORS = ['#681632', '#073e35', '#2643d8', '#101b32', '#6687a1', '#3b4f9a'];
   S.READING_KINDS = [['', 'Other'], ['article', 'Article'], ['book', 'Book'], ['video', 'Video'], ['course', 'Course'], ['tool', 'Tool'], ['document', 'Document'], ['podcast', 'Podcast']];
   S.ACCESS = [['unknown', 'Access unknown'], ['free', 'Free'], ['paid', 'Paid']];
   S.VERIFY = ['not-checked', 'reachable', 'unreachable', 'blocked', 'broken'];
@@ -114,7 +114,7 @@
     if (!f.at && !f.summary) return null;
     return {
       summary: str(f.summary, 3000), strengths: strs(f.strengths, 8, 600), improvements: strs(f.improvements, 8, 800), nextSteps: strs(f.nextSteps, 8, 600),
-      criteria: arr(f.criteria, 10).map((k) => { k = obj(k); return { name: str(k.name, 120) || 'Criterion', max: num(k.max) || 0, score: num(k.score) || 0, comment: str(k.comment, 800) }; }),
+      criteria: arr(f.criteria, 10).map((k) => { k = obj(k); return { name: str(k.name, 200) || 'Criterion', max: num(k.max) || 0, score: num(k.score) || 0, comment: str(k.comment, 800) }; }),
       score: num(f.score) || 0, max: num(f.max) || 0, model: str(f.model, 60), at: str(f.at, 40), cost: num(f.cost) || 0,
     };
   }
@@ -137,6 +137,12 @@
     const phase = final ? 'final' : 'reviewed';
     return { phase, deadline: str(w.deadline, 40), first: final ? null : first, final };
   }
+  // Earlier versions of an assignment's wording, kept when the person approves an AI revision so it can be restored. Wording only: points, rubric, work and grades are never part of it.
+  const normParts = (v) => arr(v, 8).map((p) => { p = obj(p); return { title: str(p.title, 120).trim(), questions: strs(p.questions, 8, 500) }; }).filter((p) => p.title || p.questions.length);
+  function normRevisions(v) {
+    return arr(v, 5).map((r) => { r = obj(r); const b = obj(r.before); return { at: str(r.at, 40), note: str(r.note, 300), readings: strs(r.readings, 5, 300), before: { description: str(b.description), parts: normParts(b.parts), materials: str(b.materials) } }; }).filter((r) => r.at);
+  }
+
   function normRubric(r) {
     return arr(r, 10).map((k) => { k = obj(k); return { name: str(k.name, 200), max: num(k.max) || 0 }; }).filter((k) => k.name && k.max > 0);
   }
@@ -185,7 +191,7 @@
           assignments: arr(m.assignments).map((a) => {
             a = obj(a);
             return { id: id(a.id), title: str(a.title, 300) || 'Untitled assignment', description: str(a.description), due: S.validDate(str(a.due, 10)), points: num(a.points), score: num(a.score), done: a.done === true, kind: ['learn', 'apply', 'demonstrate'].includes(a.kind) ? a.kind : '', origin: a.origin === 'ai' ? 'ai' : 'user', locked: a.locked === true && !!S.validDate(str(a.due, 10)), rubric: normRubric(a.rubric), work: normWork(a.work),
-              purpose: str(a.purpose, 2000), materials: str(a.materials, 6000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'file', 'any'].includes(a.format) ? a.format : '', basis: ['readings', 'scenario', 'portfolio'].includes(a.basis) ? a.basis : '', portfolioNote: str(a.portfolioNote, 500), realEvidence: a.realEvidence === true, evidence: (a.evidence && typeof a.evidence === 'object' && ['verified', 'needed'].includes(a.evidence.status)) ? { status: a.evidence.status, sources: (Array.isArray(a.evidence.sources) ? a.evidence.sources : []).slice(0, 8).map((s) => ({ title: str(s && s.title, 300), url: url(s && s.url) })).filter((s) => s.title) } : null, portfolio: a.portfolio === true, office: normOffice(a.office),
+              purpose: str(a.purpose, 2000), materials: str(a.materials, 6000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'file', 'any'].includes(a.format) ? a.format : '', basis: ['readings', 'scenario', 'portfolio'].includes(a.basis) ? a.basis : '', portfolioNote: str(a.portfolioNote, 500), realEvidence: a.realEvidence === true, evidence: (a.evidence && typeof a.evidence === 'object' && ['verified', 'needed'].includes(a.evidence.status)) ? { status: a.evidence.status, sources: (Array.isArray(a.evidence.sources) ? a.evidence.sources : []).slice(0, 8).map((s) => ({ title: str(s && s.title, 300), url: url(s && s.url) })).filter((s) => s.title) } : null, portfolio: a.portfolio === true, office: normOffice(a.office), revisions: normRevisions(a.revisions),
               parts: arr(a.parts, 8).map((p) => { p = obj(p); return { title: str(p.title, 120).trim(), questions: strs(p.questions, 8, 500) }; }).filter((p) => p.title || p.questions.length), submit: str(a.submit, 1000), criteria: strs(a.criteria, 8, 300), estimate: str(a.estimate, 60) };
           }),
         };

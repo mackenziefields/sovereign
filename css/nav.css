@@ -1,7 +1,7 @@
 /* sovereign. — navigation refinement (build 18, Phase 1C). Quiet, precise, content first.
    Small line icons, muted inactive text, a soft filled active row, generous row height, and controls that appear when they are relevant. */
 
-:root { --nav-muted: #6a6354; --nav-fill: rgba(21, 19, 15, .06); }
+:root { --nav-muted: #47526a; --nav-fill: rgba(16, 27, 50, .06); }
 
 /* ----- icons ----- */
 .ico { display: inline-flex; flex: none; width: 16px; height: 16px; }
@@ -26,10 +26,10 @@
 .cdot[data-theme="editorial"] { background: transparent; border: 2px solid var(--t-accent); border-radius: 50%; }
 .cdot[data-theme="intellectual"] { border-radius: 50%; }
 .cdot[data-theme="institution"] { transform: rotate(45deg) scale(.85); }
-.sidebar[data-theme="modernist"] { --nav-accent: #6a1a27; }
-.sidebar[data-theme="editorial"] { --nav-accent: #6a1a27; }
-.sidebar[data-theme="intellectual"] { --nav-accent: #1f3a8a; }
-.sidebar[data-theme="institution"] { --nav-accent: #5c1220; }
+.sidebar[data-theme="modernist"] { --nav-accent: #2643d8; }
+.sidebar[data-theme="editorial"] { --nav-accent: #2643d8; }
+.sidebar[data-theme="intellectual"] { --nav-accent: #2643d8; }
+.sidebar[data-theme="institution"] { --nav-accent: #073e35; }
 .side-courses a[aria-current="page"] { box-shadow: inset 3px 0 0 var(--nav-accent); }
 .side-note { margin-top: auto; padding-top: 1.5rem; }
 
@@ -40,8 +40,8 @@
 .course-menu a[aria-current="page"] { color: var(--ink); font-weight: 700; }
 .course-menu a[aria-current="page"] .ico { color: var(--nav-accent, var(--accent)); }
 .course-menu a:focus-visible { outline: 2px solid var(--cobalt); outline-offset: -2px; }
-.course[data-theme="intellectual"] .course-menu { --nav-accent: #1f3a8a; }
-.course[data-theme="institution"] .course-menu { --nav-accent: #5c1220; }
+.course[data-theme="intellectual"] .course-menu { --nav-accent: #2643d8; }
+.course[data-theme="institution"] .course-menu { --nav-accent: #073e35; }
 @media (max-width: 879px) { .course-menu a { padding: 0 .8rem; } .course-menu a .ico { display: none; } }
 @media (min-width: 880px) {
   .course-menu a { min-height: 46px; padding: 0 .75rem; margin: 0 -1px 0 0; border-radius: 3px 0 0 3px; }
@@ -61,10 +61,10 @@
 
 /* ----- tablet range ----- */
 @media (min-width: 720px) and (max-width: 999px) {
-  .wb-seg ul { grid-template-columns: repeat(6, 1fr); }
-  .wb-seg li:nth-child(n+4) { border-top: 0; }
-  .wb-seg li:not(:nth-child(3n+1)) { border-left: 1px solid var(--ink); }
-  .wb-seg li:nth-child(4) { border-left: 2px solid var(--ink); }
+  .wb-seg ul { grid-template-columns: repeat(7, 1fr); }
+  .wb-seg li:nth-child(n+5) { border-top: 0; }
+  .wb-seg li:not(:first-child) { border-left: 1px solid var(--ink); }
+  .wb-seg li:nth-child(5) { border-left: 2px solid var(--ink); }
 }
 
 /* ----- My Work cards: let the title column shrink so the status badge never pushes past a phone screen ----- */

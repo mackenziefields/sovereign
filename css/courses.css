@@ -16,8 +16,8 @@ input[type="number"]:focus-visible, input[type="date"]:focus-visible { outline: 
 .tile:hover, .tile:focus-visible { border-color: var(--accent); }
 .tile:hover .tile-title { color: var(--accent); }
 .tile-art { position: relative; height: 7rem; background-color: var(--c); }
-.tile-label { position: absolute; left: 1rem; bottom: .8rem; font-size: 1.5rem; font-weight: 300; letter-spacing: -.02em; color: #fbf9f4; }
-.tile-badge { position: absolute; right: .75rem; top: .75rem; font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; color: var(--ink); background: #fbf9f4; padding: .2rem .5rem; border-radius: 2px; }
+.tile-label { position: absolute; left: 1rem; bottom: .8rem; font-size: 1.5rem; font-weight: 300; letter-spacing: -.02em; color: #fcfcfd; }
+.tile-badge { position: absolute; right: .75rem; top: .75rem; font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; color: var(--ink); background: #fcfcfd; padding: .2rem .5rem; border-radius: 2px; }
 .tile-body { padding: 1rem; }
 .tile-title { font-size: 1.15rem; font-weight: 500; letter-spacing: -.01em; margin: 0 0 .25rem; }
 .tile-meta { font-size: .82rem; color: var(--muted); margin: 0 0 .75rem; }

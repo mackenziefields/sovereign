@@ -179,31 +179,31 @@
 .studio[data-theme="intellectual"] .project::before { width: 2.2rem; height: 2.2rem; border-radius: 50%; top: -1.1rem; background: var(--cobalt); }
 
 /* ===== design 4 · The Institution: oxblood plate, capitals, ruled double frame ===== */
-.studio[data-theme="institution"] .studio-open { background: #5c1220; color: #f6efe0; padding: 1.5rem 1.25rem; border: 0; outline: 1px solid #c9a96a; outline-offset: -8px; }
-.studio[data-theme="institution"] .studio-open .eyebrow, .studio[data-theme="institution"] .studio-open .muted, .studio[data-theme="institution"] .studio-open .chap-of, .studio[data-theme="institution"] .so-brief .msec .sec-head h3 { color: #d9c9a0; }
-.studio[data-theme="institution"] .studio-open a, .studio[data-theme="institution"] .studio-open .linkbtn, .studio[data-theme="institution"] .so-settings summary { color: #f6efe0; }
+.studio[data-theme="institution"] .studio-open { background: #073e35; color: #f5f6f7; padding: 1.5rem 1.25rem; border: 0; outline: 1px solid #9fb6cb; outline-offset: -8px; }
+.studio[data-theme="institution"] .studio-open .eyebrow, .studio[data-theme="institution"] .studio-open .muted, .studio[data-theme="institution"] .studio-open .chap-of, .studio[data-theme="institution"] .so-brief .msec .sec-head h3 { color: #c3d0dc; }
+.studio[data-theme="institution"] .studio-open a, .studio[data-theme="institution"] .studio-open .linkbtn, .studio[data-theme="institution"] .so-settings summary { color: #f5f6f7; }
 .studio[data-theme="institution"] .studio-open .linkbtn.danger { color: #ffb8b8; }
-.studio[data-theme="institution"] .studio-open .badge { color: #f6efe0; border-color: #d9c9a0; background: transparent; }
-.studio[data-theme="institution"] .chap-no { font-family: "Cinzel", Georgia, serif; font-weight: 500; color: #f6efe0; font-size: 3rem; }
-.studio[data-theme="institution"] .studio-title { font-family: "Cinzel", Georgia, serif; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; line-height: 1.15; font-size: clamp(1.6rem, 5vw, 2.6rem); color: #f6efe0; }
-.studio[data-theme="institution"] .so-brief .msec > .pre { font-family: "Cormorant Garamond", Garamond, Georgia, serif; font-style: italic; font-weight: 500; font-size: 1.4rem; line-height: 1.35; color: #f6efe0; }
-.studio[data-theme="institution"] .so-brief ul.plain { color: #f6efe0; }
-.studio[data-theme="institution"] .studio-open .progress { background: rgba(246, 239, 224, .25); }
-.studio[data-theme="institution"] .studio-open .progress > span { background: #f6efe0; }
-.studio[data-theme="institution"] .studio-open :focus-visible { outline-color: #f6efe0; }
-.studio[data-theme="institution"] .room-title { font-family: "Cinzel", Georgia, serif; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; font-size: clamp(1.3rem, 4vw, 1.8rem); color: #5c1220; }
+.studio[data-theme="institution"] .studio-open .badge { color: #f5f6f7; border-color: #c3d0dc; background: transparent; }
+.studio[data-theme="institution"] .chap-no { font-family: "Cinzel", Georgia, serif; font-weight: 500; color: #f5f6f7; font-size: 3rem; }
+.studio[data-theme="institution"] .studio-title { font-family: "Cinzel", Georgia, serif; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; line-height: 1.15; font-size: clamp(1.6rem, 5vw, 2.6rem); color: #f5f6f7; }
+.studio[data-theme="institution"] .so-brief .msec > .pre { font-family: "Cormorant Garamond", Garamond, Georgia, serif; font-style: italic; font-weight: 500; font-size: 1.4rem; line-height: 1.35; color: #f5f6f7; }
+.studio[data-theme="institution"] .so-brief ul.plain { color: #f5f6f7; }
+.studio[data-theme="institution"] .studio-open .progress { background: rgba(245, 246, 247, .25); }
+.studio[data-theme="institution"] .studio-open .progress > span { background: #f5f6f7; }
+.studio[data-theme="institution"] .studio-open :focus-visible { outline-color: #f5f6f7; }
+.studio[data-theme="institution"] .room-title { font-family: "Cinzel", Georgia, serif; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; font-size: clamp(1.3rem, 4vw, 1.8rem); color: #073e35; }
 .studio[data-theme="institution"] .rs-name { font-family: "Cinzel", Georgia, serif; font-weight: 600; font-size: .8rem; letter-spacing: .1em; text-transform: uppercase; }
 .studio[data-theme="institution"] .rs-room { font-family: "Cormorant Garamond", Garamond, Georgia, serif; font-style: italic; text-transform: none; letter-spacing: 0; font-size: .95rem; }
-.studio[data-theme="institution"] .rs[aria-current="page"] { background: #5c1220; border-bottom-color: #c9a96a; }
-.studio[data-theme="institution"] .rs[aria-current="page"] .rs-name, .studio[data-theme="institution"] .rs[aria-current="page"] .rs-count, .studio[data-theme="institution"] .rs[aria-current="page"] .rs-room { color: #f6efe0; }
-.studio[data-theme="institution"] .rs[aria-current="page"] .rs-mark { border-color: #f6efe0; }
-.studio[data-theme="institution"] .rs[aria-current="page"].rs-demonstrate .rs-mark { background: #f6efe0; }
-.studio[data-theme="institution"] .rcard, .studio[data-theme="institution"] .case, .studio[data-theme="institution"] .project { border: 1px solid #5c1220; outline: 1px solid #c9a96a; outline-offset: -5px; }
-.studio[data-theme="institution"] .rc-plate { background: #5c1220; }
+.studio[data-theme="institution"] .rs[aria-current="page"] { background: #073e35; border-bottom-color: #9fb6cb; }
+.studio[data-theme="institution"] .rs[aria-current="page"] .rs-name, .studio[data-theme="institution"] .rs[aria-current="page"] .rs-count, .studio[data-theme="institution"] .rs[aria-current="page"] .rs-room { color: #f5f6f7; }
+.studio[data-theme="institution"] .rs[aria-current="page"] .rs-mark { border-color: #f5f6f7; }
+.studio[data-theme="institution"] .rs[aria-current="page"].rs-demonstrate .rs-mark { background: #f5f6f7; }
+.studio[data-theme="institution"] .rcard, .studio[data-theme="institution"] .case, .studio[data-theme="institution"] .project { border: 1px solid #073e35; outline: 1px solid #9fb6cb; outline-offset: -5px; }
+.studio[data-theme="institution"] .rc-plate { background: #073e35; }
 .studio[data-theme="institution"] .rc-no, .studio[data-theme="institution"] .case-no b { font-family: "Cinzel", Georgia, serif; }
 .studio[data-theme="institution"] .case { border-left-width: 1px; }
 .studio[data-theme="institution"] .case-title, .studio[data-theme="institution"] .pj-title, .studio[data-theme="institution"] .rc-title { font-family: "Cormorant Garamond", Garamond, Georgia, serif; font-weight: 500; font-size: 1.5rem; }
 .studio[data-theme="institution"] .project::before { content: none; }
-.studio[data-theme="institution"] .nextup { background: #5c1220; color: #f6efe0; }
+.studio[data-theme="institution"] .nextup { background: #073e35; color: #f5f6f7; }
 
 @media (max-width: 640px) { .studio .chap-no { font-size: 2.6rem; } .studio[data-theme="intellectual"] .chap-no { width: 4.2rem; height: 4.2rem; font-size: 2.1rem; } }

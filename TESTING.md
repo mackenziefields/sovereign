@@ -141,6 +141,21 @@ Problems found (not fixed yet; each needs a decision):
 | Q3 | Details prompt carries the "MUST supply the reference material" rule for non-real-evidence Demonstrate; materials come back labelled FICTIONAL | Mock | Pass |
 | Q4 | Second real build on Worker v9 ("Feminist Theory: A Beginner's Foundation", 229 s, status complete, 10 calls, 6 searches, **$0.54** by the Worker's estimate; running total for the test about $1.12): reading titles clean; Demonstrate in Modules 1 and 2 supplies a labelled fictional dossier (1,744 and 1,628 characters); Module 3's Apply and Demonstrate are real-evidence with 2 verified sources each; the module with no readings got a Learn task that says readings still need adding and does not ask the learner to find sources; all 9 pages persisted after reload | Real API | Pass |
 
+## Phase 2: Academic Experience (build 20, run 2026-11-25; seeded test courses in the preview browser)
+
+| # | Check | Method | Result |
+|---|---|---|---|
+| P1 | Syllabus, Grades and Portfolio for 3 courses (AI-built with data, a legacy manual course, a second AI course) × 4 designs × 375, 768 and 1024 px (108 renders): no horizontal overflow in the page body | Browser | Pass |
+| P2 | 664 routes (every course section, module stage, assignment tab, plus Dashboard, My Work, Data) render with no uncaught errors | Browser | Pass |
+| P3 | Grades: AI-graded rows have no inputs; a manual score typed into a row updates the assignment and Current Grade; restoring it leaves stored data byte-identical | Browser | Pass |
+| P4 | Grades statuses (AI-graded, Feedback ready with the final-grade timing, Self-scored, Not graded), per-stage bars, per-module totals and the "feedback, not graded yet" notice | Browser, with seeded **mock** review data (not real AI) | Pass |
+| P5 | Portfolio: a finalized Demonstrate piece appears as a plate with note, score, excerpt and expandable work and feedback; capstone, graded record and credentials sections render; empty states for a legacy course | Browser, mock review data | Pass |
+| P6 | Syllabus: Course map, assessment split bar, Edit course details opens and cancels, Delete course is behind a fold | Browser | Pass |
+| P7 | Visual review: desktop (Institution) of all three pages and the phone Grades cards, screenshots viewed by me; fixed print button contrast on the dark cover and the status note column on phones | Browser | Pass |
+| P8 | Normalizing the full saved state changes nothing except one seeded mock criterion name longer than the existing 120-character limit | Browser | Pass |
+
+Not tested: the print layout itself (rules read by **Inspection** only; the browser print dialog was not exercised), Modernist and Editorial desktop screenshots by eye (overflow-tested only), screen reader, real phone, measured colour contrast of the new status chips, real AI (no AI code changed).
+
 ## Phase 1 test plan
 See the acceptance criteria in `docs/PHASE-0-AUDIT.md`.
 
@@ -148,3 +163,75 @@ See the acceptance criteria in `docs/PHASE-0-AUDIT.md`.
 - Cloudflare CPU limits on very large review bodies are unverified.
 - Some modules earlier returned "Source needed" for readings; cause unresolved (needs Worker logs if it recurs).
 - Real AI quality of Demonstrate artifacts and scenarios is judged only by the product owner.
+
+## Track A: visual refresh, Home and palette (build 21, Unreleased)
+Method labels: **Browser** = real preview in the in-app browser with seeded test data (13 courses). **Inspection** = reading code or computing values. Not tested: print, real phone, screen reader, real AI.
+
+| # | Check | Method | Result |
+|---|---|---|---|
+| A1 | 286 routes rendered across all 13 courses (home, announcements, syllabus, modules, all four stages of every module, every assignment workbench, assignments, grades, portfolio): no script errors; every course page present | Browser | Pass |
+| A2 | Saved data identical before and after rendering those routes (`sovereign.v3` string compared) | Browser | Pass |
+| A3 | Course Home: no Grades section; no assignment list; at most 2 cards ("Current", "Next up"); never the same assignment twice; ordering is soonest due first, undated in module order; a course with no assignments says so, a finished course says it is complete | Browser (all 13 courses) + inspection | Pass |
+| A4 | Colour contrast of key pairs (computed from the hex values): ink on ivory 15.8:1, muted on ivory 7.2:1, link on ivory 9.0:1, white on indigo button 7.3:1, sidebar muted text on navy 9.3:1, Up Next meta on navy 11.3:1, per-theme accent on its background 6.2:1 to 10.9:1, danger on ivory 7.5:1. Steel (#6687a1, 3.5:1) is used only for decoration, never for text | Inspection | Pass (all text pairs at or above 4.5:1) |
+| A5 | No horizontal overflow at 375 px on home, Reading Room, Case Lab, assignments list, workbench, grades, syllabus, portfolio, dashboard | Browser | Pass |
+| A6 | Desktop views looked at: Dashboard, course Home, Reading Room (resources beside sticky study column), Grades, Workbench. Mobile looked at: course Home | Browser (by eye) | Looks as intended; judged by me, you are the reviewer |
+| A7 | Four course designs keep their typography and composition; colours moved to the palette (Modernist navy and indigo, Editorial oxblood, Intellectual indigo tint, Institution pine) | Browser: Institution and Modernist screens seen; Editorial and Intellectual by values only | Partly looked at |
+| A8 | Existing educational workflows (build, submit, review, grade, Office Hours) with mock or real AI | not re-run | **Not tested in this build.** No logic was changed, but it has not been exercised |
+
+## Track B: syllabus (audit only)
+`docs/SYLLABUS-AUDIT.md`. Code inspection only; no real retrieval, no paid calls. Finding 1 (fetch errors counted as an opened page) and the other findings are unconfirmed against a live site until a real test is approved.
+
+## Track A follow-ups (build 21)
+| # | Check | Method | Result |
+|---|---|---|---|
+| B1 | Feedback criterion names: in the seed data the Vocabulary in Use rubric name is 145 characters, the saved feedback copy 120 (cut). After the fix the Feedback tab shows all 145 | Browser | Pass. Cause confirmed by inspection (`worker.js` clamp 120 vs criteria 200). **The Worker clamp is not changed**, so new real reviews still return the cut name; the app restores it from the rubric. Worker clamp now raised to 200 in `worker.js` (VERSION 10), not yet deployed |
+| B2 | The feedback in the screenshot ("[MOCK] Solid work…", comments "ok") is seeded mock text, not real AI output. Real feedback limits are unchanged (summary 3000, strengths 600 each, improvements 800 each, next steps 600 each, criterion comments 800) | Inspection | No depth was removed |
+| B3 | Steps tab: order Brief, Materials, Steps, Rubric; Steps content moved out of the Brief; Steps tab renders the steps; no horizontal overflow at 375 px; phone switcher is 4 + 3 | Browser | Pass |
+
+## Track B: syllabus repairs (build 21, Worker v11): MOCK TESTS ONLY
+**All of these use the mock harness: the real Worker code runs, but the AI provider, search and web pages are simulated. They prove the plumbing and the rules, NOT that real syllabi can be retrieved.** No real syllabus has been fetched and no paid call was made.
+
+| # | Check | Method | Result |
+|---|---|---|---|
+| C1 | A failed fetch (`url_not_accessible`): stage `not-accessible` with the reason, zero readings, even though the model offered a search-found reading (it was discarded) | Mock | Pass |
+| C2 | A readable page: stage `verified`; the linked reading is "link checked", the citation found in the page text is "listed in the syllabus"; the syllabus itself and an invented title are dropped | Mock | Pass |
+| C3 | A PDF the AI read itself: kind `pdf`, stage `manual-review`, the citation marked "check manually" | Mock | Pass |
+| C4 | Pasted text: kind `pasted`, the title that appears in the text is kept, the invented title that does not is dropped; the pasted text is not in saved data | Mock + Browser | Pass |
+| C5 | Adopting readings: only ticked ones are added; duplicates skipped; readings get their "derived from" label; the course's own readings unchanged | Mock | Pass |
+| C6 | Revisions on three assignments that all had submitted or graded work: nothing changed until applied; after applying, points, score, done, rubric, criteria, work, format, title, due date and kind were identical; earlier wording restored exactly; Learn assignments got no materials | Mock | Pass |
+| C7 | UI flow in the preview: Read, review panel (two readings pre-ticked), Add 2, revision picker, Propose, three proposals with touched assignments unticked, ticked one applied, the other two unchanged, Brief shows the "Revised" notice, Restore works, paste form requires the consent box | Browser + Mock | Pass |
+| C8 | Cost of a mocked syllabus read about $0.02 and a revision about $0.03 at the harness's token counts, which are not real | Mock | Not a real estimate |
+
+**Not tested:** any real website or PDF; the real behaviour of `web_fetch` errors and PDF results (the Worker's handling follows the documented result shapes, unconfirmed); real model quality of revisions; the real `/revise` endpoint; the older-Worker "update needed" message; touch and screen-reader use of the new panels.
+Preview note: while testing I overwrote the preview's saved AI access code. The preview now has the test Worker address and no code, so re-enter the code there before any real test. I restored the preview's test data by hand (readings, syllabi and usage rows I had added were removed).
+
+## Track B: REAL API test (test Worker v11, 2026-11-25; Real API unless marked)
+Approved cap $1.00. Worker's own cost estimate (its price table; the search price is unverified; the Anthropic console is the authority). Spent: **$0.418** of $1.00 (four calls).
+
+| # | Test | Result | Cost |
+|---|---|---|---|
+| R1 | Public web page: MIT OCW WGS 615 readings page | Stage `verified`, kind `page`. 3 readings returned. I then opened the real page myself: all 3 appear on it (Moi, Mohanty, Harding). Mohanty's link (archive.org) opened and its title matched; Harding's had no link (kept as a citation, "listed in the syllabus"); Moi's link (the author's own site, a PDF) could not be confirmed ("link not confirmed"). The page itself contains a wrong journal name for Moi; the AI did not copy it. 3 of the 3 readings were genuine syllabus readings, but the list was only 3 of about 25 on the page, by design (module fit, max 5) | $0.136, 77.9k in, 4 searches |
+| R2 | Public PDF: UF Feminist Theory Spring 2021 | Returned stage `verified`, kind `page`, 3 readings (hooks, May, Ahmed) attributed to "Syllabus of Dr. Jillian Hernandez, Feminist Theory: Spring 2021". **I could not confirm them: that PDF address now returns HTTP 404 (checked in the browser and with curl).** The three readings are real works with live links (two checked, one blocked), but I cannot say they are in that syllabus, and I do not know how the Worker's fetch counted as a success. **Inconclusive, and a possible weakness** | $0.124, 66.9k in, 4 searches |
+| R3 | Pasted text (a 1,052-character excerpt of the MIT page) | kind `pasted`, stage `verified`, 3 readings, all in the pasted text (Ahmed, Mohanty, Moi). Links: Mohanty checked, Ahmed's university repository link unreachable, Moi not confirmed | $0.101, 47.5k in, 4 searches |
+| R4 | `/revise` on 2 assignments (a Learn and an Apply) with one adopted reading (Mohanty) | Both proposals came back; the assignments were unchanged until applied; the Apply revision's supplied material starts with the FICTIONAL label. The revisions name the reading, tell the learner to read it and use it, and say it is "listed with a note that it critiques…" (the note I supplied). Findings: the revised overviews grew from about 195 to about 300 words (asked for the same length), and the change notes say what the reading does using the model's own knowledge of a famous work (accurate here, not guaranteed for obscure readings). I did not apply them | $0.057, 3.6k in, 3.1k out |
+
+**Findings from the real run**
+1. A real web page and (separately) pasted text both work end to end, and every reading returned was genuinely in the source text.
+2. **A PDF's text comes back as readable text, not as an opaque file.** My earlier guess that PDFs would yield no confirmable citations (audit finding 2) was not borne out for the one PDF tested; the `pdf` / "check manually" path was not triggered.
+3. R2 is unexplained. Worker v11 does not check that a reading that has a link appears in the syllabus text, so a reading found by searching could be shown as if from the syllabus. **Fix built (Worker v12):** a linked reading whose title is not found in the syllabus text is labelled "Not found in the syllabus text" and starts unticked; the response also carries a content-free `diag` (block types, successful and failed page opens, text size) so a result can be audited. Mock-tested (extra pick scenario); **not yet tested for real**.
+4. Real cost per syllabus read was $0.10 to $0.14 (about 50k to 78k tokens in), about three times my estimate. A revision of two assignments cost $0.06.
+
+**Mock regression after the v12 change** (all Mock): failed fetch, page, PDF, pasted and the new "found by search, not in the syllabus" case behave as before; the last one is labelled `not-in-text`.
+### R5: PDF retest on Worker v12 (Real API, 2026-11-25)
+Target: `https://donadey.sdsu.edu/PDFs/603FemGrad17.pdf` (WMNST 603 Advanced Feminist Theory, live: HTTP 200, application/pdf, 208 KB, 9 pages). Cost **$0.117** (100.8k in, 3.3k out). **Running total $0.535 of the $1.00 cap.**
+
+| Check | Result |
+|---|---|
+| Stage / kind | `manual-review` / `pdf` (honest: code could not read the PDF text itself) |
+| `diag` | binary 1, page opens ok 1, fetch errors 0, text chars 0, search blocks 5 with 0 usable results |
+| Readings returned | 5: Wittig "One Is Not Born a Woman"; King "Multiple Jeopardy, Multiple Consciousness"; Reagon "Coalition Politics"; MacKinnon "Consciousness Raising"; Carastathis "Identity Categories as Potential Coalitions". All marked "check manually", none ticked, no links invented |
+| My independent check | I downloaded the PDF and extracted its text (pypdf): **all 5 titles and authors appear in the syllabus.** 5 of 5 genuine |
+| Result | **Pass for the PDF path.** The Worker did not claim verification it could not do, and the readings were real. Not tested: that the real `not-in-text` rule fires (no linked pick was produced this time) |
+
+Seed data in the preview was restored from backup afterward.
+**Not done:** the real `not-in-text` rule; applying a real revision; trimming revision length drift.

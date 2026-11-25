@@ -180,6 +180,73 @@
     return { added, missing: !(r.resources || []).length };
   };
 
+  /* ----- Syllabus sourcing (build 21): read, REVIEW, adopt, then optionally revise assignments. Nothing here changes a course by itself. ----- */
+
+  // The newer features need Worker version 11; building courses and everything else keep working on older Workers.
+  ai.requireVersion = async function (n, what) {
+    let hl; try { hl = await ai.health(); } catch (e) { return; }
+    if (!(hl && hl.version >= n)) throw new AIError('outdated', what + ' needs a newer AI service (version ' + n + '). Paste the latest worker.js into your Cloudflare Worker and deploy it. Everything else still works.');
+  };
+  const briefOf = (course, mod) => ({ topic: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '', module: { title: mod.title, overview: mod.overview, objectives: mod.objectives, keyIdeas: mod.keyIdeas } });
+  const readingKey = (x) => x.url || 'c:' + x.title.toLowerCase();
+
+  // Reads a syllabus from its link, or from text the person pasted (sent only after they agreed; the text is not kept anywhere in the app).
+  // Returns { stage, kind, reason, items } for REVIEW: stage is not-accessible | no-readings | readings-found | verified | manual-review.
+  ai.readSyllabus = async function (course, mod, syl, text, opts) {
+    await ai.requireVersion(12, 'Reading a syllabus with these checks');
+    const body = briefOf(course, mod);
+    if (text) body.text = text; else body.url = syl.url;
+    const r = await ai.call('/syllabus', body, opts || {});
+    if (!S.state.courses.includes(course) || !course.modules.includes(mod)) throw new AIError('gone', 'That course changed while the syllabus was being read.');
+    if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
+    const have = new Set(mod.readings.map(readingKey));
+    S.save();
+    return { stage: r.stage || (r.missing ? 'no-readings' : 'readings-found'), kind: r.kind || 'page', reason: r.reason || '', errorCode: r.errorCode || '', diag: r.diag || null, at: now(),
+      items: (r.resources || []).map((x) => ({ ...x, dup: have.has(readingKey(x)) })) };
+  };
+
+  // Adds ONLY the readings the person ticked. Duplicates are skipped. Returns the readings added.
+  ai.adoptReadings = function (course, mod, syl, items) {
+    const have = new Set(mod.readings.map(readingKey)), added = [];
+    items.forEach((x) => {
+      if (have.has(readingKey(x))) return;
+      have.add(readingKey(x));
+      const rd = S.makeReading(readingFrom({ ...x, derivedFrom: x.derivedFrom || (syl && (syl.note || syl.title)) || 'Syllabus', derivedUrl: (syl && syl.url) || '' }));
+      if (x.review === 'manual-review') rd.note = 'Check this against the syllabus: the AI read it from a document this service could not search.';
+      mod.readings.push(rd); added.push(rd);
+    });
+    if (syl) { syl.sourcedAt = now(); syl.sourcedCount = (syl.sourcedCount || 0) + added.length; }
+    S.save();
+    return added;
+  };
+
+  // Asks for PROPOSED revisions of up to three assignments around newly adopted readings. Returns [{ a, rev }]; rev is null when the AI could not write one.
+  ai.proposeRevisions = async function (course, mod, readings, assignments, opts) {
+    await ai.requireVersion(11, 'Revising assignments');
+    const body = briefOf(course, mod);
+    body.newReadings = readings.map((x) => ({ title: x.title, creator: x.creator, note: x.relevance || x.note || '' }));
+    body.assignments = assignments.map((a) => ({ title: a.title, kind: S.stageOf(a), description: a.description, materials: a.materials, realEvidence: a.realEvidence, steps: a.parts }));
+    const r = await ai.call('/revise', body, opts || {});
+    if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
+    S.save();
+    return assignments.map((a, i) => ({ a, rev: (r.revisions || [])[i] || null }));
+  };
+
+  // Applies one approved revision. The earlier wording is kept on the assignment (restorable); points, rubric, submissions and grades are not touched.
+  ai.applyRevision = function (a, rev, readings) {
+    a.revisions = a.revisions || [];
+    a.revisions.push({ at: now(), note: rev.changeNote || '', readings: readings.map((x) => x.title).slice(0, 5), before: { description: a.description, parts: JSON.parse(JSON.stringify(a.parts)), materials: a.materials } });
+    if (a.revisions.length > 5) a.revisions.shift();
+    a.description = rev.description; a.parts = rev.parts;
+    if (S.stageOf(a) !== 'learn' && !a.realEvidence && rev.materials) a.materials = rev.materials;
+    S.save();
+  };
+  ai.restoreRevision = function (a) {
+    const v = a.revisions && a.revisions.pop(); if (!v) return false;
+    a.description = v.before.description; a.parts = v.before.parts; a.materials = v.before.materials;
+    S.save(); return true;
+  };
+
   // Reviews one submission. Only call this after the person has agreed to send it. The work is passed along and not kept by the service.
   // payload: { text } or { file: { mime, base64 } }. Round 2 also sends what round 1 asked to change.
   // The criteria shown on the assignment page become the rubric (points split evenly) unless a rubric already exists.
