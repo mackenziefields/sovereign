@@ -38,6 +38,21 @@
     return 'other';
   };
 
+  // Can the AI review this file? Checked the moment a file is chosen, so an unreadable or oversize file is never offered for AI review.
+  // Returns { ok:true } or { ok:false, msg }. (Text length is checked later, when the text is read.)
+  f.check = function (file, fileOnly) {
+    if (!file) return { ok: true };
+    const kind = f.classify(file), e = ext(file.name), L = S.FILE_LIMITS, mb = (n) => Math.round(n / 1048576) + ' MB';
+    if (kind === 'text' && fileOnly) return { ok: false, msg: 'This assignment needs a PDF, Excel file, or image, not a text file.' };
+    if (kind === 'pdf' && file.size > L.pdf) return { ok: false, msg: 'That PDF is over the ' + mb(L.pdf) + ' the AI can review. Compress it, or attach it as evidence without AI feedback.' };
+    if (kind === 'xlsx' && file.size > L.xlsx) return { ok: false, msg: 'That Excel file is over ' + mb(L.xlsx) + '. Save a smaller copy and try again.' };
+    if (kind === 'other') {
+      const tip = e === 'docx' || e === 'doc' || e === 'pages' || e === 'odt' ? ' Save it as a PDF first.' : e === 'heic' || e === 'heif' ? ' Export it as a JPG first.' : e === 'xls' || e === 'numbers' ? ' Save it as .xlsx or PDF first.' : '';
+      return { ok: false, msg: 'The AI can’t read “.' + (e || 'unknown') + '” files. It can review text, PDF, image, and Excel (.xlsx) files.' + tip + ' You can still attach this file as evidence without AI feedback.' };
+    }
+    return { ok: true };
+  };
+
   f.readText = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result || '')); r.onerror = () => rej(r.error); r.readAsText(file); });
 
   const toB64 = (blob) => new Promise((res, rej) => {

@@ -133,7 +133,7 @@
       modules: o.modules.map((m, mi) => ({
         id: S.uid(), title: m.title, overview: m.overview, keyIdeas: m.keyIdeas, reflection: m.reflection, objectives: m.objectives, selfCheck: m.selfCheck,
         duration: m.duration, origin: 'ai', edited: false, readings: [],
-        assignments: m.assignments.map((a, ai_) => ({ id: S.uid(), title: a.title, description: a.description, kind: a.kind, points: a.points, origin: 'ai', due: dueFor(start, brief && brief.weeks, o.modules.length, mi, ai_, m.assignments.length), locked: true })),
+        assignments: m.assignments.map((a, ai_) => ({ id: S.uid(), title: a.title, description: a.description, kind: a.kind, points: a.points, realEvidence: a.realEvidence === true && a.kind !== 'learn', origin: 'ai', due: dueFor(start, brief && brief.weeks, o.modules.length, mi, ai_, m.assignments.length), locked: true })),
       })),
       work: { title: fp.title, criteria: fp.criteria },
       ai: { generated: true, createdAt: now(), status: 'partial', note: 'Course outline saved. Learning materials are still being found.', brief, usage: [] },
@@ -217,7 +217,7 @@
   };
 
   // Refuses to start AI work against an older copy of the Worker that doesn't have the newest features.
-  ai.NEEDS_VERSION = 7;
+  ai.NEEDS_VERSION = 9;
   ai.requireCurrent = async function () {
     let hl = null;
     try { hl = await ai.health(); } catch (e) { return; } // unreachable: the real call will report it
@@ -231,9 +231,10 @@
     await ai.requireCurrent();
     const r = await ai.call('/details', {
       topic: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '',
-      module: { title: mod.title, overview: mod.overview, objectives: mod.objectives },
+      module: { title: mod.title, overview: mod.overview, objectives: mod.objectives, keyIdeas: mod.keyIdeas },
+      readingsMissing: !mod.readings.some((x) => x.source !== 'placeholder'),
       goal: [(course.ai && course.ai.brief && course.ai.brief.goal) || '', (course.ai && course.ai.brief && course.ai.brief.goalText) || ''].filter(Boolean).join(': '),
-      assignments: list.map((a) => ({ title: a.title, description: a.description, kind: a.kind, points: a.points })),
+      assignments: list.map((a) => ({ title: a.title, description: a.description, kind: a.kind, points: a.points, realEvidence: a.realEvidence === true })),
       readings: mod.readings.filter((x) => x.source !== 'placeholder').slice(0, 6).map((x) => ({ title: x.title })),
     }, opts || {});
     if (!S.state.courses.includes(course) || !course.modules.includes(mod)) throw new AIError('gone', 'That module was removed while its assignments were being written.');
@@ -242,7 +243,8 @@
       const a = list[i];
       if (!d || !a || !mod.assignments.includes(a)) return;
       if (a.origin === 'ai' || !a.description) { a.description = d.description; a.purpose = ''; } // a person's own wording is kept
-      a.materials = d.materials; a.basis = d.basis; a.portfolioNote = d.portfolioNote || ''; a.parts = d.parts; a.format = d.format; a.submit = d.submit; a.estimate = d.estimate; a.steps = [];
+      a.materials = a.realEvidence ? '' : S.labelFiction(d.materials); a.basis = d.basis; a.portfolioNote = d.portfolioNote || ''; a.parts = d.parts; a.format = d.format; a.submit = d.submit; a.estimate = d.estimate; a.steps = [];
+      if (a.realEvidence) S.setEvidence(mod, a); // real-evidence tasks get only sources whose links were checked; if none, they are marked "Source needed", never given an invented scenario
       if (!a.work) { a.rubric = d.rubric; a.criteria = []; } // the grading criteria can't change once work has been submitted
       done++;
     });
@@ -271,6 +273,7 @@
       try {
         let r = await ai.findMaterials(course, course.modules[i], { queries: queries[i], signal: run.ctl.signal });
         if (r.missing) r = await ai.findMaterials(course, course.modules[i], { queries: queries[i], signal: run.ctl.signal }); // one automatic second try
+        if (r.missing) r = await ai.findMaterials(course, course.modules[i], { queries: [course.title + ' ' + course.modules[i].title + ' introduction university', course.modules[i].title + ' open access reading'], signal: run.ctl.signal }); // third and last try, with different search words
         run.steps[i + 1].state = r.missing ? 'warn' : 'done'; if (r.missing) missing++;
         for (let tryN = 0; tryN < 2; tryN++) { // one automatic second try if the first answer was incomplete
           try { const d = await ai.writeDetails(course, course.modules[i], course.modules[i].assignments.filter((a) => !a.parts.length), { signal: run.ctl.signal }); if (d.done >= d.total) break; if (tryN) detailsMissing++; }
@@ -283,12 +286,12 @@
       set({});
     }
     const failed = run.steps.slice(1).filter((s) => s.state === 'fail' || s.state === 'skipped').length;
-    course.ai.status = failed ? 'partial' : 'complete';
+    course.ai.status = failed || detailsMissing ? 'partial' : 'complete'; // missing assignment pages count as incomplete, so the person is told rather than shown "ready"
     course.ai.note = failed
       ? failed + ' of ' + course.modules.length + ' modules still need learning materials (' + problem + ') Open a module and choose “Find materials with AI” to try again, or add your own.'
       : [missing ? missing + ' module' + (missing === 1 ? '' : 's') + ' had no verifiable source; they are marked “Source needed”.' : '', detailsMissing ? detailsMissing + ' module' + (detailsMissing === 1 ? '' : 's') + ' still need their assignment details: open the assignment and choose “Write full assignment with AI”.' : ''].filter(Boolean).join(' ');
     S.save();
-    set({ phase: 'done', courseId: course.id, problem: failed ? course.ai.note : '' });
+    set({ phase: 'done', courseId: course.id, problem: course.ai.status === 'partial' ? course.ai.note : '' });
     return course;
   };
 

@@ -61,18 +61,19 @@
 
   /* ---------- shell: banner + Course Menu ---------- */
 
-  V.course = function (c, section, sub) {
+  V.course = function (c, section, sub, sub2) {
     let body, current = section;
     switch (section) {
       case 'announcements': body = pageAnnouncements(c); break;
       case 'syllabus': body = pageSyllabus(c); break;
       case 'modules': {
         const m = sub && c.modules.find((x) => x.id === sub);
-        body = m ? pageModule(c, m) : pageModules(c); break;
+        body = m ? S.studio.page(c, m, sub2) : pageModules(c); break;
       }
       case 'assignments': {
         const f = sub && c.modules.flatMap((m) => m.assignments.map((a) => ({ m, a }))).find((x) => x.a.id === sub);
-        body = f ? pageAssignment(c, f.m, f.a) : pageAssignments(c); break;
+        if (f) return S.workbench.page(c, f.m, f.a, sub2); // the Assignment Workbench has its own full-width layout
+        body = pageAssignments(c); break;
       }
       case 'grades': body = pageGrades(c); break;
       case 'portfolio': body = V.portfolio(c); break;
@@ -92,7 +93,7 @@
       ui.design ? designPanel(c) : null,
       h('div', { class: 'course-layout' },
         h('nav', { class: 'course-menu', 'aria-label': 'Course menu' },
-          h('ul', {}, SECTIONS.map(([key, label]) => h('li', {}, h('a', { href: href(c, key), 'aria-current': key === current ? 'page' : null }, label))))),
+          h('ul', {}, SECTIONS.map(([key, label]) => h('li', {}, h('a', { href: href(c, key), 'aria-current': key === current ? 'page' : null }, S.icon(key), h('span', {}, label)))))),
         h('div', { class: 'course-main' }, body)));
   };
 
@@ -271,13 +272,16 @@
   const FORMAT_SENTENCE = { text: 'Submit as a text box entry.', pdf: 'Submit as a PDF.', image: 'Submit as an image.', file: 'Submit as a PDF, an Excel file, or an image.', any: 'No preferred file type: submit as a text box entry, PDF, or image.' };
   const FORMAT_SHORT = { text: 'Text entry', pdf: 'PDF upload', image: 'Image upload', file: 'PDF, Excel file, or image upload', any: 'Text entry, PDF, or image' };
 
-  function assignmentForm(c, m, a) {
+  // kind0: the stage a new assignment starts in (from the Module Studio). Existing and AI-written assignments keep their stage unless a person changes it.
+  function assignmentForm(c, m, a, kind0) {
+    const canStage = !a || a.origin !== 'ai';
     return h('form', { class: a ? 'inline-edit' : '', onsubmit: (e) => {
       e.preventDefault(); const f = new FormData(e.target);
       const graded = a && a.work && a.work.final && a.work.final.feedback;
       const lines = (k, n) => String(f.get(k) || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, n).map((x) => x.slice(0, 500));
       const v = { materials: String(f.get('materials') || '').trim().slice(0, 6000), steps: a ? a.steps : [], parts: partsFrom(f.get('parts')), format: ['text', 'pdf', 'image', 'file', 'any'].includes(f.get('format')) ? f.get('format') : '', submit: String(f.get('submit') || '').trim().slice(0, 1000), criteria: lines('criteria', 8).map((x) => x.slice(0, 300)), estimate: String(f.get('estimate') || '').trim().slice(0, 60), title: f.get('title').trim(), description: f.get('description').trim(), due: a && a.locked ? a.due : S.validDate(f.get('due') || '') };
       if (!graded) { v.points = num(f.get('points')); v.score = num(f.get('score')); }
+      if (canStage && f.has('kind')) v.kind = ['learn', 'apply', 'demonstrate'].includes(f.get('kind')) ? f.get('kind') : ''; // '' = Practice (shown under Apply)
       if (a) { Object.assign(a, v); ui.edit = null; }
       else {
         const target = m || c.modules.find((x) => x.id === f.get('module'));
@@ -288,6 +292,7 @@
     } },
       !m && !a ? select('Module', 'module', c.modules.map((x) => [x.id, x.title]), c.modules[0] && c.modules[0].id) : null,
       field('Assignment title', 'title', { value: a ? a.title : '', required: true, placeholder: 'e.g. Writing Exercise 1' }),
+      canStage ? select('Stage', 'kind', [['learn', 'Learn: study task'], ['apply', 'Apply: case or exercise'], ['demonstrate', 'Demonstrate: portfolio piece'], ['', 'Practice (listed under Apply)']], a ? a.kind : (kind0 || 'apply')) : null,
       field('Overview / instructions (optional)', 'description', { value: a ? a.description : '', multiline: true, rows: 3 }),
       field('Scenario and materials (optional)', 'materials', { value: a ? a.materials : '', multiline: true, rows: 8, hint: 'The case, document, or data the work is based on.' }),
       field('Parts and guiding questions (optional)', 'parts', { value: a ? partsText(a) : '', multiline: true, rows: 8, hint: 'Each part: its title on one line, then one question per line. Leave a blank line between parts.' }),
@@ -341,47 +346,6 @@
         catch (e) { toast(e.message); }
         writing.delete(a.id); S.render(false);
       } }, busy ? 'Writing…' : (a.parts.length ? 'Rewrite as a portfolio assignment with AI' : 'Write full assignment with AI')));
-  }
-
-  function pageAssignment(c, m, a) {
-    const mi = c.modules.indexOf(m) + 1, w = a.work;
-    const status = !w ? 'Not submitted' : w.phase === 'reviewed' ? 'Feedback ready (grade after final review)' : w.final.feedback ? 'Final grade: ' + a.score + ' / ' + a.points + ' pts' : 'Attached as evidence';
-    const sec = (title, ...kids) => h('section', { class: 'msec s-' + String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) }, h('div', { class: 'sec-head' }, h('h3', {}, title)), ...kids);
-    const row = (k, v) => v ? h('div', { class: 'ameta-i' }, h('span', { class: 'ameta-k' }, k), h('span', {}, v)) : null;
-    if (ui.edit === a.id) return h('div', {}, h('p', { class: 'crumbs' }, h('a', { href: href(c, 'assignments') }, '← All assignments')), h('div', { class: 'panel' }, assignmentForm(c, m, a)));
-    const hasAI = a.points > 0;
-    return h('div', { class: 'apage' },
-      h('p', { class: 'crumbs' }, h('a', { href: href(c, 'assignments') }, '← All assignments'), ' · ', h('a', { href: href(c, 'modules', m.id) }, 'Module ' + mi + ': ' + m.title)),
-      h('p', { class: 'eyebrow' }, a.kind ? S.kindMark(a.kind) : 'Assignment'),
-      h('h2', { class: 'mod-h' }, a.title),
-      h('div', { class: 'ameta' },
-        row('Due', a.due ? S.fmtDate(a.due) + (a.locked ? ' (set by your course timeline)' : '') : 'No due date'),
-        row('Points', a.points != null ? String(a.points) : 'Not graded'),
-        row('Estimated time', a.estimate),
-        row('Submitting', FORMAT_SHORT[a.format] || 'Text entry or a file upload (text, PDF, or image)'),
-        row('Status', status)),
-      a.description || a.purpose ? sec('Overview', a.description ? h('p', { class: 'pre' }, a.description) : null, a.purpose ? h('p', { class: 'pre' }, a.purpose) : null) : null,
-      a.basis === 'portfolio' && a.portfolioNote ? sec('Portfolio piece', h('p', { class: 'pre' }, a.portfolioNote), h('p', { class: 'small muted' }, 'This is demonstrate work: aim for something you could show to a professor, employer, client, or collaborator. Finished pieces can be saved to this course’s Portfolio.')) : null,
-      a.basis === 'readings' || a.basis === 'portfolio' ? sec(a.basis === 'portfolio' ? 'Readings and key ideas to draw on' : 'Draw on this module’s readings',
-        h('p', { class: 'small muted' }, a.basis === 'portfolio' ? 'Your work should draw on this module’s readings and key ideas. Name what you use.' : 'This assignment is graded on how well you understand the readings and key ideas of this module. Use them, and name what you draw on.'),
-        m.readings.filter((x) => x.source !== 'placeholder').length ? h('ul', { class: 'plain' }, m.readings.filter((x) => x.source !== 'placeholder').map((x) => h('li', {}, x.url ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.title) : x.title))) : h('p', { class: 'small' }, 'No readings have been added to this module yet. Add some on the ', h('a', { href: href(c, 'modules', m.id) }, 'module page'), '.'),
-        h('p', {}, h('a', { href: href(c, 'modules', m.id) }, 'Open the module →'))) : null,
-      a.materials ? sec('Scenario and materials', h('p', { class: 'pre' }, a.materials)) : null,
-      a.parts.map((p, i) => sec('Step ' + (i + 1) + (p.title ? ': ' + p.title : ''), p.questions.length ? h('ul', { class: 'plain' }, p.questions.map((x) => h('li', {}, x))) : null)),
-      a.steps.length ? sec('What to do', h('ol', { class: 'steps-list' }, a.steps.map((x) => h('li', {}, x)))) : null,
-      sec('What to submit', h('p', { class: 'pre' }, (a.submit ? a.submit.replace(/\s*$/, '') + ' ' : '') + FORMAT_SENTENCE[a.format || 'any'])),
-      a.rubric.length ? sec('How it is graded', h('p', { class: 'small muted' }, 'The AI reviews your work against these, weighted as shown. You get detailed feedback first, then your final grade after you resubmit (or after 72 hours).'),
-        h('ul', { class: 'rubric' }, a.rubric.map((k) => h('li', {},
-          h('span', { class: 'rb-name' }, k.name),
-          h('span', { class: 'rb-pts' }, h('b', {}, String(k.max)), ' / ' + a.points + ' points'),
-          h('span', { class: 'rb-bar', 'aria-hidden': 'true' }, h('i', { style: 'width:' + Math.min(100, Math.round(k.max / (a.points || k.max || 1) * 100)) + '%' })))))) : null,
-      !a.rubric.length && a.criteria.length ? sec('How it is graded', h('p', { class: 'small muted' }, (a.points != null ? a.points + ' points. ' : '') + 'The AI reviews your work against these. You get detailed feedback first, then your final grade after you resubmit (or after 72 hours).'), h('ul', { class: 'plain' }, a.criteria.map((x) => h('li', {}, x)))) : null,
-      a.due ? h('p', { class: 'small muted' }, 'Late work is accepted and marked late.') : null,
-      a.points > 0 && !a.work && (!a.parts.length && !a.materials || a.kind === 'demonstrate' && a.parts.length && a.basis !== 'portfolio') ? writeBtn(c, m, a) : null,
-      a.work && a.work.final ? S.portfolioToggle(a) : null,
-      sec('Your submission', S.workPanel(c, m, a, true)),
-      a.points > 0 ? S.officePanel(c, m, a) : null,
-      h('div', { class: 'item-actions' }, editBtn(a.id, 'Edit this assignment')));
   }
 
   function pageAssignments(c) {
@@ -530,71 +494,6 @@
         h('div', { class: 'item-actions' }, editBtn(r.id), moveBtns(m.readings, r), removeBtn('reading', m.readings, r))));
   }
 
-  function pageModule(c, m) {
-    const idx = c.modules.indexOf(m), ms = S.moduleStats(m);
-    const prev = c.modules[idx - 1], next = c.modules[idx + 1];
-    const head = ui.edit === 'title:' + m.id
-      ? h('form', { class: 'inline-edit', onsubmit: (e) => { e.preventDefault(); const f = new FormData(e.target); m.title = f.get('title').trim(); m.duration = String(f.get('duration') || '').trim().slice(0, 60); m.edited = true; ui.edit = null; commit(); } },
-          field('Module title', 'title', { value: m.title, required: true }), field('Timing (optional)', 'duration', { value: m.duration, placeholder: 'e.g. Week 1' }), h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), cancelBtn()))
-      : h('div', {},
-          h('p', { class: 'eyebrow' }, 'Module ' + (idx + 1) + ' of ' + c.modules.length + (m.duration ? ' · ' + m.duration : '')),
-          m.origin === 'ai' && !m.edited ? h('p', { class: 'small muted' }, h('span', { class: 'badge soft' }, 'AI draft'), ' Check it over and change whatever doesn’t fit.') : null,
-          h('h2', { class: 'mod-h' }, m.title),
-          h('div', { class: 'tools' }, editBtn('title:' + m.id, 'Rename'),
-            h('button', { class: 'linkbtn danger', type: 'button', onclick: () => {
-              if (!confirm('Delete “' + m.title + '” with its readings and assignments? This cannot be undone.')) return;
-              c.modules.splice(idx, 1); S.save(); go(href(c, 'modules')); toast('Module deleted.');
-            } }, 'Delete module')));
-
-    return h('div', {},
-      h('p', { class: 'crumbs' }, h('a', { href: href(c, 'modules') }, '← All modules')),
-      head,
-      h('div', { class: 'complete-row' },
-        h('label', { class: 'checkline' }, h('span', { class: 'check' }, h('input', { type: 'checkbox', checked: m.complete, onchange: (e) => { m.complete = e.target.checked; commit(); toast(m.complete ? 'Module marked complete.' : 'Module reopened.'); } }), h('span', { class: 'box', 'aria-hidden': 'true' })), h('span', {}, 'Mark this module complete')),
-        progressBar(ms.pct, 'Module progress')),
-
-      textSection(m, 'overview', 'Overview', 'Add a short overview: what this module covers and what you want to get from it.'),
-      listSection(m, 'objectives', 'Learning objectives', 'One objective per line.'),
-
-      h('section', { class: 'msec' },
-        h('div', { class: 'sec-head' }, h('h3', {}, 'Readings'), h('span', { class: 'count' }, m.readings.filter((r) => r.done).length + ' of ' + m.readings.length + ' done')),
-        m.readings.length ? h('ul', { class: 'items' }, m.readings.map((r) => readingItem(m, r))) : empty('Add readings, videos, links, or notes to study.'),
-        findMaterialsBtn(c, m),
-        h('details', { class: 'add' }, h('summary', {}, 'Add a reading'),
-          h('form', { onsubmit: (e) => {
-            e.preventDefault(); const f = new FormData(e.target), u = S.cleanUrl(f.get('url'));
-            if (u === null) return toast(BAD_LINK);
-            m.readings.push({ id: S.uid(), title: f.get('title').trim(), url: u, note: f.get('note').trim(), done: false }); commit();
-          } },
-            field('Title', 'title', { required: true, placeholder: 'e.g. Chapter 1, or a link title' }),
-            field('Link (optional)', 'url', { placeholder: 'https://' }),
-            field('Note (optional)', 'note', { multiline: true, rows: 2 }),
-            h('button', { class: 'btn', type: 'submit' }, 'Add reading')))),
-
-      syllabiSection(c, m),
-
-      textSection(m, 'keyIdeas', 'Key ideas', 'Capture the main ideas, terms, and arguments worth remembering.'),
-      m.extras.map((x) => extraSection(m, x)),
-
-      h('section', { class: 'msec' },
-        h('div', { class: 'sec-head' }, h('h3', {}, 'Assignments'), h('span', { class: 'count' }, m.assignments.filter((a) => a.done).length + ' of ' + m.assignments.length + ' done')),
-        m.assignments.length ? h('ul', { class: 'items' }, m.assignments.map((a) => assignmentItem(c, m, a, { actions: true, reorder: true }))) : empty('Add practical assignments for this module. They belong to this module only.'),
-        h('details', { class: 'add' }, h('summary', {}, 'New assignment'), assignmentForm(c, m, null))),
-
-      listSection(m, 'selfCheck', 'Check your understanding', 'One question per line.'),
-      textSection(m, 'reflection', 'Reflection', 'After finishing, write what you learned, what was hard, and what you would do differently.'),
-
-      h('details', { class: 'add' }, h('summary', {}, 'Add a custom section'),
-        h('form', { onsubmit: (e) => {
-          e.preventDefault(); const f = new FormData(e.target);
-          m.extras.push({ id: S.uid(), title: f.get('title').trim(), body: f.get('body').trim() }); commit();
-        } },
-          field('Section title', 'title', { required: true, placeholder: 'e.g. Discussion questions' }),
-          field('Content (optional)', 'body', { multiline: true, rows: 3 }),
-          h('button', { class: 'btn', type: 'submit' }, 'Add section'))),
-
-      h('nav', { class: 'pager', 'aria-label': 'Module navigation' },
-        prev ? h('a', { href: href(c, 'modules', prev.id) }, '← ' + prev.title) : h('span', {}),
-        next ? h('a', { href: href(c, 'modules', next.id) }, next.title + ' →') : h('span', {})));
-  }
+  // Shared with the Module Studio (js/studio.js).
+  S.vc = { FORMAT_SENTENCE, FORMAT_SHORT, writeBtn, partsText, h, href, num, empty, cancelBtn, editBtn, moveBtns, removeBtn, textSection, extraSection, listSection, syllabiSection, findMaterialsBtn, readingItem, assignmentItem, assignmentForm, BAD_LINK };
 })(window.Sovereign = window.Sovereign || {});

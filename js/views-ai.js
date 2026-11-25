@@ -133,7 +133,7 @@
     r.ctl = new AbortController();
     r.brief = brief;
     S.ai.build(brief, r).then((course) => {
-      if (course.ai.status === 'partial') { toast('Your course was saved, but some materials are missing.'); S.render(false); return; } // stay here so the problem is read
+      if (course.ai.status === 'partial') { toast('Your course was saved, but some parts are incomplete. See the note on this page.'); S.render(false); return; } // stay here so the problem is read
       toast('Your course is ready.');
       if ((location.hash || '') === '#/new-ai') { ui.ai = null; go(S.href(course)); } else S.render(false);
     }).catch((e) => {

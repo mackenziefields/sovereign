@@ -21,7 +21,7 @@
     else if (parts[0] === 'data') { route = 'data'; view = V.data(); title = 'Data & Backup'; }
     else if (parts[0] === 'course' && S.course(parts[1])) {
       const c = S.course(parts[1]);
-      view = V.course(c, parts[2] || 'home', parts[3]);
+      view = V.course(c, parts[2] || 'home', parts[3], parts[4]);
       title = c.code + ' · ' + V.sectionLabel(parts[2] || 'home');
     } else view = V.dashboard();
 
@@ -36,6 +36,13 @@
     sidebar.querySelectorAll('a[data-route]').forEach((a) => {
       if (a.dataset.route === route) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
+    // Course list in the sidebar: jump between courses; the current one is marked and the sidebar picks up its design.
+    const current = route === 'dash' && parts[0] === 'course' && S.course(parts[1]) ? S.course(parts[1]) : null;
+    const sc = document.getElementById('side-courses');
+    sc.parentElement.hidden = !S.state.setup || !S.state.courses.length;
+    sc.replaceChildren(...S.state.courses.map((c) => S.h('li', {}, S.h('a', { href: '#/course/' + c.id, 'aria-current': current && current.id === c.id ? 'page' : null, title: c.title },
+      S.h('span', { class: 'cdot', 'data-theme': c.designTheme, 'aria-hidden': 'true' }), S.h('span', { class: 'cname' }, c.code)))));
+    if (current) { sidebar.dataset.theme = current.designTheme; sidebar.querySelector('a[data-route="dash"]').removeAttribute('aria-current'); } else delete sidebar.dataset.theme;
     window.scrollTo(0, reset ? 0 : y);
 
     // On phones the Course Menu is a swipeable row: keep the current tab visible.
@@ -59,7 +66,7 @@
     if (open) sidebar.querySelector('a[data-route]').focus();
   });
   scrim.addEventListener('click', () => setMenu(false));
-  sidebar.addEventListener('click', (e) => { if (e.target.closest('a[data-route]')) setMenu(false); });
+  sidebar.addEventListener('click', (e) => { if (e.target.closest('a[data-route], #side-courses a')) setMenu(false); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && sidebar.classList.contains('open')) { setMenu(false); menuBtn.focus(); }
   });
@@ -71,6 +78,9 @@
     S.render(true);
     main.focus({ preventScroll: true });
   });
+
+  // Icons on the three fixed links (the markup stays plain text if scripts fail).
+  sidebar.querySelectorAll('a[data-icon]').forEach((a) => { const t = a.textContent; a.replaceChildren(S.icon(a.dataset.icon), S.h('span', {}, t)); });
 
   S.load();
   S.render(true);

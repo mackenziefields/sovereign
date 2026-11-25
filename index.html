@@ -18,6 +18,9 @@
   <link rel="stylesheet" href="css/ai.css">
   <link rel="stylesheet" href="css/design.css">
   <link rel="stylesheet" href="css/themes.css">
+  <link rel="stylesheet" href="css/studio.css">
+  <link rel="stylesheet" href="css/workbench.css">
+  <link rel="stylesheet" href="css/nav.css">
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -32,10 +35,14 @@
       <p class="tagline">Learn. Apply. Demonstrate.</p>
       <nav>
         <ul>
-          <li><a data-route="dash" href="#/">Dashboard</a></li>
-          <li><a data-route="work" href="#/work">My Work</a></li>
-          <li><a data-route="data" href="#/data">Data &amp; Backup</a></li>
+          <li><a data-route="dash" data-icon="dash" href="#/">Dashboard</a></li>
+          <li><a data-route="work" data-icon="work" href="#/work">My Work</a></li>
+          <li><a data-route="data" data-icon="data" href="#/data">Data &amp; Backup</a></li>
         </ul>
+      </nav>
+      <nav class="side-courses" aria-label="Your courses" hidden>
+        <p class="side-k">Courses</p>
+        <ul id="side-courses"></ul>
       </nav>
       <p class="side-note">Saved in this browser only. It does not sync across devices.</p>
     </aside>
@@ -59,6 +66,8 @@
   <script src="js/views-ai.js"></script>
   <script src="js/views-work.js"></script>
   <script src="js/views-course.js"></script>
+  <script src="js/studio.js"></script>
+  <script src="js/workbench.js"></script>
   <script src="js/views-dash.js"></script>
   <script src="js/app.js"></script>
 </body>
