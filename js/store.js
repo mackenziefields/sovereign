@@ -2,11 +2,22 @@
 (function (S) {
   'use strict';
 
-  S.BUILD = 16; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
+  S.BUILD = 17; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
   const KEY = 'sovereign.v3';
   const OLD_KEYS = ['sovereign.v2', 'sovereign.v1']; // earlier versions; migrated, never deleted automatically
   S.MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
+  // Course design templates (presentation only). The id is saved on each course as designTheme.
+  S.THEMES = [
+    ['modernist', 'The Modernist', 'Swiss grotesk, stacked titles, graphic blocks.'],
+    ['editorial', 'The Editorial', 'High-contrast serif with elegant italics.'],
+    ['intellectual', 'The Intellectual', 'Monumental serif with cobalt accents.'],
+    ['institution', 'The Institution', 'Roman capitals on oxblood, hairline rules.'],
+  ];
+  S.randomTheme = () => {
+    let n; try { const a = new Uint32Array(1); crypto.getRandomValues(a); n = a[0]; } catch (e) { n = Math.floor(Math.random() * 4294967296); }
+    return S.THEMES[n % S.THEMES.length][0];
+  };
   S.COLORS = ['#6a1a27', '#1f4a4d', '#1f3a8a', '#4f5226', '#4a2a4c', '#7d4f17'];
   S.READING_KINDS = [['', 'Other'], ['article', 'Article'], ['book', 'Book'], ['video', 'Video'], ['course', 'Course'], ['tool', 'Tool'], ['document', 'Document'], ['podcast', 'Podcast']];
   S.ACCESS = [['unknown', 'Access unknown'], ['free', 'Free'], ['paid', 'Paid']];
@@ -159,6 +170,7 @@
       outcomes: strs(c.outcomes, 12, 400), duration: str(c.duration, 80), pathway: str(c.pathway, 300),
       licensureNote: str(c.licensureNote, 1000), ai: normAI(c.ai), startDate: S.validDate(str(c.startDate, 10)),
       color: Number.isInteger(c.color) && c.color >= 0 && c.color < S.COLORS.length ? c.color : (i || 0) % S.COLORS.length,
+      designTheme: S.THEMES.some((t) => t[0] === c.designTheme) ? c.designTheme : S.THEMES[(((Number.isInteger(c.color) ? c.color : (i || 0)) % 4) + 4) % 4][0],
       announcements: arr(c.announcements, 200).map((a) => { a = obj(a); return { id: id(a.id), title: str(a.title, 300) || 'Untitled announcement', body: str(a.body), date: S.validDate(str(a.date, 10)) || S.todayISO() }; }),
       modules: arr(c.modules, 100).map((m) => {
         m = obj(m);
@@ -336,7 +348,7 @@
   const A = (title, description, o) => ({ id: S.uid(), title, description: description || '', due: '', points: null, score: null, done: false, kind: '', origin: 'user', locked: false, rubric: [], work: null, purpose: '', materials: '', steps: [], format: '', basis: '', portfolioNote: '', portfolio: false, office: null, parts: [], submit: '', criteria: [], estimate: '', ...o });
   const M = (title, o) => ({ id: S.uid(), title, overview: '', readings: [], keyIdeas: '', reflection: '', extras: [], assignments: [], complete: false, syllabi: [], objectives: [], selfCheck: [], duration: '', origin: 'user', edited: false, ...o });
   const C = (code, title, color, description, modules, o) => ({
-    id: S.uid(), code, title, color, description, objective: '', deliverable: '', syllabus: '', outcomes: [], duration: '', pathway: '', licensureNote: '', ai: null, startDate: '', announcements: [], modules, credentials: [],
+    id: S.uid(), code, title, color, designTheme: S.randomTheme(), description, objective: '', deliverable: '', syllabus: '', outcomes: [], duration: '', pathway: '', licensureNote: '', ai: null, startDate: '', announcements: [], modules, credentials: [],
     work: { title: '', criteria: [], description: '', reflection: '', status: 'not-started', url: '' }, ...o,
   });
 

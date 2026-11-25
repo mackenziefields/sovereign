@@ -78,21 +78,38 @@
       case 'portfolio': body = V.portfolio(c); break;
       default: body = pageHome(c); current = 'home';
     }
-    return h('div', { class: 'course' },
+    return h('div', { class: 'course', 'data-theme': c.designTheme },
       h('p', { class: 'crumbs' }, h('a', { href: '#/' }, '← Dashboard')),
-      h('header', { class: 'course-head art-' + c.color, style: '--c:' + S.COLORS[c.color] },
+      h('header', { class: 'course-head', 'data-theme': c.designTheme },
         h('p', { class: 'ch-code' }, c.code),
-        h('h1', {}, c.title),
+        S.titleEl('h1', '', c.title, c.designTheme),
         (() => {
           const st = S.courseStats(c), g = S.grade(c);
           return h('p', { class: 'ch-meta' },
-            h('span', {}, plural(st.mods, 'module')), h('span', {}, st.pct + '% complete'), g ? h('span', {}, 'Current grade ' + g.pct + '%') : null);
+            h('span', {}, plural(st.mods, 'module')), h('span', {}, st.pct + '% complete'), g ? h('span', {}, 'Current grade ' + g.pct + '%') : null,
+            h('button', { class: 'linkbtn ch-design', type: 'button', 'aria-expanded': String(!!ui.design), onclick: () => { ui.design = !ui.design; S.render(false); } }, 'Customize appearance'));
         })()),
+      ui.design ? designPanel(c) : null,
       h('div', { class: 'course-layout' },
         h('nav', { class: 'course-menu', 'aria-label': 'Course menu' },
           h('ul', {}, SECTIONS.map(([key, label]) => h('li', {}, h('a', { href: href(c, key), 'aria-current': key === current ? 'page' : null }, label))))),
         h('div', { class: 'course-main' }, body)));
   };
+
+  // Course design picker: previews of the four designs using this course's real title. Presentation only; no AI service involved.
+  function designPanel(c) {
+    const st = S.courseStats(c), meta = st.mods ? st.done + ' of ' + st.mods + (st.mods === 1 ? ' module' : ' modules') : 'No modules yet';
+    return h('section', { class: 'designer', 'aria-label': 'Course design' },
+      h('div', { class: 'section-head' }, h('h2', {}, 'Course design'), h('button', { class: 'linkbtn', type: 'button', onclick: () => { ui.design = false; S.render(false); } }, 'Close')),
+      h('p', { class: 'small muted' }, 'Choose how this course looks. This changes only its appearance. Your syllabus, modules, assignments, grades, and work are not touched, and no AI service is used.'),
+      h('div', { class: 'theme-grid', role: 'radiogroup', 'aria-label': 'Course design' }, S.THEMES.map(([id, name, note]) => h('label', { class: 'theme-opt' + (c.designTheme === id ? ' on' : '') },
+        h('input', { type: 'radio', name: 'design', value: id, checked: c.designTheme === id, onchange: () => {
+          c.designTheme = id; commit();
+          requestAnimationFrame(() => { const i = document.querySelector('.theme-opt input:checked'); if (i) i.focus(); });
+        } }),
+        h('span', { class: 'theme-prev', 'aria-hidden': 'true' }, S.cover({ tag: 'div', theme: id, code: c.code, title: c.title, pct: st.pct, meta })),
+        h('span', { class: 'theme-name' }, name), h('small', {}, note)))));
+  }
 
   const pageHead = (title, ...extra) => h('div', { class: 'page-head' }, h('h2', {}, title), ...extra);
 
@@ -107,6 +124,7 @@
   function pageHome(c) {
     const g = S.grade(c), cs = S.courseStats(c);
     return h('div', {},
+      c.objective ? h('p', { class: 'standfirst' }, c.objective) : null,
       S.state.name ? h('p', { class: 'lede' }, 'Welcome back, ' + S.state.name + '.') : null,
       h('div', { class: 'progress-row' }, h('strong', {}, cs.pct + '%'), h('span', { class: 'muted' }, cs.done + ' of ' + plural(cs.mods, 'module') + ' complete')),
       progressBar(cs.pct, c.title + ' progress'),
@@ -190,7 +208,7 @@
       const ms = S.moduleStats(m);
       const mv = (d) => { c.modules.splice(i, 1); c.modules.splice(i + d, 0, m); commit(); };
       return h('li', { class: 'tile-wrap' },
-        tile({ href: href(c, 'modules', m.id), color: c.color, label: 'Module', num: i + 1, title: m.title, badge: m.complete ? 'Complete' : '',
+        tile({ href: href(c, 'modules', m.id), color: c.color, label: 'Module', theme: c.designTheme, num: i + 1, title: m.title, badge: m.complete ? 'Complete' : '',
           meta: ms.items ? ms.done + ' of ' + plural(ms.items, 'step') + ' done' : 'No steps yet', pct: ms.pct }),
         manage ? h('div', { class: 'tile-tools' },
           h('button', { class: 'linkbtn', type: 'button', disabled: i === 0, onclick: () => mv(-1) }, '← Earlier'),

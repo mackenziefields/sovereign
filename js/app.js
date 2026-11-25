@@ -67,7 +67,7 @@
 
   /* ----- routing ----- */
   window.addEventListener('hashchange', () => {
-    S.ui.edit = null; S.ui.dataMsg = null;
+    S.ui.edit = null; S.ui.dataMsg = null; S.ui.design = false;
     S.render(true);
     main.focus({ preventScroll: true });
   });

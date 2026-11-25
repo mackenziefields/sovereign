@@ -50,7 +50,7 @@
   // Canvas-style picture tile: a patterned colour banner with a label, then title and progress bar.
   // o: href, color (0-5), label, title, meta, pct, badge
   S.tile = (o) =>
-    h('a', { class: 'tile', href: o.href },
+    h('a', { class: 'tile', href: o.href, 'data-theme': o.theme || null },
       h('div', { class: 'tile-art art-' + o.color, style: '--c:' + S.COLORS[o.color], 'aria-hidden': 'true' },
         h('span', { class: 'tile-label' }, o.label),
         o.num ? h('span', { class: 'tile-num' }, String(o.num).padStart(2, '0')) : null,
@@ -60,15 +60,30 @@
         h('p', { class: 'tile-meta' }, o.meta),
         S.progressBar(o.pct, o.title + ' progress')));
 
-  // A course as a small publication: colour, geometric mark, serif title, progress as a large numeral.
-  // o: href, color (0-5), code, title, meta, pct
-  S.cover = (o) =>
-    h('a', { class: 'cover art-' + o.color, href: o.href, style: '--c:' + S.COLORS[o.color] },
+  // The course title, split into words so each design can stack, italicise or size it. Long titles and long words shrink to fit
+  // (the sizes use container-query units; see css/themes.css). The title is always the real course title.
+  const CHAR_W = { modernist: .5, editorial: .46, intellectual: .38, institution: .8 };
+  S.titleEl = (tag, cls, title, theme) => {
+    const words = String(title || '').trim().split(/\s+/).filter(Boolean);
+    const total = words.join(' ').length, longest = Math.max(1, ...words.map((w) => w.length));
+    const k = total <= 12 ? 1 : total <= 22 ? .82 : total <= 34 ? .68 : total <= 52 ? .54 : .44;
+    const wfit = Math.round(880 / (longest * (CHAR_W[theme] || .6))) / 10;
+    const stack = words.length <= 4 && total <= 30;
+    const el = h(tag, { class: ((cls || '') + (stack ? ' stack' : '')).trim() || null, style: '--k:' + k + ';--wfit:' + wfit });
+    words.forEach((w, i) => { if (i) el.append(' '); el.append(h('span', { class: 'w' + (words.length > 1 && i === words.length - 1 ? ' tail' : '') }, w)); });
+    return el;
+  };
+
+  // A course as a small publication in one of four designs (o.theme). o: href, theme, code, title, meta, pct, tag ('div' for a preview)
+  S.cover = (o) => {
+    const theme = o.theme || 'modernist';
+    return h(o.tag || 'a', { class: 'cover', 'data-theme': theme, href: o.tag ? null : o.href },
       h('div', { class: 'cover-top' }, h('span', {}, o.code), h('span', {}, 'sovereign.')),
-      h('h3', { class: 'cover-title' }, o.title),
+      S.titleEl('h3', 'cover-title', o.title, theme),
       h('div', { class: 'cover-foot' },
         h('div', { class: 'cover-pct' }, h('strong', {}, o.pct + '%'), h('span', {}, o.meta)),
         S.progressBar(o.pct, o.title + ' progress')));
+  };
 
   // Learn (circle), Apply (square), Demonstrate (triangle): a shape and a word, never colour alone.
   S.KINDS = [['learn', 'Learn'], ['apply', 'Apply'], ['demonstrate', 'Demonstrate']];

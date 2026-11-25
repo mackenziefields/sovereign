@@ -127,7 +127,7 @@
     const raw = {
       id: S.uid(), code: S.codeFor(o.title), title: o.title, description: o.description, objective: o.pathway,
       deliverable: [fp.title, fp.description].filter(Boolean).join(': '), syllabus: o.syllabus, outcomes: o.outcomes, duration: o.duration, pathway: o.pathway,
-      licensureNote: o.licensureNote, startDate: start, color: S.state.courses.length % S.COLORS.length,
+      licensureNote: o.licensureNote, startDate: start, color: S.state.courses.length % S.COLORS.length, designTheme: S.randomTheme(),
       announcements: [{ id: S.uid(), title: 'Welcome' + (S.state.name ? ', ' + S.state.name : '') + ': ' + o.title, date: S.todayISO(), body: 'This course was drafted by AI from what you told it. Treat it as a first draft: rename, reorder, replace, or delete anything. Check every resource yourself, because links are checked by a program, not reviewed by a person.' }],
       credentials: (o.credentials || []).map((k) => ({ id: S.uid(), name: k.name, issuer: k.issuer, note: k.note, status: 'considering', requirement: k.requirement, origin: 'ai' })),
       modules: o.modules.map((m, mi) => ({

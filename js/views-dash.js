@@ -108,7 +108,7 @@
       cs.length
         ? h('ul', { class: 'covers' }, cs.map((c) => {
             const st = S.courseStats(c);
-            return h('li', { class: 'tile-wrap' }, S.cover({ href: S.href(c), color: c.color, code: c.code, title: c.title,
+            return h('li', { class: 'tile-wrap' }, S.cover({ href: S.href(c), theme: c.designTheme, code: c.code, title: c.title,
               meta: st.mods ? st.done + ' of ' + st.mods + (st.mods === 1 ? ' module' : ' modules') : 'No modules yet', pct: st.pct }));
           }))
         : h('p', { class: 'empty' }, 'No courses yet. Use New course to add your first.'));
@@ -160,8 +160,8 @@
       h('div', { class: 'item-note' }, [k.issuer, c.code].filter(Boolean).join(' · ')),
       h('div', { class: 'item-actions' }, h('a', { class: 'small', href: S.href(c, 'modules') }, 'Manage'))));
     const empty = (t) => h('p', { class: 'empty' }, t);
-    return h('div', { class: 'portfolio' },
-      h('header', { class: 'pf-head' },
+    return h('div', { class: 'portfolio', 'data-theme': course.designTheme },
+      h('header', { class: 'pf-head', 'data-theme': course.designTheme },
         h('p', { class: 'eyebrow' }, 'Portfolio · ' + course.title),
         h('h2', { class: 'display' }, 'Selected work'),
         h('p', { class: 'lede' }, 'The work and credentials you can point to for this course.'),
