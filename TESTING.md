@@ -263,3 +263,12 @@ One call, five readings with real links. Cost **$0.0063** (4,988 tokens in, 264 
 | E5 | Lorde, link that is dead (404) | **unreadable**: could not be opened (404) | Correct |
 
 5 of 5 as I judge them. The code and model agreed everywhere, so the "code and AI disagree" path was only tested in the mock. **Not tested for real:** a PDF link, a long full-text page where the title appears late, phone layout, the two buttons in the app against the real Worker. Preview data restored afterward.
+
+## Linked readings only (build 23; Mock)
+| # | Test | Result |
+|---|---|---|
+| F1 | Mock syllabus page with one linked reading and one citation-only reading | Only the linked one is listed (skipped = 1); stage verified; adopting the list plus a hand-made citation-only item adds only the linked one | Pass |
+| F2 | Mock PDF syllabus whose only reading has no link | Nothing listed; stage "no readings" with the reason; skipped = 1 | Pass |
+**Not tested:** the real SDSU PDF through this change (no paid call was made); how many linked readings a real PDF yields is unknown, and may be few because the Worker cannot read a PDF's text. Preview data restored.
+
+| F3 | Data & Backup cleanup (Browser, seeded): a citation-only syllabus reading, a linked syllabus reading, one of your own readings and a placeholder, all without links except the linked one | Only the citation-only reading was listed and removed after the confirm; the linked, own and placeholder readings stayed; the section disappeared; data restored afterward | Pass |

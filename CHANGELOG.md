@@ -2,7 +2,12 @@
 
 Reconstructed from the repository history (`git log`). Dates are all 2026-11-24 for the build session unless noted. "Tested" is described in `TESTING.md`.
 
-## Unreleased · Check content (build 22, Worker v13, not committed)
+## Unreleased · Linked readings only (build 23, not committed)
+- **Every reading taken from a syllabus must have an online link.** A reading the syllabus lists but that has no link is left out completely: not listed, not ticked, not added. The review panel says how many were left out. If none has a link, it says so and lists nothing. Adoption also refuses a reading without a link. This is enforced in the app, so it works with the Worker you already have deployed (v12 or v13). Readings you add yourself are unaffected.
+- Course creation already searches for syllabi per module and saves them; that is unchanged.
+- **Data & Backup shows "Readings without a link"** when earlier versions left citation-only syllabus readings in your courses: it lists them and has one button to remove them after a confirmation. Your own readings and "Source needed" placeholders are never included, and nothing is removed automatically. Also removed a line there that suggested clearing site data.
+
+## Released (build 22) · Check content (build 22, Worker v13, not committed)
 - **"Check content"** shows whether the page behind a reading's link actually holds that reading. Two buttons: on the review list of a syllabus read (before adopting) and next to "Find materials with AI" on a module's readings. Up to 5 readings per press, unchecked first.
 - **Labels:** Content matched, About the work not the work (abstract, listing or review), Doesn't match (the reading is unticked in the review list; tick again to override), Couldn't check content (paywall, login, PDF, no readable text, or the code check and the AI disagreed; nothing is claimed). Stored on the reading, shown with the date.
 - **How it works (Worker `/check-content`):** the Worker opens each public page itself (same address safety rules as the link check), strips it to text, and checks in code that the title's words and the author's surname appear. A light model then reads the first ~4,500 characters and says what kind of page it is. "Matched" needs both to agree. PDFs are not read. Only titles, authors and links are sent.

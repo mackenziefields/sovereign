@@ -269,13 +269,30 @@
     input.click();
   }
 
+  // Readings taken from a syllabus that have no online link (an earlier version kept them as "citations"). Placeholders and your own readings are never counted.
+  const unlinkedSyllabusReadings = () => { const out = []; S.state.courses.forEach((c) => c.modules.forEach((m) => m.readings.forEach((r) => { if (r.source === 'ai' && !r.url && r.derivedFrom) out.push({ c, m, r }); }))); return out; };
+
+  function tidySection() {
+    const list = unlinkedSyllabusReadings();
+    if (!list.length) return null;
+    return h('section', {},
+      h('div', { class: 'section-head' }, h('h2', {}, 'Readings without a link')),
+      h('p', { class: 'small' }, 'Earlier versions kept some readings from a syllabus that have no online link (' + plural(list.length, 'reading') + ' in this browser). Readings now need a link. Your own readings and “Source needed” placeholders are not included.'),
+      h('details', {}, h('summary', {}, 'Show them'), h('ul', { class: 'plain' }, list.map(({ c, m, r }) => h('li', { class: 'small' }, h('b', {}, r.title), ' · ' + c.title + ' · ' + m.title)))),
+      h('div', { class: 'btn-row' }, h('button', { class: 'btn danger', type: 'button', onclick: () => {
+        if (!confirm('Remove ' + plural(list.length, 'reading') + ' that have no online link? Your own readings, placeholders, assignments, work and grades are not touched. This cannot be undone unless you exported a backup.')) return;
+        list.forEach(({ m, r }) => { m.readings = m.readings.filter((x) => x !== r); });
+        S.save(); toast('Removed ' + plural(list.length, 'reading') + '.'); S.render(false);
+      } }, 'Remove ' + plural(list.length, 'reading') + ' without a link')));
+  }
+
   V.data = function () {
     return h('div', { class: 'narrow' },
       h('p', { class: 'eyebrow' }, 'Your data'),
       h('h1', {}, 'Data & Backup'),
       !S.storageOK ? banner('Your browser is blocking local storage, so nothing can be saved. Export a backup to keep your work.', 'error') : null,
       ui.dataMsg ? banner(ui.dataMsg.text, ui.dataMsg.type) : null,
-      h('p', { class: 'small muted' }, 'App version: build ' + S.BUILD + '. If this is lower than the latest announced, reload with Ctrl+Shift+R (or clear this site’s data in your browser).'),
+      h('p', { class: 'small muted' }, 'App version: build ' + S.BUILD + '. If this is lower than the latest announced, reload with Ctrl+Shift+R.'),
       h('p', { class: 'lede' }, 'Sovereign has no accounts and no server. Your work is stored only in this browser on this device, and it does not sync to your other devices.'),
       h('p', { class: 'muted' }, 'Clearing your browser’s site data would erase it. To keep a copy or move to another device, export a backup file and import it there.'),
       h('section', {},
@@ -286,6 +303,7 @@
         h('p', { class: 'small muted' }, 'Importing replaces your current work, and asks you to confirm first. Files are checked before anything is changed. Backups from earlier versions of Sovereign still import.')),
       h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, 'Your name')), nameForm(), S.state.name ? h('p', { class: 'small muted' }, 'Currently: ' + S.state.name + '. Save an empty box to remove it.') : null),
       S.aiDataSection(),
+      tidySection(),
       h('section', {},
         h('div', { class: 'section-head' }, h('h2', {}, 'Remove data')),
         h('p', { class: 'muted small' }, 'To remove a single course, open it and choose Syllabus → Delete this course.'),

@@ -201,8 +201,15 @@
     if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
     const have = new Set(mod.readings.map(readingKey));
     S.save();
-    return { stage: r.stage || (r.missing ? 'no-readings' : 'readings-found'), kind: r.kind || 'page', reason: r.reason || '', errorCode: r.errorCode || '', diag: r.diag || null, at: now(),
-      items: (r.resources || []).map((x) => ({ ...x, dup: have.has(readingKey(x)) })) };
+    // Every reading must have an online link. Citations with no link are left out entirely (counted, never listed or added).
+    const all = r.resources || [], linked = all.filter((x) => x.url), skipped = all.length - linked.length;
+    let stage = r.stage || (r.missing ? 'no-readings' : 'readings-found'), reason = r.reason || '';
+    if (skipped) {
+      stage = !linked.length ? 'no-readings' : linked.some((x) => x.review === 'link-checked') ? 'verified' : 'readings-found';
+      reason = !linked.length ? 'The syllabus was read, but none of its readings for this module has an online link, so nothing was listed.' : '';
+    }
+    return { stage, kind: r.kind || 'page', reason, errorCode: r.errorCode || '', diag: r.diag || null, at: now(), skipped,
+      items: linked.map((x) => ({ ...x, dup: have.has(readingKey(x)) })) };
   };
 
   // Opens the page behind each reading's link and reports whether it holds that reading. items: [{ title, creator, url }] (up to 5; only these are sent).
@@ -224,7 +231,7 @@
   ai.adoptReadings = function (course, mod, syl, items) {
     const have = new Set(mod.readings.map(readingKey)), added = [];
     items.forEach((x) => {
-      if (have.has(readingKey(x))) return;
+      if (!x.url || have.has(readingKey(x))) return; // a reading without an online link is never added
       have.add(readingKey(x));
       const rd = S.makeReading(readingFrom({ ...x, derivedFrom: x.derivedFrom || (syl && (syl.note || syl.title)) || 'Syllabus', derivedUrl: (syl && syl.url) || '' }));
       if (x.review === 'manual-review') rd.note = 'Check this against the syllabus: the AI read it from a document this service could not search.';

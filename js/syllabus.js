@@ -109,7 +109,8 @@
         rv.stage !== 'not-accessible' ? h('span', { class: 'small muted' }, KIND_NOTE[rv.kind] || '') : null);
       if (rv.stage === 'not-accessible') return h('div', { class: 'syl-review' }, head, h('p', {}, rv.reason),
         h('p', { class: 'small muted' }, 'Nothing was added. Try a different link, or use “Paste a syllabus instead” below.'));
-      if (!rv.items.length) return h('div', { class: 'syl-review' }, head, h('p', {}, rv.reason), h('p', { class: 'small muted' }, 'Nothing was added.'));
+      const skippedNote = rv.skipped ? h('p', { class: 'small muted' }, plural(rv.skipped, 'reading') + ' in this syllabus had no online link, so ' + (rv.skipped === 1 ? 'it was' : 'they were') + ' left out. Only readings with a link are listed.') : null;
+      if (!rv.items.length) return h('div', { class: 'syl-review' }, head, h('p', {}, rv.reason), skippedNote, h('p', { class: 'small muted' }, 'Nothing was added.'));
 
       const list = h('ul', { class: 'syl-items' }, rv.items.map((x, i) => {
         const r = REVIEW[x.review] || REVIEW['check-link'];
@@ -142,7 +143,7 @@
         : h('div', { class: 'btn-row' },
             h('button', { class: 'btn', type: 'button', disabled: !n, onclick: () => { s.added = S.ai.adoptReadings(c, m, y, rv.items.filter((_, i) => s.pick.has(i))); toast('Added ' + plural(s.added.length, 'reading') + '.'); commit(); } }, n ? 'Add ' + plural(n, 'selected reading') : 'Tick readings to add'),
             h('span', { class: 'small muted' }, 'Only ticked readings are added. Your own readings are never changed.'));
-      return h('div', { class: 'syl-review' }, head, rv.reason ? h('p', { class: 'small' }, rv.reason) : null, list, checkRow, adopt, s.added && s.added.length ? revisePanel(c, m, y, s) : null);
+      return h('div', { class: 'syl-review' }, head, rv.reason ? h('p', { class: 'small' }, rv.reason) : null, skippedNote, list, checkRow, adopt, s.added && s.added.length ? revisePanel(c, m, y, s) : null);
     },
   };
 
