@@ -2,6 +2,27 @@
 
 Reconstructed from the repository history (`git log`). Dates are all 2026-11-24 for the build session unless noted. "Tested" is described in `TESTING.md`.
 
+## Unreleased · Phase 3-5: capstone on Grades and Portfolio (not committed)
+- **Grades page (only for courses with a ready capstone):** the "Current Grade" is the combined grade, labelled **provisional** until the capstone is graded, plus a "How your course grade is calculated" table that separates the module average (80%), the capstone grade (20%) and the course grade, with a one-line explanation of the case you are in (combined, provisional, or capstone graded but no module scores yet). The capstone has its own group in the assignment table. The course header says "(provisional)" the same way.
+- **Portfolio:** the finished capstone is a "Culminating project" card under "Course capstone" (work, score, feedback). A self-reported final project, if you wrote one, stays untouched under its own heading "Self-reported final project", so the two are never confused. Without a capstone the Portfolio is exactly as before.
+- Courses without a capstone: Grades, header and Portfolio are unchanged (checked on all saved courses).
+
+## Unreleased · Phase 3-3: the capstone screens (not committed)
+- **Modules page:** a "Course capstone" section under the module grid (new file `js/capstone-ui.js`). No capstone yet: an explanation and **Create a capstone**, which writes a draft and shows a **preview** (instructions, deliverable, phases, weighted rubric, planned exhibits, recommended preparation, and how it changes the course grade). Nothing is saved until **Add this capstone**; **Write a different one** and **Discard** are there too. Existing courses never get one unless you choose.
+- **Ready capstone:** title, status, points, "counts 20% of the course grade", current course grade (labelled provisional until graded), the modules/objectives/skills that prepare for it (recommendations, never locks), and Start/Open. **Incomplete** capstone (for example a failed build): a plain note, **Finish the capstone**, **Remove it**; it cannot be submitted to and does not affect the grade until finished. A capstone with submitted work cannot be removed.
+- **Workbench reuse:** the capstone opens in the same Assignment Workbench, Review Studio and 72-hour process, with a "Course capstone" header, a breadcrumb back to Modules, "Recommended preparation" instead of module readings, and no Edit or "write with AI" buttons.
+
+## Unreleased · Phase 3-2: capstone generation (Worker v18, not deployed, not committed)
+- **Worker v18** adds `/capstone`: a cumulative, portfolio-worthy capstone page (overview, fictional framing, exhibit plan, 4-6 phases, deliverable, 5-7 weighted criteria summing to exactly 100 points) plus "recommended preparation" (module numbers with a reason, objectives, skills). The Worker rejects a capstone that is incomplete or does not name at least two contributing modules (one if the course has one), keeps module numbers in range, and labels AI-written material fictional in code. Exhibits reuse the existing `/exhibits`.
+- **App:** `ai.draftCapstone` (unsaved draft, for the preview), `ai.adoptCapstone`, `ai.finishCapstone` (builds missing exhibits; also the recovery action) and `ai.createCapstone` (all at once). A capstone is "ready" only when its page, rubric and exhibits are complete; otherwise it is saved as **incomplete** with a plain note and nothing is shown as ready. Never replaces a capstone that has submitted work.
+- **New AI courses** now build the capstone as the last step of course creation (shown as its own step). If it fails the course is marked partial and says so; a stub incomplete capstone is saved so it can be finished later. Older Workers (below v18) cannot make one and say so.
+- No screens yet (3-3 and 3-4).
+
+## Unreleased · Phase 3-1: capstone data model and 80/20 grade maths (no screens yet, not committed)
+- New optional `course.capstone`: a module-shaped record kept outside `course.modules` with one assignment (kind demonstrate, `capstone: true`), status ready/incomplete, weight (default 20), and "recommended preparation" lists. Courses without it are saved byte-identically.
+- `S.courseGrade(c)`: no capstone = the module average exactly as before; with one, 80% module average + 20% capstone; capstone ungraded = module average labelled provisional (never counted as zero); nothing is combined with a missing side. `S.grade` is untouched. Nothing displays this yet (3-5).
+- `finalizeExpired` also covers a capstone's 72-hour window (`S.allWork`); `S.allAssignments` stays module-only.
+
 ## Unreleased · Phase 2D-4: Review Studio shows the row a review cited (not committed)
 - When a review cites a row of your own data (`U1-2`), Review Studio shows that row's cells under the citation, with the cited column highlighted, **taken from the dataset version the review was given**, so replacing your data later does not change what an old review shows.
 - If that version was deleted, or the review did not record a version, it says so plainly instead of showing a different row. A row that was not in the version shows "not available". Text is shown as text (a cell starting with `=` is never run).

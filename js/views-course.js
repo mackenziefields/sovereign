@@ -71,7 +71,8 @@
         body = m ? S.studio.page(c, m, sub2) : pageModules(c); break;
       }
       case 'assignments': {
-        const f = sub && c.modules.flatMap((m) => m.assignments.map((a) => ({ m, a }))).find((x) => x.a.id === sub);
+        const capA = S.capstoneOf(c);
+        const f = sub && (c.modules.flatMap((m) => m.assignments.map((a) => ({ m, a }))).find((x) => x.a.id === sub) || (capA && capA.id === sub ? { m: c.capstone, a: capA } : null));
         if (f) return S.workbench.page(c, f.m, f.a, sub2); // the Assignment Workbench has its own full-width layout
         body = pageAssignments(c); break;
       }
@@ -85,9 +86,9 @@
         h('p', { class: 'ch-code' }, c.code),
         S.titleEl('h1', '', c.title, c.designTheme),
         (() => {
-          const st = S.courseStats(c), g = S.grade(c);
+          const st = S.courseStats(c), g = S.courseGrade(c);
           return h('p', { class: 'ch-meta' },
-            h('span', {}, plural(st.mods, 'module')), h('span', {}, st.pct + '% complete'), g ? h('span', {}, 'Current grade ' + g.pct + '%') : null,
+            h('span', {}, plural(st.mods, 'module')), h('span', {}, st.pct + '% complete'), g.pct != null ? h('span', {}, 'Current grade ' + g.pct + '%' + (g.provisional ? ' (provisional)' : '')) : null,
             h('button', { class: 'linkbtn ch-design', type: 'button', 'aria-expanded': String(!!ui.design), onclick: () => { ui.design = !ui.design; S.render(false); } }, 'Customize appearance'));
         })()),
       ui.design ? designPanel(c) : null,
@@ -276,6 +277,7 @@
     return h('div', {},
       pageHead('Modules'),
       moduleTiles(c, true),
+      S.capstoneUi ? S.capstoneUi.section(c) : null,
       h('details', { class: 'add', open: !c.modules.length }, h('summary', {}, 'New module'),
         h('form', { onsubmit: (e) => {
           e.preventDefault();

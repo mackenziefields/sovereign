@@ -45,7 +45,8 @@
     if (a.description || a.purpose) parts.push(sec('Overview', a.description ? h('p', { class: 'pre wb-lead' }, a.description) : null, a.purpose ? h('p', { class: 'pre' }, a.purpose) : null));
     if (a.basis === 'portfolio' && a.portfolioNote) parts.push(sec('The portfolio piece', h('p', { class: 'pre' }, a.portfolioNote),
       h('p', { class: 'small muted' }, 'Aim for something you could show a professor, employer, client, or collaborator. Finished pieces can be saved to this course’s Portfolio.')));
-    if (a.basis === 'readings' || a.basis === 'portfolio') {
+    if (a.capstone && S.capstoneUi) { const pr = S.capstoneUi.prep(c, m); if (pr) parts.push(sec('Recommended preparation', pr)); }
+    else if (a.basis === 'readings' || a.basis === 'portfolio') {
       const rs = realReadings(m);
       parts.push(sec(a.basis === 'portfolio' ? 'Readings and key ideas to draw on' : 'Draw on this module’s readings',
         h('p', { class: 'small muted' }, a.basis === 'portfolio' ? 'Your work should draw on this module’s readings and key ideas. Name what you use.' : 'This assignment is graded on how well you understand the readings and key ideas of this module. Use them, and name what you draw on.'),
@@ -172,11 +173,13 @@
       const focusPane = REFK.includes(focus) ? 'ref' : 'work';
       const theme = c.designTheme;
 
-      const crumbs = h('p', { class: 'crumbs wb-crumbs' }, h('a', { href: S.href(c, 'modules', m.id + '/' + st.key) }, '← ' + m.title + ' · ' + st.room), ' · ', h('a', { href: S.href(c, 'home') }, c.code), ' · ', h('a', { href: S.href(c, 'assignments') }, 'All assignments'));
+      const isCap = a.capstone === true;
+      const crumbs = isCap ? h('p', { class: 'crumbs wb-crumbs' }, h('a', { href: S.href(c, 'modules') }, '← Course capstone · Modules'), ' · ', h('a', { href: S.href(c, 'home') }, c.code))
+        : h('p', { class: 'crumbs wb-crumbs' }, h('a', { href: S.href(c, 'modules', m.id + '/' + st.key) }, '← ' + m.title + ' · ' + st.room), ' · ', h('a', { href: S.href(c, 'home') }, c.code), ' · ', h('a', { href: S.href(c, 'assignments') }, 'All assignments'));
       if (ui.edit === a.id) return h('div', { class: 'course wb', 'data-theme': theme }, crumbs, h('div', { class: 'panel' }, h('h2', { class: 'mod-h' }, 'Edit assignment'), vc.assignmentForm(c, m, a)));
 
-      const g = gaps(a), thin = g.length >= 3 || (!a.parts.length && !a.materials && !a.rubric.length);
-      const canWrite = a.points > 0 && !a.work && (!a.parts.length && !a.materials || a.kind === 'demonstrate' && a.parts.length && a.basis !== 'portfolio');
+      const g = gaps(a), thin = !isCap && (g.length >= 3 || (!a.parts.length && !a.materials && !a.rubric.length));
+      const canWrite = !isCap && a.points > 0 && !a.work && (!a.parts.length && !a.materials || a.kind === 'demonstrate' && a.parts.length && a.basis !== 'portfolio');
       const notice = thin ? h('aside', { class: 'wb-notice', 'aria-label': 'Missing details' },
         h('p', { class: 'wb-notice-k' }, a.origin === 'ai' ? 'Incomplete: the full page didn’t finish' : 'A short entry'),
         h('p', {}, a.origin === 'ai'
@@ -195,9 +198,9 @@
         crumbs,
         h('header', { class: 'wb-head' },
           h('div', { class: 'wb-head-main' },
-            h('p', { class: 'eyebrow' }, (a.kind ? S.kindMark(a.kind) : h('span', {}, 'Practice')), ' ', h('span', { class: 'wb-where' }, st.room + ' · Module ' + mi)),
+            h('p', { class: 'eyebrow' }, (a.kind ? S.kindMark(a.kind) : h('span', {}, 'Practice')), ' ', h('span', { class: 'wb-where' }, isCap ? 'Course capstone · counts ' + (c.capstone ? c.capstone.weight : 20) + '% of the course grade' : st.room + ' · Module ' + mi)),
             h('h2', { class: 'wb-title' }, a.title)),
-          h('div', { class: 'wb-tools' }, vc.editBtn(a.id, 'Edit assignment'))),
+          h('div', { class: 'wb-tools' }, isCap ? null : vc.editBtn(a.id, 'Edit assignment'))),
         h('div', { class: 'ameta wb-meta' },
           ...[['Due', a.due ? S.fmtDate(a.due) + (a.locked ? ' (course timeline)' : '') : 'No due date'], ['Points', a.points != null ? String(a.points) : 'Not graded'], ['Estimated time', a.estimate], ['Submitting', vc.FORMAT_SHORT[a.format] || 'Text or a file'], ['Status', statusText(a)]]
             .map(([k, v]) => v ? h('div', { class: 'ameta-i' }, h('span', { class: 'ameta-k' }, k), h('span', {}, v)) : null)),
@@ -206,7 +209,7 @@
         h('div', { class: 'wb-grid' },
           pane('ref', 'Reference', tabNav(c, a, REF, refTab, 'Reference views'), refBody),
           pane('work', 'Your work', tabNav(c, a, WORK.map(([k, n]) => [k, n + (flags[k] ? ' •' : '')]), workTab, 'Your work views'), workBody, workTab === 'submit' ? ' is-sticky' : '')),
-        h('nav', { class: 'pager', 'aria-label': 'Assignment navigation' },
+        isCap ? null : h('nav', { class: 'pager', 'aria-label': 'Assignment navigation' },
           (() => { const i = m.assignments.indexOf(a), pr = m.assignments[i - 1], nx = m.assignments[i + 1];
             return [pr ? h('a', { href: S.href(c, 'assignments', pr.id) }, '← ' + pr.title) : h('span', {}), nx ? h('a', { href: S.href(c, 'assignments', nx.id) }, nx.title + ' →') : h('span', {})]; })()));
     },

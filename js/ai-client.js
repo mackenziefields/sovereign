@@ -435,6 +435,67 @@
     return { missing };
   };
 
+  /* ---- The course capstone (Phase 3, Worker v18) ---- */
+  ai.CAPSTONE_VERSION = 18;
+  const CAP_POINTS = 100;
+  const capBody = (course) => ({
+    topic: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '',
+    goal: [(course.ai && course.ai.brief && course.ai.brief.goal) || '', (course.ai && course.ai.brief && course.ai.brief.goalText) || ''].filter(Boolean).join(': '),
+    outcomes: course.outcomes, finalProject: { title: (course.work && course.work.title) || '', description: course.deliverable || '' }, points: CAP_POINTS,
+    modules: course.modules.map((m) => ({ title: m.title, overview: m.overview, objectives: m.objectives, keyIdeas: m.keyIdeas })),
+  });
+  // Is the capstone complete enough to show as ready? Its page is written, its rubric exists, and any required exhibits are built.
+  ai.capstoneComplete = (cap) => { const a = cap && cap.assignments[0]; return !!(a && a.parts.length && a.rubric.length && (!S.exhibits.needsPacket(a) || S.exhibits.packetStatus(a) === 'ready')); };
+  // Asks for a capstone and returns it as an UNSAVED draft (a module-shaped record). Nothing is stored until adoptCapstone.
+  ai.draftCapstone = async function (course, o) {
+    o = o || {};
+    if (!course.modules.length) throw new AIError('bad_input', 'Add at least one module before creating a capstone.');
+    await ai.requireCurrent();
+    if (ai.workerVersion && ai.workerVersion < ai.CAPSTONE_VERSION) throw new AIError('outdated', 'The capstone needs AI service version ' + ai.CAPSTONE_VERSION + ' or newer (yours is ' + ai.workerVersion + '). Paste the latest worker.js into your Cloudflare Worker (Edit code, replace everything, Deploy), then try again.');
+    const r = await ai.call('/capstone', capBody(course), o.signal ? { signal: o.signal } : {});
+    if (course.ai && course.ai.generated && r.usage) course.ai.usage.push(usageRow(r.usage)); // the cost was real even if the page is rejected
+    if (!r.capstone) throw new AIError('incomplete', (r.reason || 'The AI did not write a complete capstone.') + ' You can try again.');
+    const c = r.capstone, plan = c.exhibitPlan || [];
+    const a = { id: S.uid(), title: c.title, description: c.description, due: '', points: c.points, score: null, done: false, kind: 'demonstrate', origin: 'ai', locked: false, rubric: c.rubric, work: null, purpose: '', materials: S.labelFiction(c.materials), steps: [], format: c.format, basis: 'portfolio', portfolioNote: c.portfolioNote || '', realEvidence: false, portfolio: false, capstone: true, parts: c.parts, submit: c.submit, criteria: [], estimate: c.estimate,
+      packet: { state: plan.length ? 'required' : 'incomplete', plan, at: now(), model: '', upgraded: false, note: plan.length ? '' : 'The AI did not say which exhibits the capstone needs.' } };
+    const cap = S.makeCapstone({ title: c.title, overview: 'The culminating project for ' + course.title + '.', objectives: c.prepares.objectives, origin: 'ai', status: 'incomplete', weight: 20, createdAt: now(), note: '',
+      prepares: { modules: (c.prepares.modules || []).map((x) => ({ id: (course.modules[x.n - 1] || {}).id || '', why: x.why })), objectives: c.prepares.objectives, skills: c.prepares.skills }, assignments: [a] });
+    return { cap, usage: r.usage };
+  };
+  // Saves an approved draft as the course's capstone (never over one that already has submitted work).
+  ai.adoptCapstone = function (course, draft) {
+    if (!S.state.courses.includes(course)) throw new AIError('gone', 'That course was removed.');
+    const old = course.capstone && course.capstone.assignments[0];
+    if (old && old.work) throw new AIError('bad_input', 'This capstone already has submitted work, so it is never replaced.');
+    course.capstone = draft.cap; S.save();
+    return course.capstone;
+  };
+  // Builds whatever the capstone is still missing (its exhibits) and sets ready or incomplete honestly. Safe to repeat: this is also the recovery action.
+  ai.finishCapstone = async function (course, o) {
+    o = o || {};
+    const cap = course.capstone, a = cap && cap.assignments[0];
+    if (!a) throw new AIError('bad_input', 'There is no capstone page to finish. Create the capstone first.');
+    let missing = 0;
+    try { if (!a.work) missing = (await ai.buildPackets(course, cap, { signal: o.signal, onStep: o.onStep || (() => {}) })).missing; }
+    catch (e) { cap.status = ai.capstoneComplete(cap) ? 'ready' : 'incomplete'; cap.note = e.message; S.save(); throw e; }
+    const ok = ai.capstoneComplete(cap);
+    cap.status = ok ? 'ready' : 'incomplete';
+    cap.note = ok ? '' : 'The capstone page is written but its exhibits are not all built yet' + (a.packet && a.packet.note ? ' (' + a.packet.note + ')' : '') + '. Choose “Finish the capstone” to try again.';
+    S.save();
+    return { ok, missing };
+  };
+  // One call for the whole job (new course build, or "Create a capstone" after the preview). Failures leave a visible incomplete record, never a half-ready one.
+  ai.createCapstone = async function (course, o) {
+    o = o || {};
+    if (!course.capstone || !course.capstone.assignments[0] || !course.capstone.assignments[0].parts.length) {
+      let draft;
+      try { draft = o.draft || await ai.draftCapstone(course, o); }
+      catch (e) { if (!course.capstone) { course.capstone = S.makeCapstone({ title: 'Course capstone', origin: 'ai', status: 'incomplete', weight: 20, createdAt: now(), note: e.message, assignments: [] }); S.save(); } else { course.capstone.note = e.message; S.save(); } throw e; }
+      ai.adoptCapstone(course, draft);
+    }
+    return ai.finishCapstone(course, o);
+  };
+
   // Phase 1: outline (saved immediately as a partial course). Phase 2: materials, one module at a time.
   ai.build = async function (brief, run) {
     const set = (patch) => { Object.assign(run, patch); S.render(false); };
@@ -446,10 +507,10 @@
     S.state.courses.push(course); S.state.setup = true; S.save();
     run.courseId = course.id;
     const queries = out.outline.modules.map((m) => m.searchQueries || []);
-    set({ steps: [{ label: 'Course outline saved', state: 'done' }].concat(course.modules.map((m, i) => ({ label: 'Materials and assignments: ' + m.title, state: i === 0 ? 'active' : 'todo' }))) });
+    set({ steps: [{ label: 'Course outline saved', state: 'done' }].concat(course.modules.map((m, i) => ({ label: 'Materials and assignments: ' + m.title, state: i === 0 ? 'active' : 'todo' })), [{ label: 'Course capstone', state: 'todo' }]) });
 
     const STOP = ['budget', 'global_limit', 'ip_limit', 'hour_limit', 'day_limit', 'bad_code', 'locked', 'not_configured', 'no_code', 'cancelled', 'upstream_auth', 'bad_model'];
-    let problem = '', missing = 0, detailsMissing = 0, packetsMissing = 0;
+    let problem = '', problemCode = '', missing = 0, detailsMissing = 0, packetsMissing = 0;
     for (let i = 0; i < course.modules.length; i++) {
       run.steps[i + 1].state = 'active'; set({});
       try {
@@ -468,16 +529,26 @@
         } catch (e) { if (e.packetsMissing) packetsMissing += e.packetsMissing; throw e; }
         finally { run.steps[i + 1].label = label; }
       } catch (e) {
-        run.steps[i + 1].state = 'fail'; problem = e.message;
+        run.steps[i + 1].state = 'fail'; problem = e.message; problemCode = e.code || '';
         if (STOP.includes(e.code)) { for (let j = i + 1; j < course.modules.length; j++) run.steps[j + 1].state = 'skipped'; break; }
       }
       set({});
     }
-    const failed = run.steps.slice(1).filter((s) => s.state === 'fail' || s.state === 'skipped').length;
-    course.ai.status = failed || detailsMissing || packetsMissing ? 'partial' : 'complete'; // missing assignment pages count as incomplete, so the person is told rather than shown "ready"
+    const capIdx = course.modules.length + 1; let capProblem = '';
+    if (run.steps[capIdx].state === 'todo' && STOP.includes(problemCode)) { run.steps[capIdx].state = 'skipped'; capProblem = 'The build stopped before the capstone was written.'; }
+    else {
+      run.steps[capIdx].state = 'active'; set({});
+      try {
+        const cr = await ai.createCapstone(course, { signal: run.ctl.signal, onStep: (t) => { run.steps[capIdx].label = t; set({}); } });
+        run.steps[capIdx].label = 'Course capstone'; run.steps[capIdx].state = cr.ok ? 'done' : 'warn'; if (!cr.ok) capProblem = course.capstone.note;
+      } catch (e) { run.steps[capIdx].label = 'Course capstone'; run.steps[capIdx].state = 'fail'; capProblem = e.message; }
+    }
+    set({});
+    const failed = run.steps.slice(1, capIdx).filter((s) => s.state === 'fail' || s.state === 'skipped').length;
+    course.ai.status = failed || detailsMissing || packetsMissing || capProblem ? 'partial' : 'complete'; // missing assignment pages count as incomplete, so the person is told rather than shown "ready"
     course.ai.note = failed
       ? failed + ' of ' + course.modules.length + ' modules still need learning materials (' + problem + ') Open a module and choose “Find materials with AI” to try again, or add your own.'
-      : [missing ? missing + ' module' + (missing === 1 ? '' : 's') + ' had no verifiable source; they are marked “Source needed”.' : '', detailsMissing ? detailsMissing + ' module' + (detailsMissing === 1 ? '' : 's') + ' still need their assignment details: open the assignment and choose “Write full assignment with AI”.' : '', packetsMissing ? packetsMissing + ' assignment' + (packetsMissing === 1 ? '' : 's') + ' still need their exhibits (the case files, documents and data the work is built on): open the assignment, choose Materials, then “Build the exhibits with AI”.' : ''].filter(Boolean).join(' ');
+      : [missing ? missing + ' module' + (missing === 1 ? '' : 's') + ' had no verifiable source; they are marked “Source needed”.' : '', detailsMissing ? detailsMissing + ' module' + (detailsMissing === 1 ? '' : 's') + ' still need their assignment details: open the assignment and choose “Write full assignment with AI”.' : '', packetsMissing ? packetsMissing + ' assignment' + (packetsMissing === 1 ? '' : 's') + ' still need their exhibits (the case files, documents and data the work is built on): open the assignment, choose Materials, then “Build the exhibits with AI”.' : '', capProblem ? 'The course capstone is not finished (' + capProblem.replace(/[. ]+$/, '') + '). Open the Modules page and choose “Finish the capstone”.' : ''].filter(Boolean).join(' ');
     S.save();
     set({ phase: 'done', courseId: course.id, problem: course.ai.status === 'partial' ? course.ai.note : '' });
     return course;

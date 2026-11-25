@@ -2,7 +2,7 @@
 (function (S) {
   'use strict';
 
-  S.BUILD = 30; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
+  S.BUILD = 31; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
   const KEY = 'sovereign.v3';
   const OLD_KEYS = ['sovereign.v2', 'sovereign.v1']; // earlier versions; migrated, never deleted automatically
   S.MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -197,6 +197,40 @@
     };
   }
 
+  // One module record (also used for the capstone, which is a module-shaped record with exactly one assignment).
+  function normModule(m, id, url) {
+    m = obj(m);
+    return {
+      id: id(m.id), title: str(m.title, 200) || 'Untitled module', overview: str(m.overview),
+      keyIdeas: str(m.keyIdeas), reflection: str(m.reflection), complete: m.complete === true,
+      syllabi: arr(m.syllabi, 10).map((y) => normSyllabus(y, id, url)),
+      objectives: strs(m.objectives, 12, 400), selfCheck: strs(m.selfCheck, 12, 400), duration: str(m.duration, 60),
+      origin: m.origin === 'ai' ? 'ai' : 'user', edited: m.edited === true,
+      readings: arr(m.readings).map((r) => { r = obj(r); return normReading(r, id, url); }),
+      extras: arr(m.extras, 50).map((x) => { x = obj(x); return { id: id(x.id), title: str(x.title, 200) || 'Untitled section', body: str(x.body) }; }),
+      assignments: arr(m.assignments).map((a) => {
+        a = obj(a);
+        return { id: id(a.id), title: str(a.title, 300) || 'Untitled assignment', description: str(a.description), due: S.validDate(str(a.due, 10)), points: num(a.points), score: num(a.score), done: a.done === true, kind: ['learn', 'apply', 'demonstrate'].includes(a.kind) ? a.kind : '', origin: a.origin === 'ai' ? 'ai' : 'user', locked: a.locked === true && !!S.validDate(str(a.due, 10)), rubric: normRubric(a.rubric), work: normWork(a.work),
+          purpose: str(a.purpose, 2000), materials: str(a.materials, 6000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'file', 'any'].includes(a.format) ? a.format : '', basis: ['readings', 'scenario', 'portfolio'].includes(a.basis) ? a.basis : '', portfolioNote: str(a.portfolioNote, 500), realEvidence: a.realEvidence === true, evidence: (a.evidence && typeof a.evidence === 'object' && ['verified', 'needed'].includes(a.evidence.status)) ? { status: a.evidence.status, sources: (Array.isArray(a.evidence.sources) ? a.evidence.sources : []).slice(0, 8).map((s) => ({ title: str(s && s.title, 300), url: url(s && s.url) })).filter((s) => s.title) } : null, portfolio: a.portfolio === true, ...(a.capstone === true ? { capstone: true } : {}), office: normOffice(a.office), ...(a.myData ? (() => { const md = normMyData(a.myData); return md ? { myData: md } : {}; })() : {}), revisions: normRevisions(a.revisions), exhibits: S.exhibits.sanitize(a.exhibits).exhibits, packet: normPacket(a.packet),
+          parts: arr(a.parts, 8).map((p) => { p = obj(p); return { title: str(p.title, 120).trim(), questions: strs(p.questions, 8, 500) }; }).filter((p) => p.title || p.questions.length), submit: str(a.submit, 1000), criteria: strs(a.criteria, 8, 300), estimate: str(a.estimate, 60) };
+      }),
+    };
+  }
+
+  // The standalone course capstone (Phase 3). A module-shaped record kept OUTSIDE course.modules, so module grids, module stats and the
+  // module-average grade never see it by accident. Absent on every existing course until the learner opts in or a new AI course is built.
+  function normCapstone(x, id, url) {
+    x = obj(x);
+    const base = normModule(x, id, url);
+    base.assignments = base.assignments.slice(0, 1).map((a) => ({ ...a, kind: 'demonstrate', capstone: true }));
+    const st = x.status === 'ready' && base.assignments.length ? 'ready' : 'incomplete'; // no assignment means it is not ready, whatever was claimed
+    const wt = Number(x.weight), p = obj(x.prepares);
+    return { ...base, complete: false, status: st, weight: Number.isFinite(wt) && wt >= 0 && wt <= 100 ? Math.round(wt * 10) / 10 : 20, createdAt: str(x.createdAt, 40), note: str(x.note, 500),
+      prepares: { modules: arr(p.modules, 100).map((q) => { q = obj(q); return { id: str(q.id, 60), why: str(q.why, 300) }; }).filter((q) => q.id), objectives: strs(p.objectives, 12, 400), skills: strs(p.skills, 12, 200) } };
+  }
+
+  S.makeCapstone = (x) => normCapstone(x, (v) => str(v, 60) || S.uid(), (v) => S.cleanUrl(str(v, 2000)) || '');
+
   function normCourse(c, i) {
     c = obj(c);
     const seen = new Set();
@@ -216,28 +250,12 @@
       color: Number.isInteger(c.color) && c.color >= 0 && c.color < S.COLORS.length ? c.color : (i || 0) % S.COLORS.length,
       designTheme: S.THEMES.some((t) => t[0] === c.designTheme) ? c.designTheme : S.THEMES[(((Number.isInteger(c.color) ? c.color : (i || 0)) % 4) + 4) % 4][0],
       announcements: arr(c.announcements, 200).map((a) => { a = obj(a); return { id: id(a.id), title: str(a.title, 300) || 'Untitled announcement', body: str(a.body), date: S.validDate(str(a.date, 10)) || S.todayISO() }; }),
-      modules: arr(c.modules, 100).map((m) => {
-        m = obj(m);
-        return {
-          id: id(m.id), title: str(m.title, 200) || 'Untitled module', overview: str(m.overview),
-          keyIdeas: str(m.keyIdeas), reflection: str(m.reflection), complete: m.complete === true,
-          syllabi: arr(m.syllabi, 10).map((y) => normSyllabus(y, id, url)),
-          objectives: strs(m.objectives, 12, 400), selfCheck: strs(m.selfCheck, 12, 400), duration: str(m.duration, 60),
-          origin: m.origin === 'ai' ? 'ai' : 'user', edited: m.edited === true,
-          readings: arr(m.readings).map((r) => { r = obj(r); return normReading(r, id, url); }),
-          extras: arr(m.extras, 50).map((x) => { x = obj(x); return { id: id(x.id), title: str(x.title, 200) || 'Untitled section', body: str(x.body) }; }),
-          assignments: arr(m.assignments).map((a) => {
-            a = obj(a);
-            return { id: id(a.id), title: str(a.title, 300) || 'Untitled assignment', description: str(a.description), due: S.validDate(str(a.due, 10)), points: num(a.points), score: num(a.score), done: a.done === true, kind: ['learn', 'apply', 'demonstrate'].includes(a.kind) ? a.kind : '', origin: a.origin === 'ai' ? 'ai' : 'user', locked: a.locked === true && !!S.validDate(str(a.due, 10)), rubric: normRubric(a.rubric), work: normWork(a.work),
-              purpose: str(a.purpose, 2000), materials: str(a.materials, 6000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'file', 'any'].includes(a.format) ? a.format : '', basis: ['readings', 'scenario', 'portfolio'].includes(a.basis) ? a.basis : '', portfolioNote: str(a.portfolioNote, 500), realEvidence: a.realEvidence === true, evidence: (a.evidence && typeof a.evidence === 'object' && ['verified', 'needed'].includes(a.evidence.status)) ? { status: a.evidence.status, sources: (Array.isArray(a.evidence.sources) ? a.evidence.sources : []).slice(0, 8).map((s) => ({ title: str(s && s.title, 300), url: url(s && s.url) })).filter((s) => s.title) } : null, portfolio: a.portfolio === true, office: normOffice(a.office), ...(a.myData ? (() => { const md = normMyData(a.myData); return md ? { myData: md } : {}; })() : {}), revisions: normRevisions(a.revisions), exhibits: S.exhibits.sanitize(a.exhibits).exhibits, packet: normPacket(a.packet),
-              parts: arr(a.parts, 8).map((p) => { p = obj(p); return { title: str(p.title, 120).trim(), questions: strs(p.questions, 8, 500) }; }).filter((p) => p.title || p.questions.length), submit: str(a.submit, 1000), criteria: strs(a.criteria, 8, 300), estimate: str(a.estimate, 60) };
-          }),
-        };
-      }),
+      modules: arr(c.modules, 100).map((m) => normModule(m, id, url)),
       credentials: arr(c.credentials, 100).map((k) => {
         k = obj(k);
         return { id: id(k.id), name: str(k.name, 300) || 'Untitled credential', issuer: str(k.issuer, 300), url: url(k.url), note: str(k.note), status: oneOf(k.status, S.CRED_STATUS, 'considering'), requirement: k.requirement === 'required' || k.requirement === 'suggested' ? k.requirement : '', origin: k.origin === 'ai' ? 'ai' : 'user' };
       }),
+      ...(c.capstone ? (() => { const k = normCapstone(c.capstone, id, url); return k ? { capstone: k } : {}; })() : {}),
       work: { title: str(w.title, 200), criteria: strs(w.criteria, 12, 400), description: str(w.description), reflection: str(w.reflection), status: oneOf(w.status, S.WORK_STATUS, 'not-started'), url: url(w.url) },
     };
   }
@@ -371,7 +389,7 @@
   // Anything past its 72 hours is finalized from its first review. Safe to call often.
   S.finalizeExpired = function (nowMs) {
     let n = 0;
-    S.allAssignments().forEach(({ a }) => {
+    S.allWork().forEach(({ a }) => {
       if (a.work && a.work.phase === 'reviewed' && a.work.deadline && new Date(a.work.deadline).getTime() <= (nowMs || Date.now())) { if (S.finalizeWork(a)) n++; }
     });
     if (n) S.save();
@@ -384,6 +402,26 @@
       if (a.points > 0 && a.score != null) { earned += a.score; possible += a.points; n++; }
     }));
     return n ? { n, earned, possible, pct: Math.round((earned / possible) * 1000) / 10 } : null;
+  };
+
+  /* ----- the capstone and the course grade (Phase 3) ----- */
+  S.capstoneOf = (c) => (c && c.capstone && c.capstone.status === 'ready' && c.capstone.assignments[0]) || null;
+  // Everything a learner can submit, capstone included. (S.allAssignments stays module-only on purpose.)
+  S.allWork = () => S.allAssignments().concat(S.state.courses.filter((c) => S.capstoneOf(c)).map((c) => ({ c, m: c.capstone, a: c.capstone.assignments[0] })));
+  // The course grade. Without a capstone it is exactly the module average, as before. With one: 80% module average + 20% capstone
+  // (weight is c.capstone.weight). Until the capstone is graded the grade is the module average labelled provisional; the capstone never counts as zero.
+  S.courseGrade = function (c) {
+    const mod = S.grade(c), a = S.capstoneOf(c), cp = a && a.points > 0 && a.score != null ? { score: a.score, points: a.points, pct: S.pctOf(a) } : null;
+    const total = c.modules.reduce((t, m) => t + m.assignments.length, 0);
+    const out = { module: mod, modulesGraded: mod ? mod.n : 0, modulesTotal: total, capstone: cp, hasCapstone: !!a, weight: 0, pct: null, provisional: false, basis: 'none' };
+    if (!a || !(c.capstone.weight > 0)) { out.pct = mod ? mod.pct : null; out.basis = mod ? 'modules' : 'none'; return out; }
+    out.weight = c.capstone.weight;
+    const w = out.weight / 100;
+    if (mod && cp) { out.pct = Math.round(((1 - w) * mod.pct + w * cp.pct) * 10) / 10; out.basis = 'combined'; out.provisional = false; }
+    else if (mod) { out.pct = mod.pct; out.basis = 'modules'; out.provisional = true; }   // capstone not graded yet
+    else if (cp) { out.pct = null; out.basis = 'capstone-only'; out.provisional = true; } // nothing to combine with yet; not guessed
+    else { out.pct = null; out.basis = 'none'; out.provisional = true; }
+    return out;
   };
 
   /* ----- builders and starter content ----- */

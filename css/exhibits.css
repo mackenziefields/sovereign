@@ -162,3 +162,17 @@ dialog.di[open] { display: flex; flex-direction: column; }
 .md-refrow { margin: .3rem 0 .5rem; padding: .5rem .7rem; background: var(--soft, #f3f5fa); border-radius: 6px; overflow-wrap: anywhere; }
 .md-cell { white-space: normal; }
 .md-hit { background: rgba(255, 214, 90, .45); border-radius: 3px; padding: 0 .2rem; }
+
+/* ---------- Course capstone (Phase 3-3) ---------- */
+.cap-sec { margin-top: 2rem; }
+.cap-card, .cap-preview { border: 1px solid var(--line, #d9d4c8); border-left: 4px solid var(--accent, #1f3a5f); border-radius: 6px; padding: 1rem 1.1rem; background: var(--surface, transparent); }
+.cap-incomplete { border-left-color: #b45309; }
+.cap-title { margin: 0 0 .4rem; font-size: 1.15rem; }
+.cap-k { margin: .9rem 0 .25rem; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; color: var(--muted, #6b6b6b); }
+.cap-err { color: #b42318; }
+.cap-prep, .cap-grade { margin-top: .6rem; }
+
+/* Grades: capstone breakdown; Portfolio: culminating project (Phase 3-5) */
+.gr-calc { margin: 1.5rem 0; }
+.gr-total td { border-top: 2px solid currentColor; }
+.cap-major { border-left: 4px solid var(--accent, #1f3a5f); padding-left: 1rem; }
