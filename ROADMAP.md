@@ -78,3 +78,6 @@ Defined in their own plans when reached.
 
 ### Track A and B follow-up (after 2C, not released)
 Review Studio wider resizable feedback, legacy local quote matching, and non-duplicated Materials with an approval gate are built and mock-tested; they ship in the next build once approved. Real-AI confirmation of the tightened Worker `materials` rule is still pending a Worker redeploy.
+
+### 2D progress
+2D-1 (import engine), 2D-2 (storage, versions, Your data screens), 2D-3 (authorization, Worker v17, mock-tested) and 2D-4 (cited rows and per-review versions in Review Studio) are built; 2D-5 (one capped real-AI test, needs Worker v17 deployed) follows the approved spec. Not released.

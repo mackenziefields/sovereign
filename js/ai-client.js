@@ -281,7 +281,7 @@
   }
   // Supplied materials as the reviewer sees them. Worker v16+ takes the evidence packet as its own field (up to 14,000 characters, fairly shared
   // between exhibits). An older Worker only reads 7,000 characters of "materials", so there the packet is squeezed in after the original text, as before.
-  const NEW_REVIEW = 16, EXH_BUDGET = 14000;
+  const NEW_REVIEW = 16, EXH_BUDGET = 14000, NEW_LEARNER = 17; // Worker 17 accepts the learner's own dataset (context.learnerData)
   const packetMaterials = (a) => {
     const text = a.materials || '';
     if (ai.workerVersion && ai.workerVersion >= NEW_REVIEW) return text;
@@ -290,10 +290,10 @@
   };
   const packetField = (a) => (ai.workerVersion && ai.workerVersion >= NEW_REVIEW && !a.realEvidence ? S.exhibits.asText(a, EXH_BUDGET).text : '');
   // What the reviewer is told about the assignment (v14). Reading TEXTS are never included: only titles, and the reviewer is told so.
-  const reviewContext = (mod, a, kind, mode) => ({
+  const reviewContext = (mod, a, kind, mode, learner) => ({
     stage: S.stageOf(a), format: a.format || '', submit: a.submit || '', mode, kind: kind || '',
     steps: (a.parts || []).map((p) => ({ title: p.title, questions: p.questions })),
-    materials: a.realEvidence ? '' : packetMaterials(a), exhibits: packetField(a),
+    materials: a.realEvidence ? '' : packetMaterials(a), exhibits: packetField(a), learnerData: learner ? learner.text : '',
     module: { title: mod.title, objectives: mod.objectives, keyIdeas: mod.keyIdeas },
     readings: (mod.readings || []).filter((x) => x.source !== 'placeholder').slice(0, 8).map((x) => x.title),
   });
@@ -303,32 +303,39 @@
   // Office hours: ungraded practice, up to two rounds. mode "practice" = the same assignment, materials and criteria; "own" = the learner's own material.
   // payload: { text } or { file }, plus { kind, previous } (previous = the first version, only when the learner agreed to send it again).
   // The Worker's version decides how exhibits are sent (see packetMaterials). One free /health call per session, only when needed.
-  const versionFor = async (a) => { if (ai.workerVersion || !(a.exhibits && a.exhibits.length)) return; try { const hl = await ai.health(); if (hl && hl.version) ai.workerVersion = hl.version; } catch (e) { /* the real call reports it */ } };
+  const versionFor = async (a, force) => { if (ai.workerVersion || (!force && !(a.exhibits && a.exhibits.length))) return; try { const hl = await ai.health(); if (hl && hl.version) ai.workerVersion = hl.version; } catch (e) { /* the real call reports it */ } };
+  ai.learnerOk = () => !!(ai.workerVersion && ai.workerVersion >= NEW_LEARNER);
+  ai.ensureVersion = (a) => versionFor(a, true); // one free /health call per session; lets the screen know whether the Worker can take a learner dataset
+  // opts.learner = { text } is the learner's own dataset, present ONLY when they ticked the authorization for this one review.
   ai.office = async function (course, mod, a, payload, round, material, mode, opts) {
-    await versionFor(a);
+    const { learner, ...callOpts } = opts || {};
+    await versionFor(a, !!learner);
+    if (learner && !ai.learnerOk()) throw new AIError('bad_input', 'The connected AI service is too old to take your own data (it needs version 17). Untick “Include my dataset” or update the service.');
     const { kind, previous, ...submission } = payload;
     const prior = a.office && a.office.rounds[0] && a.office.rounds[0].feedback, practice = mode === 'practice';
     const r = await ai.call('/review', {
       mode: 'office', course: { title: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '' },
-      assignment: { title: a.title, description: a.description }, context: reviewContext(mod, a, kind, practice ? 'practice' : 'own'), ownMaterial: practice ? '' : material,
+      assignment: { title: a.title, description: a.description }, context: reviewContext(mod, a, kind, practice ? 'practice' : 'own', learner), ownMaterial: practice ? '' : material,
       ...(practice ? { rubric: rubricFor(a) } : {}),
       round: round === 2 ? 2 : 1, previousImprovements: round === 2 && prior ? prior.improvements : [], previousFindings: round === 2 ? priorFindings(prior) : [], submission,
       ...(round === 2 && previous ? { previousSubmission: previous } : {}),
-    }, opts || {});
+    }, callOpts);
     if (!S.state.courses.includes(course) || !mod.assignments.includes(a)) throw new AIError('gone', 'That assignment was removed while it was being reviewed.');
     if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
     return finish(r);
   };
   ai.review = async function (course, mod, a, payload, round, opts) {
-    await versionFor(a);
+    const { learner, ...callOpts } = opts || {};
+    await versionFor(a, !!learner);
+    if (learner && !ai.learnerOk()) throw new AIError('bad_input', 'The connected AI service is too old to take your own data (it needs version 17). Untick “Include my dataset” or update the service.');
     const { kind, previous, ...submission } = payload;
     const first = a.work && a.work.first && a.work.first.feedback;
     const r = await ai.call('/review', {
       course: { title: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '' },
-      assignment: { title: a.title, description: a.description, points: a.points }, context: reviewContext(mod, a, kind, 'graded'),
+      assignment: { title: a.title, description: a.description, points: a.points }, context: reviewContext(mod, a, kind, 'graded', learner),
       round: round === 2 ? 2 : 1, rubric: rubricFor(a), previousImprovements: round === 2 && first ? first.improvements : [], previousFindings: round === 2 ? priorFindings(first) : [],
       submission, ...(round === 2 && previous ? { previousSubmission: previous } : {}),
-    }, opts || {});
+    }, callOpts);
     if (!S.state.courses.includes(course) || !mod.assignments.includes(a)) throw new AIError('gone', 'That assignment was removed while it was being reviewed.');
     if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
     return finish(r);

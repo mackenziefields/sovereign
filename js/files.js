@@ -84,9 +84,19 @@
   const utf8 = (u8) => new TextDecoder().decode(u8);
   async function inflateRaw(bytes) {
     if (typeof DecompressionStream === 'undefined') throw new Error('This browser can’t open Excel files. Export the sheet as a PDF or CSV instead.');
-    const ds = new DecompressionStream('deflate-raw'), w = ds.writable.getWriter();
-    w.write(bytes); w.close();
-    return new Uint8Array(await new Response(ds.readable).arrayBuffer());
+    // Read in chunks and stop at a hard ceiling, so a crafted "zip bomb" cannot use up the tab's memory whatever sizes its header claims.
+    const MAX = 20 * 1024 * 1024, ds = new DecompressionStream('deflate-raw'), w = ds.writable.getWriter(), rd = ds.readable.getReader(), parts = [];
+    w.write(bytes).catch(() => {}); w.close().catch(() => {});
+    let total = 0;
+    for (;;) {
+      const { done, value } = await rd.read();
+      if (done) break;
+      total += value.length;
+      if (total > MAX) { try { await rd.cancel(); } catch (e) { /* already stopped */ } throw new Error('That Excel file is too large to read.'); }
+      parts.push(value);
+    }
+    const out = new Uint8Array(total); let o = 0; for (const p of parts) { out.set(p, o); o += p.length; }
+    return out;
   }
   function unzip(buf) {
     const dv = new DataView(buf), u8 = new Uint8Array(buf);
@@ -113,6 +123,7 @@
   const colIndex = (ref) => { const m = /^([A-Z]+)/.exec(ref || ''); let n = 0; if (m) for (const ch of m[1]) n = n * 26 + (ch.charCodeAt(0) - 64); return Math.max(0, n - 1); };
   const csvCell = (v) => (/[",\n\t]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v);
 
+  f.unzip = unzip; f.colIndex = colIndex; // shared with js/dataset-import.js
   f.xlsxToText = async function (file) {
     const zip = unzip(await file.arrayBuffer()), dom = (x) => new DOMParser().parseFromString(x, 'application/xml');
     if (!zip.has('xl/workbook.xml')) throw new Error('That doesn’t look like a valid Excel (.xlsx) file.');

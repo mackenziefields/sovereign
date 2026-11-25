@@ -139,8 +139,8 @@ Navigator, plates, document/table/chart/timeline polish, theme art direction, si
 ### 2C Evidence-Aware Review
 Worker `/review` receives exhibits as compact addressable rows and blocks (`[A-3] landlord=... | filed=...`, `[B-p2] paragraph text`) inside its size budget; oversized exhibits are sampled with a stated "first N of M rows" so the reviewer never claims to have seen the rest. Findings gain optional `ref {exhibit, row|block, column}`; code verifies the exhibit, id and column exist, otherwise drops the ref and keeps the finding as unlocated (as for quotes). Review Studio shows "Exhibit A, row A-7, Landlord" under the quote. 1A-1C rules unchanged. Real-AI test only with your approved estimate and cap.
 
-### 2D Learner import (last)
-CSV/XLSX import on the device with preview, column confirmation, original file kept, stored in `myExhibits`, labelled "Added by you", local unless a per-review consent names it and shows its size. Never overwrites supplied exhibits or submissions. Starts only after 2A to 2C are stable.
+### 2D Learner datasets (last)
+Superseded by the detailed, approved-direction spec in `docs/PHASE2D-SPEC.md` (optional, Demonstrate and Office Hours only, versioned per review, sheet picker, per-review authorization). Starts only after you approve that spec.
 
 ## 9. Changes from the previous revision
 - Added the Document exhibit type, the calc engine (median, percent, rate), automatic course-creation generation with detection and honest progress, an upgrade-with-preview flow, configurable limits, and the safe/exact export split (previously unsafe cells were rejected, which would have altered data).

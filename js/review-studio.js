@@ -185,7 +185,7 @@
         h('span', { class: 'rv-main' }, h('span', { class: 'rv-line' }, h('span', { class: 'sr-only' }, 'Point ' + it.n + ': '), h('span', { class: 'rv-chip rv-chip-' + t[1] }, t[0]), pin), h('span', { class: 'rv-claim' }, f.claim)));
       const loc = h('p', { class: 'small muted rv-loc' }), show = h('button', { type: 'button', class: 'rv-show', hidden: true, onclick: () => { if (!wide()) setTab('work'); scrollToActive(); say('Showing in your work: ' + (f.quote || '')); } }, 'Show in your work →');
       const body = h('div', { class: 'rv-card-body', id: bodyId, hidden: true },
-        f.quote ? h('blockquote', { class: 'f-quote' }, '“' + f.quote + '”') : null, S.exhibitsView.refLine(f), loc, show,
+        f.quote ? h('blockquote', { class: 'f-quote' }, '“' + f.quote + '”') : null, S.exhibitsView.refLine(f), S.myData && opts.a && f.ref ? S.myData.refRow(opts.a, fb.data, f.ref) : null, loc, show,
         f.criterion ? h('p', { class: 'small muted' }, 'Criterion: ' + f.criterion) : null,
         f.note ? h('p', { class: 'small muted' }, f.note) : null, f.caution ? h('p', { class: 'small' }, f.caution) : null,
         f.fix ? h('p', { class: 'f-fix' }, h('b', {}, 'Suggested change: '), f.fix) : null,
@@ -216,6 +216,7 @@
         ins.limited ? h('p', { class: 'banner', role: 'status' }, 'Review limitation: ' + (fb.criteria.length - assessed.length) + ' of ' + fb.criteria.length + ' grading criteria could not be fairly assessed because the AI could not read the evidence. They were left out, not scored low. To have them assessed, resubmit as typed text, a PDF with selectable text, or an Excel file with the values in cells.') : null,
         h('details', { class: 'inspect' }, h('summary', {}, 'What the reviewer could see'),
           ins.received ? h('p', { class: 'small' }, ins.received) : null,
+          fb.data ? h('p', { class: 'small' }, h('b', {}, 'Your own dataset was included. '), 'You chose to send ' + fb.data.rows.toLocaleString() + ' row' + (fb.data.rows === 1 ? '' : 's') + (fb.data.sent.length ? ' from ' + fb.data.sent.join(', ') : '') + ' for this review (about ' + fb.data.chars.toLocaleString() + ' characters).' + (fb.data.removed ? ' That version has since been deleted from this device.' : '')) : null,
           (ins.facts || []).length ? h('ul', { class: 'plain small' }, ins.facts.map((x) => h('li', {}, x))) : null,
           (ins.couldNotInspect || []).length ? h('div', {}, h('p', { class: 'small' }, h('b', {}, 'Could not read or see:')), h('ul', { class: 'plain small' }, ins.couldNotInspect.map((x) => h('li', {}, x)))) : null,
           h('p', { class: 'small muted' }, c.mode === 'practice' ? 'Practice on this assignment. Ungraded.' : c.mode === 'own' ? 'Explored with your own material. Ungraded.' : ''),

@@ -2,7 +2,7 @@
 (function (S) {
   'use strict';
 
-  S.BUILD = 29; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
+  S.BUILD = 30; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
   const KEY = 'sovereign.v3';
   const OLD_KEYS = ['sovereign.v2', 'sovereign.v1']; // earlier versions; migrated, never deleted automatically
   S.MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -119,7 +119,7 @@
     f = obj(f); if (!str(f.claim, 700).trim()) return null;
     return { type: inList(f.type, S.FINDING_TYPES, 'optional'), criterion: str(f.criterion, 200), claim: str(f.claim, 700), quote: str(f.quote, 300), where: str(f.where, 120), alreadyPresent: str(f.alreadyPresent, 300), fix: str(f.fix, 700), example: str(f.example, 700),
       exampleSource: inList(f.exampleSource, ['supplied', 'illustrative', 'none'], 'none'), located: f.located === true ? true : f.located === false ? false : null, note: str(f.note, 300), caution: str(f.caution, 300), illustrative: f.illustrative === true,
-      ref: f.ref && typeof f.ref === 'object' && /^[A-F]$/.test(f.ref.exhibit || '') ? { exhibit: f.ref.exhibit, row: str(f.ref.row, 20), column: str(f.ref.column, 60) } : null };
+      ref: f.ref && typeof f.ref === 'object' && /^(?:[A-F]|U[1-5])$/.test(f.ref.exhibit || '') ? { exhibit: f.ref.exhibit, row: str(f.ref.row, 20), column: str(f.ref.column, 60) } : null };
   }
   function normFeedback(f) {
     f = obj(f);
@@ -129,6 +129,8 @@
       summary: str(f.summary, 3000), strengths: strs(f.strengths, 8, 600), improvements: strs(f.improvements, 8, 800), nextSteps: strs(f.nextSteps, 8, 600),
       criteria: arr(f.criteria, 10).map((k) => { k = obj(k); const o = { name: str(k.name, 200) || 'Criterion', max: num(k.max) || 0, score: num(k.score) || 0, comment: str(k.comment, 800) }; if (v2) { o.status = inList(k.status, ['met', 'partly', 'not-met', 'not-assessed'], 'partly'); o.assessed = k.assessed !== false; o.adjusted = str(k.adjusted, 300); } return o; }),
       score: num(f.score) || 0, max: num(f.max) || 0, model: str(f.model, 60), at: str(f.at, 40), cost: num(f.cost) || 0,
+      // Which learner dataset version this review was given (Phase 2D). Kept so the review can always be explained; absent on every older review.
+      ...(obj(f.data).versionId ? { data: { datasetId: str(f.data.datasetId, 40), versionId: str(f.data.versionId, 40), sent: strs(f.data.sent, 5, 120), rows: num(f.data.rows) || 0, chars: num(f.data.chars) || 0, at: str(f.data.at, 40), removed: f.data.removed === true } } : {}),
       ...(v2 ? {
         findings: arr(f.findings, 14).map(normFinding).filter(Boolean),
         inspection: { received: str(ins.received, 400), couldNotInspect: strs(ins.couldNotInspect, 8, 300), facts: strs(ins.facts, 6, 500), limited: ins.limited === true },
@@ -144,10 +146,20 @@
     return { text: str(x.text, 30000), fileId: str(x.fileId, 60), fileName: str(x.fileName, 200), fileType: str(x.fileType, 100), fileSize: num(x.fileSize) || 0, at: str(x.at, 40), late: x.late === true, feedback: normFeedback(x.feedback) };
   }
   // Office hours: optional practice feedback on material the learner chose. Up to two rounds, never graded.
+  // Learner datasets (Phase 2D). Only small descriptive records live here; the rows and the original file are in IndexedDB (js/mydata.js).
+  function normMyData(v) {
+    v = obj(v);
+    const vers = arr(v.versions, 20).map((x) => { x = obj(x); const s = obj(x.source); return { id: str(x.id, 40), at: str(x.at, 40), note: str(x.note, 200), source: { name: str(s.name, 200), size: Math.min(Math.max(Number(s.size) || 0, 0), 2e7), type: str(s.type, 100), fileId: str(s.fileId, 60) }, dataKey: str(x.dataKey, 60), sheets: arr(x.sheets, 5).map((y) => { y = obj(y); return { name: str(y.name, 120), exhibitId: str(y.exhibitId, 8), rows: num(y.rows) || 0, cols: num(y.cols) || 0 }; }), left: strs(x.left, 20, 400), notes: strs(x.notes, 20, 400) }; }).filter((x) => x.id && x.dataKey);
+    if (!vers.length) return null;
+    const cur = str(v.currentId, 40);
+    return { id: str(v.id, 40) || vers[0].id, currentId: vers.some((x) => x.id === cur) ? cur : '', versions: vers };
+  }
   function normOffice(o) {
     o = obj(o);
     const rounds = arr(o.rounds, 2).map(normSub).filter(Boolean);
-    return rounds.length ? { material: str(o.material, 500), mode: o.mode === 'practice' ? 'practice' : 'own', rounds } : null; // saved sessions from before the two modes were always "own material"
+    const data = normMyData(o.data); // optional learner data kept with the session (2D); absent on every older session
+    if (!rounds.length && !data) return null;
+    return { material: str(o.material, 500), mode: o.mode === 'practice' ? 'practice' : o.mode === '' && !rounds.length ? '' : 'own', rounds, ...(data ? { data } : {}) }; // saved sessions from before the two modes were always "own material"
   }
   function normWork(w) {
     w = obj(w);
@@ -217,7 +229,7 @@
           assignments: arr(m.assignments).map((a) => {
             a = obj(a);
             return { id: id(a.id), title: str(a.title, 300) || 'Untitled assignment', description: str(a.description), due: S.validDate(str(a.due, 10)), points: num(a.points), score: num(a.score), done: a.done === true, kind: ['learn', 'apply', 'demonstrate'].includes(a.kind) ? a.kind : '', origin: a.origin === 'ai' ? 'ai' : 'user', locked: a.locked === true && !!S.validDate(str(a.due, 10)), rubric: normRubric(a.rubric), work: normWork(a.work),
-              purpose: str(a.purpose, 2000), materials: str(a.materials, 6000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'file', 'any'].includes(a.format) ? a.format : '', basis: ['readings', 'scenario', 'portfolio'].includes(a.basis) ? a.basis : '', portfolioNote: str(a.portfolioNote, 500), realEvidence: a.realEvidence === true, evidence: (a.evidence && typeof a.evidence === 'object' && ['verified', 'needed'].includes(a.evidence.status)) ? { status: a.evidence.status, sources: (Array.isArray(a.evidence.sources) ? a.evidence.sources : []).slice(0, 8).map((s) => ({ title: str(s && s.title, 300), url: url(s && s.url) })).filter((s) => s.title) } : null, portfolio: a.portfolio === true, office: normOffice(a.office), revisions: normRevisions(a.revisions), exhibits: S.exhibits.sanitize(a.exhibits).exhibits, packet: normPacket(a.packet),
+              purpose: str(a.purpose, 2000), materials: str(a.materials, 6000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'file', 'any'].includes(a.format) ? a.format : '', basis: ['readings', 'scenario', 'portfolio'].includes(a.basis) ? a.basis : '', portfolioNote: str(a.portfolioNote, 500), realEvidence: a.realEvidence === true, evidence: (a.evidence && typeof a.evidence === 'object' && ['verified', 'needed'].includes(a.evidence.status)) ? { status: a.evidence.status, sources: (Array.isArray(a.evidence.sources) ? a.evidence.sources : []).slice(0, 8).map((s) => ({ title: str(s && s.title, 300), url: url(s && s.url) })).filter((s) => s.title) } : null, portfolio: a.portfolio === true, office: normOffice(a.office), ...(a.myData ? (() => { const md = normMyData(a.myData); return md ? { myData: md } : {}; })() : {}), revisions: normRevisions(a.revisions), exhibits: S.exhibits.sanitize(a.exhibits).exhibits, packet: normPacket(a.packet),
               parts: arr(a.parts, 8).map((p) => { p = obj(p); return { title: str(p.title, 120).trim(), questions: strs(p.questions, 8, 500) }; }).filter((p) => p.title || p.questions.length), submit: str(a.submit, 1000), criteria: strs(a.criteria, 8, 300), estimate: str(a.estimate, 60) };
           }),
         };

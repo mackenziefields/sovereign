@@ -83,7 +83,10 @@
         if (!pr.prev) throw new Error(pr.why + ' Untick “Also send my first version” to continue with the earlier findings only.');
         p.payload.previous = pr.prev;
       }
-      const fb = await S.ai.review(c, m, a, p.payload, round);
+      const learner = d.sendData && S.myData && S.myData.eligible(a, 'assignment') ? await S.myData.forReview(a, 'assignment', d.sendVer) : null; // only if they ticked it for THIS review
+      const fb = await S.ai.review(c, m, a, p.payload, round, learner ? { learner } : undefined);
+      if (learner) fb.data = learner.ref; // remember exactly which dataset version this review was given
+      d.sendData = false; d.sendVer = ''; // never carried over to a later review
       // keep the rubric the AI wrote at the first review so a second review grades the same criteria
       if (round === 1 && !(a.rubric && a.rubric.length)) a.rubric = fb.criteria.map((k) => ({ name: k.name, max: k.max }));
       const sub = { text: '', fileId, fileName: '', fileType: '', fileSize: 0, ...p.stored, at: at.toISOString(), late: round === 1 ? S.isLate(a, at.getTime()) : !!(a.work && a.work.first && a.work.first.late), feedback: fb };
@@ -116,9 +119,12 @@
       }
       const at = new Date();
       if (p.blob) { fileId = S.uid(); await S.files.put(fileId, p.blob); }
-      const fb = await S.ai.office(c, m, a, p.payload, round, material, mode);
+      const learner = d.sendData && S.myData && S.myData.eligible(a, 'office') ? await S.myData.forReview(a, 'office', d.sendVer) : null;
+      const fb = await S.ai.office(c, m, a, p.payload, round, material, mode, learner ? { learner } : undefined);
+      if (learner) fb.data = learner.ref;
+      d.sendData = false; d.sendVer = '';
       const sub = { text: '', fileId, fileName: '', fileType: '', fileSize: 0, ...p.stored, at: at.toISOString(), late: false, feedback: fb };
-      a.office = { material, mode, rounds: ((a.office && a.office.rounds) || []).concat([sub]) };
+      a.office = { ...(a.office || {}), material, mode, rounds: ((a.office && a.office.rounds) || []).concat([sub]) };
       dropDraft(key); S.save(); toast(round === 1 ? 'Office-hours feedback is ready. It isn’t graded.' : 'Second round of feedback is ready. Nothing here is graded.');
     } catch (e) {
       if (fileId) S.files.del(fileId);
@@ -169,6 +175,7 @@
         h('small', {}, d.file ? 'Selected: ' + d.file.name + (o.fileOnly ? '.' : '. It will be used instead of the text above.') + (S.files.classify(d.file) === 'xlsx' ? ' Only cell values are read. Charts, images and formatting in Excel are not, so use a PDF or image if the AI needs to see them.' : '') : 'PDFs up to 2 MB. Excel files up to 5 MB (cell values only). Photos are shrunk automatically.')),
       o.prior ? h('label', { class: 'consent' }, h('input', { type: 'checkbox', checked: !!d.prior, disabled: d.busy, onchange: (e) => { d.prior = e.target.checked; S.render(false); } }),
         h('span', {}, 'Also send my first version (saved on this device) so the AI can compare it with this revision. If unticked, the AI sees only this revision and the earlier findings, and will say it could not compare the two.')) : null,
+      o.dataScope && S.myData ? S.myData.authBox(a, o.dataScope, d) : null,
       h('label', { class: 'consent' }, agree, h('span', {}, sending + ' will be sent to the AI service to review. It is used for this review only and is not kept by the service. Send it?')),
       h('div', { class: 'btn-row' }, go,
         o.attach && d.file ? h('button', { class: 'btn ghost', type: 'button', disabled: d.busy, onclick: () => attachOnly(c, m, a) }, 'Attach without AI feedback') : null,
@@ -298,10 +305,12 @@
       o && o.mode === 'practice' ? h('p', { class: 'small' }, h('b', {}, 'Practising: '), 'this assignment, with its own instructions, materials and criteria.') : null,
       o && o.mode !== 'practice' && o.material ? h('p', { class: 'small' }, h('b', {}, 'Working from: '), o.material) : null,
       o ? o.rounds.map((r, i) => h('div', { class: 'oh-round' }, h('h4', { class: 'minor' }, 'Round ' + (i + 1) + ' · ' + when(r.at)), r.feedback ? [studioButton(c, m, a, r, { office: true, meta: 'Office hours, round ' + (i + 1) }), feedbackView(r.feedback, false, true)] : null, fileLine(r))) : null,
-      n < 2 ? (ready ? inputForm(c, m, a, { key, label: n ? 'Get second-round feedback' : 'Get office-hours feedback', material: n === 0, modePick: n === 0, prior: n === 1, textLabel: n ? 'Your revised work' : 'Your work', onSend: () => officeSubmit(c, m, a, n + 1) }) : h('p', { class: 'small' }, 'Office hours need the AI service. Add its address and access code under Data & Backup → AI.')) : h('p', { class: 'small muted' }, 'You’ve used both rounds. Start over to try different material.'),
+      S.myData && ((a.kind === 'demonstrate' && !a.realEvidence) || (n ? o.mode : d.mode) === 'own' || (o && o.data)) ? S.myData.panel(c, m, a, 'office') : null,
+      n < 2 ? (ready ? inputForm(c, m, a, { key, dataScope: 'office', label: n ? 'Get second-round feedback' : 'Get office-hours feedback', material: n === 0, modePick: n === 0, prior: n === 1, textLabel: n ? 'Your revised work' : 'Your work', onSend: () => officeSubmit(c, m, a, n + 1) }) : h('p', { class: 'small' }, 'Office hours need the AI service. Add its address and access code under Data & Backup → AI.')) : h('p', { class: 'small muted' }, 'You’ve used both rounds. Start over to try different material.'),
       n ? h('div', { class: 'btn-row' }, h('button', { class: 'linkbtn danger', type: 'button', onclick: () => {
         if (!confirm('Clear this office-hours session, including its feedback? This cannot be undone.')) return;
         (a.office.rounds || []).forEach((r) => { if (r.fileId) S.files.del(r.fileId); });
+        if (S.myData) S.myData.purgeData(a.office.data);
         a.office = null; dropDraft(key); commit();
       } }, 'Start over')) : null,
     ];
@@ -319,7 +328,7 @@
     const w = a.work, fileOnly = a.format === 'file';
     const ready = S.ai && S.ai.ready && S.ai.ready();
     const canReview = a.points > 0;
-    const form = (round) => inputForm(c, m, a, { key: a.id, label: round === 1 ? 'Get AI feedback' : 'Submit for final review', fileOnly, attach: round === 1, onSend: () => submit(c, m, a, round), prior: round === 2 });
+    const form = (round) => inputForm(c, m, a, { key: a.id, dataScope: a.kind === 'demonstrate' && !a.realEvidence ? 'assignment' : '', label: round === 1 ? 'Get AI feedback' : 'Submit for final review', fileOnly, attach: round === 1, onSend: () => submit(c, m, a, round), prior: round === 2 });
     let submitPart, feedbackPart, state;
     if (!w) {
       state = 'none';

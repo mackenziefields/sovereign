@@ -201,6 +201,6 @@
   }
 
   // "Exhibit A, row A-7, Landlord": where in the evidence packet a finding points (the Worker has already checked that it exists).
-  const refLine = (f) => (f && f.ref && f.ref.exhibit ? h('p', { class: 'small rv-ref' }, h('b', {}, 'Related exhibit location: '), 'Exhibit ' + f.ref.exhibit + (f.ref.row ? ', ' + (/-b\d/.test(f.ref.row) ? 'paragraph ' : 'row ') + f.ref.row : '') + (f.ref.column ? ', ' + f.ref.column : '')) : null);
+  const refLine = (f) => (f && f.ref && f.ref.exhibit ? h('p', { class: 'small rv-ref' }, h('b', {}, 'Related exhibit location: '), (/^U\d/.test(f.ref.exhibit) ? 'Your data, exhibit ' : 'Exhibit ') + f.ref.exhibit + (f.ref.row ? ', ' + (/-b\d/.test(f.ref.row) ? 'paragraph ' : 'row ') + f.ref.row : '') + (f.ref.column ? ', ' + f.ref.column : '')) : null);
   S.exhibitsView = { refLine, packet, exhibitEl, download, panel };
 })(window.Sovereign = window.Sovereign || {});

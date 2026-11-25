@@ -126,3 +126,39 @@
 .ex-table.sr-only { inline-size: 1px; max-inline-size: 1px; block-size: 1px; overflow: hidden; }
 .ex-chartdata:not(.sr-only) { display: block; overflow-x: auto; max-inline-size: 100%; }
 .ex-chart { position: relative; overflow-x: clip; }
+
+/* ---- Phase 2D-1: "Add your own data" dialog ---- */
+dialog.di { width: min(54rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); padding: 0; border: 1px solid var(--line, #d7dbe3); border-radius: 12px; background: var(--paper, #fff); color: inherit; }
+dialog.di::backdrop { background: rgba(16, 27, 50, .55); }
+dialog.di[open] { display: flex; flex-direction: column; }
+.di-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 1.4rem; border-bottom: 1px solid var(--line, #d7dbe3); }
+.di-head h2 { margin: 0; font-size: 1.3rem; }
+.di-body { padding: 1.1rem 1.4rem 1.4rem; overflow: auto; display: grid; gap: .9rem; align-content: start; }
+.di-sheets { list-style: none; margin: 0; padding: 0; display: grid; gap: .8rem; }
+.di-sheet { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; font-weight: 600; }
+.di-sname { font-size: 1rem; }
+.di-prev { overflow: auto; max-height: 11rem; border: 1px solid var(--line, #d7dbe3); border-radius: 6px; margin-top: .4rem; }
+.di-prev table, .di-cols { border-collapse: collapse; width: 100%; font-size: .85rem; }
+.di-prev td, .di-cols td, .di-cols th { padding: .3rem .55rem; border-bottom: 1px solid var(--line, #e3e6ec); text-align: left; vertical-align: top; max-width: 14rem; overflow-wrap: anywhere; }
+.di-sec { border-top: 1px solid var(--line, #d7dbe3); padding-top: .8rem; display: grid; gap: .6rem; }
+.di-sec h3 { margin: 0; font-size: 1.1rem; }
+.di-actions { display: flex; gap: .9rem; align-items: center; flex-wrap: wrap; }
+@media (max-width: 600px) { dialog.di { width: 100vw; max-height: 100vh; border-radius: 0; } .di-head, .di-body { padding-inline: 1rem; } }
+
+/* ---- Phase 2D-2: "Your data" section (separate from the supplied exhibits) ---- */
+.md { margin-top: 2rem; padding: 1.1rem 1.2rem 1.3rem; border: 1px dashed var(--line, #b9c0cf); border-radius: 10px; display: grid; gap: .8rem; }
+.md-head { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+.md-h { margin: 0; font-size: 1.25rem; }
+.md-ex { min-width: 0; }
+.md-vers ul { margin-top: .6rem; display: grid; gap: .9rem; }
+
+/* ---- Phase 2D-3: authorization for sending your own data to a review ---- */
+.md-auth { margin: .2rem 0 .6rem; padding: .8rem 1rem; border: 1px solid var(--line, #c9cfdb); border-left: 4px solid var(--accent, #2742d9); border-radius: 8px; display: grid; gap: .5rem; }
+.md-auth-h { margin: 0; font-weight: 700; }
+.md-auth-detail { display: grid; gap: .5rem; }
+.md-prev { max-height: 12rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: .4rem 0 0; }
+
+/* ---- Phase 2D-4: the cited row of your own data, shown in Review Studio ---- */
+.md-refrow { margin: .3rem 0 .5rem; padding: .5rem .7rem; background: var(--soft, #f3f5fa); border-radius: 6px; overflow-wrap: anywhere; }
+.md-cell { white-space: normal; }
+.md-hit { background: rgba(255, 214, 90, .45); border-radius: 3px; padding: 0 .2rem; }

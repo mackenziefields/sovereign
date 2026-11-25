@@ -2,6 +2,30 @@
 
 Reconstructed from the repository history (`git log`). Dates are all 2026-11-24 for the build session unless noted. "Tested" is described in `TESTING.md`.
 
+## Unreleased · Phase 2D-4: Review Studio shows the row a review cited (not committed)
+- When a review cites a row of your own data (`U1-2`), Review Studio shows that row's cells under the citation, with the cited column highlighted, **taken from the dataset version the review was given**, so replacing your data later does not change what an old review shows.
+- If that version was deleted, or the review did not record a version, it says so plainly instead of showing a different row. A row that was not in the version shows "not available". Text is shown as text (a cell starting with `=` is never run).
+
+## Unreleased · Phase 2D-3: sending your own data to a review, only when you say so (Worker v17, not committed)
+- **Authorization box** above the usual "send it?" consent, on the Demonstrate submission form (first and final review) and in Office Hours. **Off by default and asked again for every review**; never remembered. When ticked it lists exactly what will be sent: the dataset name and date, each sheet with rows and columns, whether it is **sampled** ("the first N of M rows"), about how many characters, and a preview of the first rows. Unticked, nothing about your data is sent and the review does not refer to it.
+- **Worker v17** accepts an optional `context.learnerData` (up to 10,000 characters; the app sends up to 8,000). The prompt labels it as the learner's own, unverifiable data and as data, never instructions. Findings may cite its rows (`ref` exhibit `U1`..`U5`); the Worker keeps a ref only if that exhibit, row and column were really sent, otherwise it drops it and says so. The app hides the option and explains if the connected Worker is older than v17, and refuses to send in code as well.
+- **Recorded on the review:** `feedback.data` keeps which dataset version, which sheets, how many rows and characters were sent. Review Studio's "What the reviewer could see" says "Your own dataset was included", and a row citation reads "Your data, exhibit U1, row U1-2".
+- Guards: if the dataset changes after you tick the box, sending is refused until you read the description again. `refLine`, the feedback normalizer and `S.exhibits.asText` were extended for `U` ids.
+- **You need to redeploy the Worker (v17) before real use.** Not deployed, not real-tested.
+
+## Unreleased · Phase 2D-2: "Your data" storage, versions and screens (not committed)
+- New `js/mydata.js` (`S.myData`). A **Your data (optional)** section appears below the supplied exhibits on **Demonstrate** assignments' Materials tab (not on Apply, Learn or real-evidence assignments), and in **Office Hours** for Demonstrate assignments or whenever "work from my own material" is chosen. It is labelled "Added by you" and never replaces the supplied materials.
+- **Versions:** every add or replacement is a new immutable version. Replacing never changes an earlier one. "Remove my data" stops using the data but keeps any version a review used (read-only, under "Versions kept"); other versions are deleted from the device. A used version can still be deleted after a clear warning.
+- **Storage:** rows and the original file are in IndexedDB (not localStorage, not backups); the assignment keeps only small descriptive records (`myData`, or `office.data` inside the practice session). Office Hours data is stored in the session, never on the graded assignment, and is deleted with "Start over". "Use a copy of my assignment data" copies it into the session; the two never affect each other.
+- Saved reviews can now carry `feedback.data { datasetId, versionId, ... }`, which the store keeps across reloads. Nothing writes it yet; that is step 2D-3.
+- Not sent anywhere: nothing about your data reaches the AI service in this step, and the panel says so.
+
+## Unreleased · Phase 2D-1: import engine for your own data (not wired into assignments yet, not committed)
+- New `js/dataset-import.js` (`S.dataImport`): reads CSV, TSV and Excel (.xlsx) on this device into "Your data" table exhibits (`origin: 'user'`, ids `U1`, `U2`, row ids `U1-1`). Includes the sheet picker (nothing pre-selected in a multi-sheet workbook), header-row and column-type confirmation, and a plain-language "left out" report. It is not yet reachable from any assignment screen; that is step 2D-2.
+- Safety: formulas are never run (the saved value is imported as text), macros, external links, charts, images and pivot tables are ignored and listed, password-protected and old .xls files are refused, and a crafted "zip bomb" is stopped before it can use up memory. Over-limit content is reported and left out, never cut short.
+- Limits (configurable via `S.config.importLimits`): 5 MB, 5 sheets, 2,000 rows, 30 columns, 300 characters per cell.
+- `js/files.js`: the Excel decompressor now reads in chunks and stops at a hard ceiling; it also exposes `unzip` and `colIndex` for the importer.
+
 ## Unreleased · Build 29
 - **Older reviews in Review Studio** now show "Next steps (optional)" right after "What to change"; the original saved review stays below.
 

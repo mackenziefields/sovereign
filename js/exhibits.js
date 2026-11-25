@@ -225,9 +225,9 @@
   // Everything the learner can see, as addressable text: [A-3] rows, [A-b2] document blocks. When the whole packet does not fit in `budget`
   // characters, each exhibit gets a fair share (small exhibits stay whole, large ones are cut to their first rows) and says "N of M shown",
   // so the reviewer is never led to think it saw more than it did. Returns { text, cut, shown:{id:[shown,total]} }.
-  function asText(a, budget) {
+  function asText(a, budget, opts) {
     const ex = (a && a.exhibits) || []; if (!ex.length) return { text: '', cut: 0, shown: {} };
-    const intro = 'EXHIBITS SUPPLIED WITH THIS ASSIGNMENT (fictional, exactly as the learner sees them; nothing has been cleaned; "(blank)" means an empty cell; ids in brackets are the app’s own row and paragraph references):';
+    const intro = (opts && opts.intro) || 'EXHIBITS SUPPLIED WITH THIS ASSIGNMENT (fictional, exactly as the learner sees them; nothing has been cleaned; "(blank)" means an empty cell; ids in brackets are the app’s own row and paragraph references):';
     const parts = ex.map((e) => {
       const head = ['\nEXHIBIT ' + e.id + ' (' + e.type + '): ' + e.title + (e.source ? ' — ' + e.source : '')], rows = [], tail = [];
       let noun = 'items';
