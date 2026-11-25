@@ -109,7 +109,7 @@
   ai.money = (n) => '$' + (n < 0.01 && n > 0 ? n.toFixed(4) : n.toFixed(2));
 
   function readingFrom(r) {
-    return { id: S.uid(), title: r.title, url: r.url, note: '', done: false, source: 'ai', kind: r.kind, creator: r.creator, access: r.access, sourceType: r.sourceType, derivedFrom: r.derivedFrom, derivedUrl: r.derivedUrl, relevance: r.relevance, verification: r.verification };
+    return { id: S.uid(), title: r.title, url: r.url, note: '', done: false, source: 'ai', kind: r.kind, creator: r.creator, access: r.access, sourceType: r.sourceType, derivedFrom: r.derivedFrom, derivedUrl: r.derivedUrl, relevance: r.relevance, verification: r.verification, contentCheck: r.contentCheck };
   }
   const placeholder = (mod, note) => ({ id: S.uid(), title: 'Source needed: ' + mod.title, url: '', note: note || 'No verifiable source was found. Add your own.', done: false, source: 'placeholder' });
 
@@ -203,6 +203,21 @@
     S.save();
     return { stage: r.stage || (r.missing ? 'no-readings' : 'readings-found'), kind: r.kind || 'page', reason: r.reason || '', errorCode: r.errorCode || '', diag: r.diag || null, at: now(),
       items: (r.resources || []).map((x) => ({ ...x, dup: have.has(readingKey(x)) })) };
+  };
+
+  // Opens the page behind each reading's link and reports whether it holds that reading. items: [{ title, creator, url }] (up to 5; only these are sent).
+  // Returns one result per item that has a link: { status: matched | about | mismatch | unreadable, detail, checkedAt }, or null for items without a link.
+  ai.checkContent = async function (course, mod, items, opts) {
+    await ai.requireVersion(13, 'Checking content');
+    const sendable = items.map((x, i) => ({ x, i })).filter(({ x }) => x.url).slice(0, 5);
+    if (!sendable.length) throw new AIError('bad_input', 'None of these readings has a link to check.');
+    const r = await ai.call('/check-content', { readings: sendable.map(({ x }) => ({ title: x.title, creator: x.creator || '', url: x.url })) }, opts || {});
+    if (!S.state.courses.includes(course) || !course.modules.includes(mod)) throw new AIError('gone', 'That course changed while the content was being checked.');
+    if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
+    const out = items.map(() => null);
+    sendable.forEach(({ i }, k) => { const c = (r.results || [])[k]; if (c) out[i] = { status: c.status, detail: c.detail || '', checkedAt: c.checkedAt || now() }; });
+    S.save();
+    return out;
   };
 
   // Adds ONLY the readings the person ticked. Duplicates are skipped. Returns the readings added.

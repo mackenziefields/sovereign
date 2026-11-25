@@ -235,3 +235,31 @@ Target: `https://donadey.sdsu.edu/PDFs/603FemGrad17.pdf` (WMNST 603 Advanced Fem
 
 Seed data in the preview was restored from backup afterward.
 **Not done:** the real `not-in-text` rule; applying a real revision; trimming revision length drift.
+
+## Check content (build 22, Worker v13; all **Mock** unless marked)
+Real Worker code run in the browser against a simulated Anthropic and simulated pages (`worker/mock/harness.js`). Not a real-site test.
+
+| # | Test | Result |
+|---|---|---|
+| D1 | Five pages: full text, repository abstract, review, unrelated page, and a page the mock AI wrongly calls "full text" | matched, about, about, mismatch, **unreadable** (code and AI disagreed; nothing claimed) |
+| D2 | PDF, 403 login page, JavaScript-only page, a reading with no link, a 404 | unreadable with the right reason each; the no-link item is skipped; no AI call (cost $0) when no page was readable |
+| D3 | Module reading list button: labels appear on cards with the date and a one-line description; results survive a save (6 readings stored with a check) | Pass |
+| D4 | Syllabus review button: the mismatching reading is unticked with an explanation; ticking it again and adding it carries the check onto the new reading | Pass |
+| D5 | Older Worker (health says v12): clear "needs version 13" message, nothing sent | Pass |
+| D6 | Cost at the mock's token counts: about $0.005 for five readings (not real) | Not a real estimate |
+
+**Not tested:** any real website or the real model's judgments; the real cost; phone layout of the new buttons; screen reader. Real test plan: test Worker v13, five readings from the sample syllabus plus one wrong and one dead link, cap **$0.45** (spent so far $0.535 of $1.00).
+Preview note: data and AI settings backed up and restored after the test.
+
+### Check content: REAL API test (test Worker v13, 2026-11-25; Real API)
+One call, five readings with real links. Cost **$0.0063** (4,988 tokens in, 264 out), far below my $0.03 to $0.04 per reading estimate. **Running total $0.541 of the $1.00 cap; this test used $0.006 of its $0.45.** I then opened each page myself.
+
+| # | Reading and link | Result | My check |
+|---|---|---|---|
+| E1 | de Beauvoir, "Introduction" (marxists.org) | **matched**: contains the introduction at length | Correct: the page is the Introduction's full text |
+| E2 | Crenshaw 1989 (University of Chicago repository) | **about**: a repository record with citation and download link, not the article | Correct: a catalog record with an abstract and download link |
+| E3 | Mohanty (JSTOR) | **unreadable**: almost no readable text | Correct: the page is a bot-check ("Client Challenge") wall |
+| E4 | Butler, deliberately linked to nasa.gov | **mismatch**: a NASA navigation and news page | Correct |
+| E5 | Lorde, link that is dead (404) | **unreadable**: could not be opened (404) | Correct |
+
+5 of 5 as I judge them. The code and model agreed everywhere, so the "code and AI disagree" path was only tested in the mock. **Not tested for real:** a PDF link, a long full-text page where the title appears late, phone layout, the two buttons in the app against the real Worker. Preview data restored afterward.

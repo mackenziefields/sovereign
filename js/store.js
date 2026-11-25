@@ -2,7 +2,7 @@
 (function (S) {
   'use strict';
 
-  S.BUILD = 21; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
+  S.BUILD = 22; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
   const KEY = 'sovereign.v3';
   const OLD_KEYS = ['sovereign.v2', 'sovereign.v1']; // earlier versions; migrated, never deleted automatically
   S.MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -89,6 +89,8 @@
         finalUrl: url(v.finalUrl), detail: str(v.detail, 300),
       };
       if (r.source === 'placeholder') out.url = '';
+      const cc = obj(r.contentCheck);
+      if (['matched', 'about', 'mismatch', 'unreadable'].includes(cc.status)) out.contentCheck = { status: cc.status, detail: str(cc.detail, 300), checkedAt: str(cc.checkedAt, 40) };
     }
     return out;
   }

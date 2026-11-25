@@ -27,6 +27,7 @@ Vision: an internationally respected independent university with the art directi
 | 1 | **Learning Studio**: Module and Assignment redesign | ✅ released: build 19, `d858ce0`, Worker v9 | 0 approved |
 | 2 | **Academic Experience**: Syllabus, Grades, Portfolio redesign | 🟡 built (build 20), awaiting your review. Not committed | 1 released |
 | 2b | **Visual refresh and Home** (Track A): palette tokens, navy shell, Up Next Home, Reading Room columns | 🟡 built (build 21), awaiting your review. Not committed | 2 built |
+| 2d | **Check content** (does a reading's page hold the reading?) | 🟡 built (build 22, Worker v13), mock-tested and one real test (5 of 5 correct, $0.006) | none |
 | 2c | **Syllabus reliability** (Track B): audit, stages, paste, review screen, assignment revisions | 🟡 built (build 21, Worker v11), mock-tested only; a real-retrieval test needs your cost approval | none |
 | 3 | **Discover**: search, library, collections, Save to Course | ⬜ | 1 (resource cards), and the resource model below |
 | 4 | **Study Notebook and Reading Assistant** | ⬜ | 3 (library and resource model), a Worker text-retrieval design |

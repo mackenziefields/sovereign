@@ -57,6 +57,15 @@
     'syllabi.mock-college.edu': { status: 200, title: 'WGS 101 Syllabus 2005 | Mock College' },
     'press.mock-press.org': { status: 200, title: 'Mock Feminist Theory Reader | Mock Press' },
     'sneaky.mock-site.org': { ip: '10.0.0.5', status: 200, title: 'internal page' },
+    // Build 22 "Check content" pages (mock). The marker words tell the canned AI what kind of page it is; the real Worker still runs its own word check.
+    'full.mock-journal.org': { status: 200, title: 'Mock Feminist Theory Reader', body: 'FULLTEXT-MARK Mock Feminist Theory Reader by A. Author. ' + 'In this chapter the author argues that theory must start from lived experience. '.repeat(12) },
+    'listing.mock-repo.edu': { status: 200, title: 'Mock Feminist Theory Reader | Repository', body: 'ABSTRACT-MARK Mock Feminist Theory Reader. A. Author. Abstract and download page. ' + 'Record created in the repository catalog with subject headings and rights information. '.repeat(8) },
+    'review.mock-blog.com': { status: 200, title: 'A review of the Reader', body: 'REVIEW-MARK A review of Mock Feminist Theory Reader by A. Author. ' + 'The reviewer found the second half stronger than the first. '.repeat(10) },
+    'wrong.mock-site.com': { status: 200, title: 'Cooking pasta', body: 'OTHER-MARK Boil the water, add salt, cook the pasta for ten minutes. ' + 'Serve with olive oil and fresh basil from the garden. '.repeat(12) },
+    'trick.mock-site.com': { status: 200, title: 'Cooking pasta', body: 'FULLTEXT-MARK Boil the water, add salt, cook the pasta for ten minutes. ' + 'Serve with olive oil and fresh basil from the garden. '.repeat(12) },
+    'pdf.mock-site.org': { status: 200, title: '', ctype: 'application/pdf', body: '%PDF-1.4 binary' },
+    'login.mock-site.org': { status: 403, title: '' },
+    'jsonly.mock-site.org': { status: 200, title: 'App', body: 'Loading...' },
   };
 
   function install(o) {
@@ -137,6 +146,11 @@
           const txt = b.messages[0].content[0].text, r2 = /review 2 of 2/.test(txt), sc = r2 ? [9, 9, 9] : [6, 7, 8];
           return json({ content: [{ type: 'text', text: JSON.stringify({ summary: r2 ? 'Much stronger. The argument is now supported.' : 'A solid start with a thin argument.', strengths: ['Clear thesis in paragraph 1'], improvements: r2 ? [] : ['Add one source to support the claim in paragraph 2', 'Cut the repeated point in paragraph 3'], nextSteps: ['Proofread once more'], criteria: ['Argument', 'Evidence', 'Clarity'].map((n, i) => ({ name: n, max: 10, score: sc[i], comment: 'Comment on ' + n })), score: 999 }) }], stop_reason: 'end_turn', usage: { input_tokens: 2500, output_tokens: 900 } });
         }
+        if (/For each numbered reading below/.test(b.messages[0].content)) { // /check-content (canned): the kind comes from marker words in the mock pages
+          const blocks = b.messages[0].content.split('<reading n="').slice(1);
+          const checks = blocks.map((t) => ({ n: Number(t.split('"')[0]), kind: /FULLTEXT-MARK/.test(t) ? 'full-text' : /ABSTRACT-MARK/.test(t) ? 'listing' : /REVIEW-MARK/.test(t) ? 'about' : 'other', note: /FULLTEXT-MARK/.test(t) ? 'The page holds the text of the work.' : /ABSTRACT-MARK/.test(t) ? 'A repository record with an abstract.' : /REVIEW-MARK/.test(t) ? 'A review of the work.' : 'A page about something else.' }));
+          return json({ content: [{ type: 'text', text: JSON.stringify({ checks }) }], stop_reason: 'end_turn', usage: { input_tokens: 700 * blocks.length, output_tokens: 60 * blocks.length } });
+        }
         if (/Revise each assignment above/.test(b.messages[0].content)) { // /revise (canned): one revision per listed assignment
           const n = (b.messages[0].content.match(/^\d+\. .*\[(learn|apply|demonstrate)/gm) || []).length;
           return json({ content: [{ type: 'text', text: JSON.stringify({ assignments: Array.from({ length: n }, () => ({ description: '[MOCK REVISED] This task now draws on the Mock Feminist Theory Reader.', materials: 'Northwind Ltd, adjusted for the new reading.', changeNote: 'Added the new reading to step one.', steps: [{ title: 'Read the new reading', questions: ['What is its main claim?'] }, { title: 'Apply it', questions: ['How does it change the case?'] }] })) }) }], stop_reason: 'end_turn', usage: { input_tokens: 1800, output_tokens: 1500 } });
@@ -167,7 +181,8 @@
         const p = PAGES[x.hostname]; if (!p) return new Response('', { status: 404 });
         if (p.hang) return new Promise((_, rej) => { (init && init.signal) && init.signal.addEventListener('abort', () => rej(new Error('aborted'))); });
         if (p.redirect) return new Response(null, { status: 302, headers: { location: p.redirect } });
-        return new Response('<html><head><title>' + (p.title || '') + '</title></head><body>' + 'x'.repeat(500) + '</body></html>', { status: p.status, headers: { 'content-type': 'text/html' } });
+        if (p.ctype) return new Response(p.body || '', { status: p.status, headers: { 'content-type': p.ctype } });
+        return new Response('<html><head><title>' + (p.title || '') + '</title></head><body>' + (p.body || 'x'.repeat(500)) + '</body></html>', { status: p.status, headers: { 'content-type': 'text/html' } });
       };
 
       window.fetch = async function (input, init) {

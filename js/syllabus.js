@@ -38,7 +38,31 @@
     } catch (e) { s.busy = false; s.error = e.message; redraw(); return false; }
   }
 
+  /* ----- "Check content": does the page behind a link hold the reading? (AI service version 13) ----- */
+  const CHECK_MAX = 5;
+  const checking = new Set(); // module ids and syllabus ids with a check running
+  const COST_NOTE = 'Opens each link and has the AI read the start of the page. About a few cents per reading.';
+  const countStatus = (rs) => rs.reduce((t, x) => { if (x) t[x.status] = (t[x.status] || 0) + 1; return t; }, {});
+  const summary = (t) => [t.matched && t.matched + ' matched', t.about && t.about + ' about the work only', t.mismatch && t.mismatch + ' didn’t match', t.unreadable && t.unreadable + ' couldn’t be checked'].filter(Boolean).join(', ') || 'nothing could be checked';
+
   S.syl = {
+    // On the module's reading list: checks the readings that have a link (unchecked ones first, five at a time).
+    checkButton(c, m) {
+      const cand = (m.readings || []).filter((r) => r.source === 'ai' && r.url);
+      if (!cand.length) return null;
+      const pick = cand.filter((r) => !r.contentCheck).concat(cand.filter((r) => r.contentCheck)).slice(0, CHECK_MAX), key = 'check:' + m.id, busy = checking.has(key);
+      return h('button', { class: 'btn ghost', type: 'button', disabled: busy, title: COST_NOTE, onclick: async () => {
+        if (!S.ai.ready()) return toast('Add the AI service address and access code first (Data & Backup → AI).');
+        checking.add(key); redraw();
+        try {
+          const res = await S.ai.checkContent(c, m, pick.map((r) => ({ title: r.title, creator: r.creator, url: r.url })), {});
+          pick.forEach((r, i) => { if (res[i]) r.contentCheck = res[i]; });
+          S.save(); toast('Content check: ' + summary(countStatus(res)) + '.');
+        } catch (e) { toast(e.message); }
+        checking.delete(key); redraw();
+      } }, busy ? 'Checking content…' : 'Check content' + (pick.length < cand.length ? ' (' + pick.length + ' of ' + cand.length + ')' : ' (' + pick.length + ')'));
+    },
+
     // The button next to a syllabus that has a link.
     button(c, m, y) {
       const s = get(y.id);
@@ -94,16 +118,31 @@
             h('span', { class: 'check' }, h('input', { type: 'checkbox', disabled: x.dup || !!s.added, checked: s.pick.has(i), onchange: (e) => { e.target.checked ? s.pick.add(i) : s.pick.delete(i); redraw(); } }), h('span', { class: 'box', 'aria-hidden': 'true' })),
             h('span', {}, h('b', {}, x.title), x.creator ? ' · ' + x.creator : '')),
           h('div', { class: 'syl-meta' },
-            h('span', { class: 'badge ' + r[1], title: r[2] }, r[0]), x.dup ? h('span', { class: 'badge soft' }, 'Already in this module') : null,
+            h('span', { class: 'badge ' + r[1], title: r[2] }, r[0]),
+            x.contentCheck && S.CONTENT_TEXT[x.contentCheck.status] ? h('span', { class: 'badge ' + S.CONTENT_TEXT[x.contentCheck.status][1], title: S.CONTENT_TEXT[x.contentCheck.status][2] + ' ' + (x.contentCheck.detail || '') }, S.CONTENT_TEXT[x.contentCheck.status][0]) : null,
+            x.dup ? h('span', { class: 'badge soft' }, 'Already in this module') : null,
             x.url ? h('a', { class: 'small', href: x.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open link') : null),
-          h('p', { class: 'small muted' }, r[2] + (x.relevance ? ' ' + x.relevance : '')));
+          h('p', { class: 'small muted' }, r[2] + (x.relevance ? ' ' + x.relevance : '')),
+          x.contentCheck && x.contentCheck.detail ? h('p', { class: 'small' }, h('b', {}, 'Content check: '), x.contentCheck.detail + (x.contentCheck.status === 'mismatch' ? ' It was unticked; tick it again if you disagree.' : '')) : null);
       }));
-      const n = s.pick.size;
+      const n = s.pick.size, linked = rv.items.filter((x) => x.url && !x.dup), ckey = 'check:' + y.id;
+      const checkRow = !s.added && linked.length ? h('div', { class: 'btn-row' },
+        h('button', { class: 'btn ghost', type: 'button', disabled: checking.has(ckey), title: COST_NOTE, onclick: async () => {
+          if (!S.ai.ready()) return toast('Add the AI service address and access code first (Data & Backup → AI).');
+          const list = linked.slice(0, CHECK_MAX); checking.add(ckey); redraw();
+          try {
+            const res = await S.ai.checkContent(c, m, list, {});
+            list.forEach((x, i) => { if (!res[i]) return; x.contentCheck = res[i]; if (res[i].status === 'mismatch') s.pick.delete(rv.items.indexOf(x)); });
+            toast('Content check: ' + summary(countStatus(res)) + '.');
+          } catch (e) { toast(e.message); }
+          checking.delete(ckey); redraw();
+        } }, checking.has(ckey) ? 'Checking content…' : 'Check content (' + Math.min(linked.length, CHECK_MAX) + ')'),
+        h('span', { class: 'small muted' }, 'Reads the page behind each link. ' + COST_NOTE)) : null;
       const adopt = s.added ? h('p', { class: 'banner' }, 'Added ' + plural(s.added.length, 'reading') + ' to this module.')
         : h('div', { class: 'btn-row' },
             h('button', { class: 'btn', type: 'button', disabled: !n, onclick: () => { s.added = S.ai.adoptReadings(c, m, y, rv.items.filter((_, i) => s.pick.has(i))); toast('Added ' + plural(s.added.length, 'reading') + '.'); commit(); } }, n ? 'Add ' + plural(n, 'selected reading') : 'Tick readings to add'),
             h('span', { class: 'small muted' }, 'Only ticked readings are added. Your own readings are never changed.'));
-      return h('div', { class: 'syl-review' }, head, rv.reason ? h('p', { class: 'small' }, rv.reason) : null, list, adopt, s.added && s.added.length ? revisePanel(c, m, y, s) : null);
+      return h('div', { class: 'syl-review' }, head, rv.reason ? h('p', { class: 'small' }, rv.reason) : null, list, checkRow, adopt, s.added && s.added.length ? revisePanel(c, m, y, s) : null);
     },
   };
 

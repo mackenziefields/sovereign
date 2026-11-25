@@ -2,7 +2,14 @@
 
 Reconstructed from the repository history (`git log`). Dates are all 2026-11-24 for the build session unless noted. "Tested" is described in `TESTING.md`.
 
-## Unreleased · Visual refresh and course Home (build 21, not committed)
+## Unreleased · Check content (build 22, Worker v13, not committed)
+- **"Check content"** shows whether the page behind a reading's link actually holds that reading. Two buttons: on the review list of a syllabus read (before adopting) and next to "Find materials with AI" on a module's readings. Up to 5 readings per press, unchecked first.
+- **Labels:** Content matched, About the work not the work (abstract, listing or review), Doesn't match (the reading is unticked in the review list; tick again to override), Couldn't check content (paywall, login, PDF, no readable text, or the code check and the AI disagreed; nothing is claimed). Stored on the reading, shown with the date.
+- **How it works (Worker `/check-content`):** the Worker opens each public page itself (same address safety rules as the link check), strips it to text, and checks in code that the title's words and the author's surname appear. A light model then reads the first ~4,500 characters and says what kind of page it is. "Matched" needs both to agree. PDFs are not read. Only titles, authors and links are sent.
+- **Real test (test Worker v13):** 5 of 5 correct on five real links (full text matched, repository record as about, bot wall as could not check, wrong page as mismatch, dead link as could not check); cost $0.006. See TESTING.md.
+- Needs Worker v13 (the app shows the usual "update needed" message otherwise). The rest of the app still needs only v9. The "Update assignments to use these readings?" step is unchanged.
+
+## Released (build 21) · Visual refresh and course Home (build 21, not committed)
 - **Palette as tokens** (`css/refresh.css`, loaded last, and recoloured values in the other sheets): midnight navy `#101b32`, deep pine `#073e35`, electric indigo `#2643d8`, cool ivory `#f5f6f7`, steel `#6687a1`, oxblood `#681632`. Cream and burgundy are gone from the base; module colours updated (`S.COLORS`).
 - **Course designs recoloured, not redesigned:** Modernist navy + indigo, Editorial oxblood, Intellectual indigo tint, Institution pine. Typography and composition are unchanged.
 - **Shell:** navy sidebar and top bar, wider workspace (up to 90 rem), buttons in indigo with a darker hover, surfaces instead of rule lines, larger body text (17 px) and darker secondary text, white panes for the Workbench with the work pane marked.
