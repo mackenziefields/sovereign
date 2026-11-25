@@ -205,6 +205,7 @@
           legBanner,
           items.length ? h('p', { class: 'rv-hint' }, 'Select a point marked “In your work” to jump to its passage.') : null,
           ...['strength', 'change'].map((ty) => { const g = items.filter((it) => it.f.type === ty); return g.length ? h('section', { class: 'rv-group', 'aria-label': TYPES[ty][2] }, h('h3', { class: 'rv-h' }, TYPES[ty][2], h('span', { class: 'rv-count' }, ' ' + g.length)), h('ul', { class: 'rv-cards' }, g.map(card))) : null; }).filter(Boolean),
+          fb.nextSteps && fb.nextSteps.length ? h('section', { class: 'rv-group', 'aria-label': 'Next steps' }, h('h3', { class: 'rv-h' }, 'Next steps (optional)'), h('ul', { class: 'plain' }, fb.nextSteps.map((x) => h('li', {}, x)))) : null,
           opts.legacy ? h('details', { class: 'inspect rv-orig' }, h('summary', {}, 'The original review, as saved (scores, summary, next steps)'), opts.legacy()) : null);
         refreshUi();
         return;

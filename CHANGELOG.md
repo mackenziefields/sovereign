@@ -2,6 +2,9 @@
 
 Reconstructed from the repository history (`git log`). Dates are all 2026-11-24 for the build session unless noted. "Tested" is described in `TESTING.md`.
 
+## Unreleased · Build 29
+- **Older reviews in Review Studio** now show "Next steps (optional)" right after "What to change"; the original saved review stays below.
+
 ## Unreleased · Review Studio layout and materials presentation (Track A and B, not committed, not yet a build)
 - **Review Studio, wider feedback panel:** the work and feedback columns start at about 55/45 and the divider between them can be dragged, or moved with the arrow keys (Home resets). The size is remembered in this browser (`sovereign.rvSplit`). Below 900px the Your work / Feedback tabs and the bottom stepper are unchanged and the divider is hidden.
 - **Easier to scan:** larger claim text, calmer spacing, a visible "In your work" pill on every point that has a passage, a one-line key for blue (What's working) and yellow (What to change), and a hint that selecting a point jumps to and keeps its passage highlighted.
