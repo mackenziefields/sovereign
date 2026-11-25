@@ -69,7 +69,12 @@
     strength: ['Working well', 'blue', 'What’s working'], error: ['Verified error', 'yellow', 'Verified errors'], missing: ['Missing', 'yellow', 'Missing requirements'],
     partial: ['Partly achieved', 'yellow', 'Partly achieved'], clarity: ['Clarity', 'yellow', 'Clarity and presentation'], optional: ['Optional', 'yellow', 'Optional improvements'], unverified: ['Could not verify', 'none', 'Could not be verified'],
   };
-  const ORDER = ['strength', 'error', 'missing', 'partial', 'clarity', 'optional', 'unverified'];
+  TYPES.change = ['Suggested change', 'yellow', 'What to change'];
+  function legacyPoint(type, text) {
+    const m = String(text).match(/[“"]([^”"]{12,300})[”"]/);
+    return { type, claim: String(text), quote: m ? m[1] : '', criterion: '', where: '', alreadyPresent: '', fix: '', example: '', exampleSource: 'none', located: null, note: '', caution: '', illustrative: false, ref: null, legacy: true };
+  }
+  const ORDER = ['strength', 'change', 'error', 'missing', 'partial', 'clarity', 'optional', 'unverified'];
   const CSTATUS = { met: 'Met', partly: 'Partly met', 'not-met': 'Not met', 'not-assessed': 'Not assessed' };
   const FOLLOW = { addressed: 'Addressed', partly: 'Partly addressed', 'not-addressed': 'Not yet addressed', 'cannot-tell': 'Could not tell' };
   const wide = () => window.matchMedia('(min-width: 900px)').matches;
@@ -91,10 +96,14 @@
   // opts: { c, m, a, sub, feedback, showScore, office, title, meta, scoreLine, rubric, legacy: () => node, opener }
   function open(opts) {
     const fb = opts.feedback, v2 = !!(fb && fb.findings && fb.context);
-    const items = v2 ? fb.findings.map((f, i) => ({ id: 'f' + i, f, i, hue: (TYPES[f.type] || TYPES.optional)[1], state: f.quote ? 'pending' : 'none', count: 0, page: 0, short: false })).sort((x, y) => ORDER.indexOf(x.f.type) - ORDER.indexOf(y.f.type)) : [];
+    // Older reviews have no structured findings. Their saved points are shown as they were written; where a point quotes the work in
+    // quotation marks, this device tries to match that quote locally (no AI, nothing saved). A point with no quote is never given an anchor.
+    const legacyPts = (!v2 && fb) ? [...(fb.strengths || []).map((s) => legacyPoint('strength', s)), ...(fb.improvements || []).map((s) => legacyPoint('change', s))] : [];
+    const items = (v2 ? fb.findings : legacyPts).map((f, i) => ({ id: 'f' + i, f, i, hue: (TYPES[f.type] || TYPES.optional)[1], state: f.quote ? 'pending' : 'none', count: 0, page: 0, short: false })).sort((x, y) => ORDER.indexOf(x.f.type) - ORDER.indexOf(y.f.type));
     items.forEach((it, k) => { it.n = k + 1; }); // numbered in the order they are read: strengths first
     const theme = (opts.c && opts.c.designTheme) || 'modernist';
     const st = { doc: null, items, active: null, pdf: null, pages: null, noText: false, urls: [] };
+    let updateLegacy = () => {};
     const live = h('div', { class: 'sr-only', 'aria-live': 'polite', role: 'status' });
     const say = (msg) => { live.textContent = ''; setTimeout(() => { live.textContent = msg; }, 30); };
     const dlg = h('dialog', { class: 'rv', 'aria-labelledby': 'rv-title', 'data-tab': 'fb', 'data-theme': theme });
@@ -109,7 +118,7 @@
     // --- where each point sits in the work ---
     const locLine = (it) => {
       const k = st.doc && st.doc.kind;
-      if (!it.f.quote) return it.f.type === 'missing' ? 'Nothing to highlight: this is about something that is not in your work.' : '';
+      if (!it.f.quote) return it.f.legacy ? 'This older point does not quote your work, so there is nothing to highlight. No location was guessed.' : it.f.type === 'missing' ? 'Nothing to highlight: this is about something that is not in your work.' : '';
       if (it.state === 'pending') return 'Checking where this is in your work…';
       if (it.state === 'located') return 'Found in your work' + (it.page ? ' (page ' + it.page + ')' : '') + '.' + (it.count > 1 ? ' The same words appear ' + it.count + ' times; the first is shown.' : '');
       if (k === 'image') return 'Passages can’t be located in an image, so nothing is highlighted.';
@@ -119,6 +128,7 @@
       return 'Sovereign could not find this passage in your submission, so it is not highlighted. The feedback is kept.';
     };
     function refreshUi() {
+      updateLegacy();
       items.forEach((it) => { if (!it.ui) return; it.ui.loc.textContent = locLine(it); it.ui.show.hidden = it.state !== 'located'; it.ui.card.classList.toggle('located', it.state === 'located'); it.ui.pin.hidden = it.state !== 'located'; });
     }
 
@@ -189,7 +199,14 @@
       const ins = fb.inspection || {}, c = fb.context || {}, rub = opts.rubric || [];
       const fullName = (k) => { const r = rub.find((x) => x.name === k.name || (k.name.length >= 100 && x.name.startsWith(k.name))); return r ? r.name : k.name; };
       if (!v2) {
-        fbPane.append(h('p', { class: 'banner' }, 'This review was made before evidence-linked feedback existed, so its points have no passage references. Your work is shown beside it for reading.')); if (opts.legacy) fbPane.append(opts.legacy());
+        const legText = () => 'This review was made before evidence-linked feedback existed, so it has no saved passage references. Its points are shown below exactly as written and nothing was regenerated or changed. Where a point quotes your work in quotation marks, this device tries to match the quote itself (no AI). ' + (items.length ? (items.some((it) => it.state === 'pending') ? 'Checking the quotes…' : 'So far ' + items.filter((it) => it.state === 'located').length + ' of ' + items.length + ' points could be matched; the rest are not highlighted and no location is guessed.') : '');
+        const legBanner = h('p', { class: 'banner', role: 'status' }, legText()); updateLegacy = () => { legBanner.textContent = legText(); };
+        fbPane.append(h('div', { class: 'rv-intro' }, h('p', { class: 'rv-kicker' }, 'Your review'), h('h3', { class: 'rv-display' }, 'A closer look.'), opts.scoreLine ? h('p', { class: 'rv-score' }, opts.scoreLine) : null),
+          legBanner,
+          items.length ? h('p', { class: 'rv-hint' }, 'Select a point marked “In your work” to jump to its passage.') : null,
+          ...['strength', 'change'].map((ty) => { const g = items.filter((it) => it.f.type === ty); return g.length ? h('section', { class: 'rv-group', 'aria-label': TYPES[ty][2] }, h('h3', { class: 'rv-h' }, TYPES[ty][2], h('span', { class: 'rv-count' }, ' ' + g.length)), h('ul', { class: 'rv-cards' }, g.map(card))) : null; }).filter(Boolean),
+          opts.legacy ? h('details', { class: 'inspect rv-orig' }, h('summary', {}, 'The original review, as saved (scores, summary, next steps)'), opts.legacy()) : null);
+        refreshUi();
         return;
       }
       const assessed = fb.criteria.filter((k) => k.assessed !== false);
@@ -202,7 +219,7 @@
           (ins.couldNotInspect || []).length ? h('div', {}, h('p', { class: 'small' }, h('b', {}, 'Could not read or see:')), h('ul', { class: 'plain small' }, ins.couldNotInspect.map((x) => h('li', {}, x)))) : null,
           h('p', { class: 'small muted' }, c.mode === 'practice' ? 'Practice on this assignment. Ungraded.' : c.mode === 'own' ? 'Explored with your own material. Ungraded.' : ''),
           c.compared === 'both-versions' ? h('p', { class: 'small muted' }, 'Compared with your first version (you agreed to send it).') : c.compared === 'findings-only' ? h('p', { class: 'small muted' }, 'Your first version was not available to the AI, so it could not compare the two versions.') : null),
-        !items.length ? h('p', { class: 'small muted' }, 'The AI found nothing to flag.') : null,
+        !items.length ? h('p', { class: 'small muted' }, 'The AI found nothing to flag.') : h('p', { class: 'rv-hint' }, h('span', { class: 'rv-key rv-k-blue' }, 'What’s working'), h('span', { class: 'rv-key rv-k-yellow' }, 'What to change'), 'Select any point marked “In your work” to jump to its passage. The passage is highlighted and the point stays selected; select a highlight to come back.'),
         ORDER.map((ty) => { const g = items.filter((it) => it.f.type === ty); return g.length ? h('section', { class: 'rv-group', 'aria-label': TYPES[ty][2] }, h('h3', { class: 'rv-h' }, TYPES[ty][2], h('span', { class: 'rv-count' }, ' ' + g.length)), h('ul', { class: 'rv-cards' }, g.map(card))) : null; }),
         fb.followUp && fb.followUp.length ? h('section', { class: 'rv-group' }, h('h3', { class: 'rv-h' }, 'Earlier points'), h('ul', { class: 'plain' }, fb.followUp.map((x) => h('li', {}, h('b', {}, FOLLOW[x.status] || ''), ': ', x.claim, x.note ? ' — ' + x.note : '')))) : null,
         fb.criteria.length ? h('section', { class: 'rv-group' }, h('h3', { class: 'rv-h' }, 'Rubric assessment'), h('ul', { class: 'rv-rubric' }, fb.criteria.map((k) => h('li', {}, h('div', { class: 'rv-rub-top' }, h('b', {}, fullName(k)), h('span', { class: 'rv-cstatus rv-cs-' + k.status }, CSTATUS[k.status] || ''), opts.showScore && k.assessed !== false ? h('span', { class: 'rv-pts' }, k.score + ' / ' + k.max) : null), k.comment ? h('p', { class: 'small muted' }, k.comment) : null, k.adjusted ? h('p', { class: 'small muted' }, 'Adjusted: ' + k.adjusted) : null)))) : null,
@@ -233,13 +250,32 @@
         h('div', { class: 'rv-peek-actions' }, h('button', { type: 'button', class: 'rv-step', onclick: () => step(-1) }, '← Previous'), h('button', { type: 'button', class: 'rv-step', onclick: () => step(1) }, 'Next →'),
           h('button', { type: 'button', class: 'rv-step rv-all', onclick: () => { setTab('fb'); const x = items.find((q) => q.id === st.active); (x && x.ui ? x.ui.head : tabs[1][1]).focus(); } }, 'All feedback')));
     }
+    // Adjustable split (desktop): drag the bar, or focus it and use the arrow keys. Starts at 55% work / 45% feedback; remembered on this device.
+    const splitter = h('div', { class: 'rv-split', role: 'separator', 'aria-orientation': 'vertical', tabindex: '0', 'aria-label': 'Resize the work and feedback panels. Use the left and right arrow keys; Home resets.', title: 'Drag to resize. Double-click to reset.' });
+    const grid = h('div', { class: 'rv-grid' }, docPane, splitter, fbPane);
+    const SPLIT_KEY = 'sovereign.rvSplit';
+    let pct = 55; try { const v = parseFloat(localStorage.getItem(SPLIT_KEY)); if (v >= 30 && v <= 70) pct = v; } catch (e) { /* default */ }
+    const setSplit = (p, save) => {
+      const W = grid.clientWidth || 1200, rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16, lo = Math.min(45, (22 * rem) / W * 100), hi = Math.max(lo, 100 - (26 * rem) / W * 100);
+      pct = Math.round(Math.max(lo, Math.min(hi, p)) * 10) / 10;
+      grid.style.setProperty('--rv-w', pct + '%'); splitter.setAttribute('aria-valuenow', String(Math.round(pct))); splitter.setAttribute('aria-valuemin', String(Math.round(lo))); splitter.setAttribute('aria-valuemax', String(Math.round(hi)));
+      if (save) { try { localStorage.setItem(SPLIT_KEY, String(pct)); } catch (e) { /* not saved */ } }
+    };
+    splitter.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); splitter.setPointerCapture(e.pointerId); splitter.classList.add('on'); const r = grid.getBoundingClientRect();
+      const move = (ev) => setSplit(((ev.clientX - r.left) / r.width) * 100, false);
+      const up = () => { splitter.classList.remove('on'); splitter.removeEventListener('pointermove', move); splitter.removeEventListener('pointerup', up); setSplit(pct, true); };
+      splitter.addEventListener('pointermove', move); splitter.addEventListener('pointerup', up);
+    });
+    splitter.addEventListener('dblclick', () => setSplit(55, true));
+    splitter.addEventListener('keydown', (e) => { const d = e.key === 'ArrowLeft' ? -3 : e.key === 'ArrowRight' ? 3 : 0; if (d) { e.preventDefault(); setSplit(pct + d, true); } else if (e.key === 'Home') { e.preventDefault(); setSplit(55, true); } });
     docPane.append(h('div', { class: 'rv-docbar' }, h('p', { class: 'rv-docmeta', id: 'rv-docmeta' }),
       v2 ? h('p', { class: 'rv-legend' }, h('span', { class: 'rv-key rv-k-blue' }, 'Strength'), h('span', { class: 'rv-key rv-k-yellow' }, 'Suggested change'), h('span', { class: 'rv-fine' }, 'Highlighted only where Sovereign found the passage.')) : null, pdfCtl), docBody);
     dlg.append(h('div', { class: 'rv-head' }, h('div', { class: 'rv-head-main' }, h('p', { class: 'rv-eyebrow' }, 'Review Studio' + (opts.meta ? ' · ' + opts.meta : '')), h('h2', { id: 'rv-title', class: 'rv-title' }, opts.title || 'Your work and feedback')), h('button', { type: 'button', class: 'rv-close', onclick: close }, 'Close ', h('span', { 'aria-hidden': 'true' }, '✕'))),
-      tabList, h('div', { class: 'rv-grid' }, docPane, fbPane), peek, live);
+      tabList, grid, peek, live);
     dlg.addEventListener('close', close);
     dlg.addEventListener('cancel', (e) => { e.preventDefault(); close(); }); // Escape closes
-    document.body.append(dlg); document.documentElement.classList.add('rv-lock'); dlg.showModal(); setTab(wide() ? 'fb' : 'fb'); buildFeedback(); applyActive();
+    document.body.append(dlg); document.documentElement.classList.add('rv-lock'); dlg.showModal(); setTab('fb'); setSplit(pct, false); buildFeedback(); applyActive();
 
     // --- load the work, then find each passage ---
     (async () => {

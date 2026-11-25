@@ -81,15 +81,23 @@
           : h('div', { class: 'wb-doc-body' }, h('p', { role: 'status' }, h('b', {}, 'Source needed. '), 'No real source for this task could be verified, so none is supplied and nothing was made up. Find one yourself, add it to this module’s readings, or use “Find materials” in the Reading Room.'))));
     } else {
       // Evidence packet (Phase 2A): exhibits sit with the text materials. Older text-only assignments show exactly what they always did.
-      const hasEx = (a.exhibits || []).length > 0, upgraded = !!(a.packet && a.packet.upgraded);
-      const text = a.materials ? h('article', { class: 'wb-doc' },
-        h('p', { class: 'wb-doc-k' }, hasEx ? (upgraded ? 'Original supplied text (kept)' : 'The situation') : 'Supplied material'),
-        a.origin === 'ai' ? h('p', { class: 'wb-doc-note' }, h('b', {}, 'Fictional. '), 'Written by the AI for this assignment. The people, organizations, figures and sources in it are invented.') : null,
-        h('div', { class: 'wb-doc-body' }, a.materials.split(/\n{2,}/).map((p) => h('p', {}, p)))) : null;
+      // Presentation rule (Track B): context first, then the structured exhibits, then source notes. Record-shaped text that the exhibits
+      // already contain is not shown a second time; it stays in the assignment and is available, collapsed, under "Original supplied text".
+      const hasEx = (a.exhibits || []).length > 0;
+      const split = a.materials ? S.exhibits.splitMaterials(a.materials, a.exhibits || []) : { parts: [], narrative: [], repeats: [] };
+      const shown = hasEx ? split.narrative : split.parts;
+      const proseBlock = (list, label, note) => h('article', { class: 'wb-doc' }, h('p', { class: 'wb-doc-k' }, label), note,
+        h('div', { class: 'wb-doc-body' }, list.map((p) => h('p', {}, p.text))));
+      const fictionNote = a.origin === 'ai' ? h('p', { class: 'wb-doc-note' }, h('b', {}, 'Fictional. '), 'Written by the AI for this assignment. The people, organizations, figures and sources in it are invented.') : null;
+      const text = shown.length ? proseBlock(shown, hasEx ? 'The situation' : 'Supplied material', fictionNote) : null;
       const pan = S.exhibitsView ? S.exhibitsView.panel(c, m, a) : [];
-      if (text && !(hasEx && upgraded)) out.push(text);
+      if (text) out.push(text);
       out.push(...pan);
-      if (text && hasEx && upgraded) out.push(h('div', { class: 'ex-orig' }, text));
+      if (a.materials && hasEx && split.repeats.length) {
+        out.push(h('details', { class: 'ex-orig' }, h('summary', {}, 'Original supplied text (kept, not shown twice)'),
+          h('p', { class: 'small muted' }, split.repeats.length + (split.repeats.length === 1 ? ' block of the original text repeats' : ' blocks of the original text repeat') + ' data that the exhibits above already show, so it is collapsed here. Nothing was deleted; this is the text exactly as it was supplied.'),
+          proseBlock(split.parts, 'Original supplied text', null)));
+      }
       if (!text && !pan.length) out.push(empty(a.basis === 'readings' || a.kind === 'learn' ? 'This assignment works from the module’s readings, listed below.' : 'No materials were supplied with this assignment. If it needs a case, document, or data, add it with Edit.'));
     }
     if (rs.length) out.push(sec('Module readings', h('ul', { class: 'plain' }, rs.map((x) => h('li', {}, x.url ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.title) : x.title)))));

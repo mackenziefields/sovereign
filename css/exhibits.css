@@ -27,7 +27,7 @@
 .ex-table th, .ex-table td { padding: .55rem .8rem; text-align: left; vertical-align: top; border: 0; }
 .ex-table thead th { position: sticky; top: 0; z-index: 2; background: #f3f4f7; color: var(--ex-ink); font-weight: 650; white-space: nowrap; box-shadow: 0 1px 0 var(--ex-hair); }
 .ex-table tbody tr:nth-child(even) td, .ex-table tbody tr:nth-child(even) th { background: rgba(16, 27, 50, .028); }
-.ex-table .num { text-align: right; }
+.ex-table .num { text-align: right; font-size: inherit; font-weight: inherit; color: inherit; letter-spacing: normal; font-variant-numeric: tabular-nums; }
 .ex-rid { position: sticky; left: 0; z-index: 1; background: inherit; color: var(--ex-muted); font-size: .8rem; font-weight: 500; inline-size: 3.4rem; white-space: nowrap; }
 .ex-table thead .ex-rid { z-index: 3; background: #f3f4f7; }
 .ex-table tbody th.ex-rid { background: #fff; }

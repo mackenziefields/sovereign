@@ -261,5 +261,25 @@
     return { text: out.join('\n'), cut, shown };
   }
 
-  S.exhibits = { asText, limits, CEIL, DEFAULTS, TYPES, DOC_KINDS, BLOCKS, COL_KINDS, FNS, parseNumber, sanitize, compute, toCsv, parseCsv, needsPacket, packetStatus, needsGuard };
+  /* ---- presentation rule: one representation of the evidence ---- */
+  // Splits an assignment's plain-text material into paragraphs and labels each:
+  //   'narrative' (scene-setting, background, an editor's note, how to use the evidence): always shown;
+  //   'repeat'    (record-shaped text, e.g. rows or a pipe table, whose figures are really found in the structured exhibits): not shown a second time.
+  // Prose is NEVER labelled 'repeat', even when it mentions figures. The stored text is not changed; the view keeps the original available.
+  function splitMaterials(text, exhibits) {
+    const paras = String(text || '').split(/\n{2,}/).map((p) => p.replace(/\s+$/, '')).filter((p) => p.trim());
+    const hay = (exhibits || []).map((e) => e.table ? e.table.rows.map((r) => Object.values(r.cells).join(' ')).join(' ') : e.document ? e.document.blocks.map((b) => b.text || (b.items || []).join(' ')).join(' ') : e.timeline ? e.timeline.events.map((v) => v.date + ' ' + v.label + ' ' + (v.detail || '')).join(' ') : '').join(' ').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const out = paras.map((p) => {
+      const lines = p.split('\n').filter((l) => l.trim());
+      const recordish = lines.filter((l) => (l.match(/[|\t;]/g) || []).length >= 2 || ((l.match(/,/g) || []).length >= 2 && /\d/.test(l))).length;
+      const shaped = lines.length >= 3 && recordish / lines.length >= 0.6;
+      const toks = [...new Set((p.match(/[A-Za-z]*\d[\w.\-/]*/g) || []).map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, '')).filter((t) => t.length >= 2))];
+      const found = toks.filter((t) => hay.includes(t)).length;
+      const repeat = shaped && toks.length >= 4 && found / toks.length >= 0.6;
+      return { text: p, kind: repeat ? 'repeat' : 'narrative', share: toks.length ? Math.round((found / toks.length) * 100) / 100 : 0 };
+    });
+    return { parts: out, narrative: out.filter((x) => x.kind === 'narrative'), repeats: out.filter((x) => x.kind === 'repeat') };
+  }
+
+  S.exhibits = { splitMaterials, asText, limits, CEIL, DEFAULTS, TYPES, DOC_KINDS, BLOCKS, COL_KINDS, FNS, parseNumber, sanitize, compute, toCsv, parseCsv, needsPacket, packetStatus, needsGuard };
 })(window.Sovereign = window.Sovereign || {});

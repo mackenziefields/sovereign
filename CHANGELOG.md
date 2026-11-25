@@ -2,6 +2,15 @@
 
 Reconstructed from the repository history (`git log`). Dates are all 2026-11-24 for the build session unless noted. "Tested" is described in `TESTING.md`.
 
+## Unreleased · Review Studio layout and materials presentation (Track A and B, not committed, not yet a build)
+- **Review Studio, wider feedback panel:** the work and feedback columns start at about 55/45 and the divider between them can be dragged, or moved with the arrow keys (Home resets). The size is remembered in this browser (`sovereign.rvSplit`). Below 900px the Your work / Feedback tabs and the bottom stepper are unchanged and the divider is hidden.
+- **Easier to scan:** larger claim text, calmer spacing, a visible "In your work" pill on every point that has a passage, a one-line key for blue (What's working) and yellow (What to change), and a hint that selecting a point jumps to and keeps its passage highlighted.
+- **Older reviews (no saved quotes):** the Studio now tries to match any quotation marks inside a saved point against the work, on this device, with no AI and nothing saved. Matched points get blue or yellow highlights; unmatched or unquoted points say so plainly and no location is guessed. The original saved review is kept, readable under "The original review, as saved".
+- **Materials no longer shown twice:** once an assignment has exhibits, Materials reads "The situation" (narrative), then the exhibits, and a paragraph that only repeats exhibit records is moved into a collapsed "Original supplied text (kept, not shown twice)". The stored text is never changed or deleted.
+- **Approval gate for upgrades:** the exhibit preview lists any figure in the existing text that the draft exhibits do not contain, and an assignment with submitted work always asks for a ticked acknowledgment before the Approve button works. Nothing is saved until approval.
+- **Worker prompt (needs your deploy to take effect):** when exhibits are planned, `materials` must be a short framing paragraph with no tables, records, figures or quoted document text; reading-based tasks plan no exhibits.
+- **Table fix:** numeric column headers and values in exhibit tables are no longer enlarged and blue.
+
 ## Unreleased · Overlay navigation, G1 (build 27, not committed)
 - **Sidebar floats instead of pushing.** On desktop the global menu is hidden by default behind a slim edge handle. Hovering the handle (after a short delay) or pressing Enter on it opens the full menu over the page; the page never resizes or reflows. It closes about half a second after the pointer leaves, on Escape (focus returns to the handle), or when Tab leaves it, and after you choose a link.
 - **Pin menu open** (first control in the menu) restores the persistent sidebar. The choice is kept in this browser only (`sovereign.navPinned`).

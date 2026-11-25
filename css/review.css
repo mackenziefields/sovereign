@@ -6,7 +6,7 @@ dialog.rv {
   --rv-blue: #2643d8; --rv-blue-ink: #1c34b0; --rv-amber: #f2be28; --rv-amber-ink: #6b4e00;
   --rv-blue-tint: rgba(38, 67, 216, .11); --rv-yel-tint: rgba(242, 190, 40, .3);
   --rv-sign: var(--t-tile-bg, #101b32);
-  width: 100vw; max-width: 1560px; height: 100vh; height: 100dvh; max-height: none; margin: 0 auto; padding: 0; border: 0; display: none; flex-direction: column; overflow: hidden; overflow: clip; position: fixed; inset: 0;
+  width: 100vw; max-width: none; height: 100vh; height: 100dvh; max-height: none; margin: 0 auto; padding: 0; border: 0; display: none; flex-direction: column; overflow: hidden; overflow: clip; position: fixed; inset: 0;
   background: var(--rv-bg); color: var(--rv-ink); font: 400 1rem/1.6 var(--font, "Helvetica Neue", Helvetica, Arial, sans-serif);
 }
 dialog.rv[open] { display: flex; }
@@ -27,10 +27,16 @@ dialog.rv[data-theme="institution"] .rv-title { font-size: 1.15rem; line-height:
 .rv-tab[aria-selected="true"] { color: var(--rv-ink); border-bottom-color: var(--rv-sign); }
 
 /* ----- composition ----- */
-.rv-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(24rem, 31rem); }
+.rv-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(22rem, var(--rv-w, 55%)) 10px minmax(26rem, 1fr); }
+.rv-split { position: relative; cursor: col-resize; background: var(--rv-hair); touch-action: none; }
+.rv-split::after { content: ""; position: absolute; top: 50%; left: 50%; width: 4px; height: 3rem; margin: -1.5rem 0 0 -2px; border-radius: 2px; background: var(--rv-muted); opacity: .55; }
+.rv-split:hover, .rv-split.on { background: rgba(38, 67, 216, .18); }
+.rv-split:hover::after, .rv-split.on::after { opacity: .9; background: var(--rv-blue); }
+.rv-split:focus-visible { outline: 3px solid var(--rv-blue); outline-offset: -3px; }
 .rv-doc, .rv-fb { margin: 0; max-width: none; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .rv-doc { background: var(--rv-bg); }
-.rv-fb { overflow: auto; background: #fff; padding: 2rem clamp(1.25rem, 2.6vw, 2.5rem) 0; border-left: 1px solid var(--rv-hair); }
+.rv-fb { overflow: auto; background: #fff; padding: 2rem clamp(1.4rem, 3vw, 3rem) 0; }
+.rv-fb > * { max-width: 56rem; }
 
 /* ----- the manuscript ----- */
 .rv-docbar { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1.2rem; padding: .85rem clamp(1rem, 4vw, 3rem) .2rem; }
@@ -111,11 +117,19 @@ dialog.rv[data-theme="institution"] .rv-h::after { height: 3px; border-top: 1px 
 .rv-chip { font-size: .88rem; font-weight: 700; color: var(--rv-muted); }
 .rv-chip-blue { color: var(--rv-blue-ink); }
 .rv-chip-yellow { color: var(--rv-amber-ink); }
-.rv-pin { margin-left: auto; font-size: .82rem; color: var(--rv-muted); white-space: nowrap; }
+.rv-pin { margin-left: auto; font-size: .82rem; font-weight: 600; white-space: nowrap; padding: .12rem .55rem; border-radius: 999px; background: var(--rv-blue-tint); color: var(--rv-blue-ink); }
+.rv-pin::after { content: " ↗"; }
+.hue-yellow .rv-pin { background: var(--rv-yel-tint); color: var(--rv-amber-ink); }
+.rv-card.located:not(.active) .rv-card-head:hover .rv-pin { box-shadow: 0 0 0 2px currentColor; }
+.rv-card { border-left: 3px solid transparent; }
+.rv-card.located.hue-blue:not(.active) { border-left-color: rgba(38, 67, 216, .45); }
+.rv-card.located.hue-yellow:not(.active) { border-left-color: rgba(209, 154, 0, .7); }
+.rv-hint { margin: 1rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1rem; font-size: .95rem; color: var(--rv-muted); line-height: 1.5; }
+.rv-orig { margin-top: 2rem; }
 .rv-pin[hidden] { display: none; }
-.rv-claim { font-size: 1rem; line-height: 1.5; color: var(--rv-ink); }
-.rv-card:not(.active) .rv-claim { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.rv-card-body { padding: 0 .8rem 1rem 3.2rem; }
+.rv-claim { font-size: 1.05rem; line-height: 1.55; color: var(--rv-ink); }
+.rv-card:not(.active) .rv-claim { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.rv-card-body { padding: 0 .8rem 1.2rem 3.2rem; }
 .rv-card-body[hidden] { display: none; }
 .rv-card-body p { margin: .55rem 0; font-size: .95rem; line-height: 1.55; }
 .rv-card-body .small { font-size: .9rem; }
@@ -148,6 +162,7 @@ dialog.rv[data-theme="institution"] .rv-h::after { height: 3px; border-top: 1px 
 /* ----- phones: two tabs, and the selected annotation rides along under the manuscript ----- */
 .rv-peek { display: none; }
 @media (max-width: 899px) {
+  .rv-split { display: none; }
   dialog.rv { max-width: none; }
   .rv-head { padding: .8rem 1rem .7rem; }
   .rv-title { font-size: 1.35rem; }

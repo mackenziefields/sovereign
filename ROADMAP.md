@@ -75,3 +75,6 @@ Defined in their own plans when reached.
 - Four different functional interfaces per theme: rejected. Themes stay presentational.
 - Animation beyond short state transitions, shadows, glass effects: not planned.
 - Gamification (streaks, points): not planned.
+
+### Track A and B follow-up (after 2C, not released)
+Review Studio wider resizable feedback, legacy local quote matching, and non-duplicated Materials with an approval gate are built and mock-tested; they ship in the next build once approved. Real-AI confirmation of the tightened Worker `materials` rule is still pending a Worker redeploy.
