@@ -53,11 +53,29 @@
     h('a', { class: 'tile', href: o.href },
       h('div', { class: 'tile-art art-' + o.color, style: '--c:' + S.COLORS[o.color], 'aria-hidden': 'true' },
         h('span', { class: 'tile-label' }, o.label),
+        o.num ? h('span', { class: 'tile-num' }, String(o.num).padStart(2, '0')) : null,
         o.badge ? h('span', { class: 'tile-badge' }, o.badge) : null),
       h('div', { class: 'tile-body' },
         h('h3', { class: 'tile-title' }, o.title),
         h('p', { class: 'tile-meta' }, o.meta),
         S.progressBar(o.pct, o.title + ' progress')));
+
+  // A course as a small publication: colour, geometric mark, serif title, progress as a large numeral.
+  // o: href, color (0-5), code, title, meta, pct
+  S.cover = (o) =>
+    h('a', { class: 'cover art-' + o.color, href: o.href, style: '--c:' + S.COLORS[o.color] },
+      h('div', { class: 'cover-top' }, h('span', {}, o.code), h('span', {}, 'sovereign.')),
+      h('h3', { class: 'cover-title' }, o.title),
+      h('div', { class: 'cover-foot' },
+        h('div', { class: 'cover-pct' }, h('strong', {}, o.pct + '%'), h('span', {}, o.meta)),
+        S.progressBar(o.pct, o.title + ' progress')));
+
+  // Learn (circle), Apply (square), Demonstrate (triangle): a shape and a word, never colour alone.
+  S.KINDS = [['learn', 'Learn'], ['apply', 'Apply'], ['demonstrate', 'Demonstrate']];
+  S.kindMark = (kind) => {
+    const k = S.KINDS.find((x) => x[0] === kind);
+    return k ? h('span', { class: 'kmark kmark-' + k[0] }, k[1]) : null;
+  };
 
   S.badge = (text, kind) => h('span', { class: 'badge ' + (kind || '') }, text);
   S.plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');

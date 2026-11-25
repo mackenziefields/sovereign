@@ -2,12 +2,12 @@
 (function (S) {
   'use strict';
 
-  S.BUILD = 15; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
+  S.BUILD = 16; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
   const KEY = 'sovereign.v3';
   const OLD_KEYS = ['sovereign.v2', 'sovereign.v1']; // earlier versions; migrated, never deleted automatically
   S.MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
-  S.COLORS = ['#7a1f2b', '#1f4e52', '#2b3a55', '#5a5a2a', '#4d2c4f', '#8a5a1c'];
+  S.COLORS = ['#6a1a27', '#1f4a4d', '#1f3a8a', '#4f5226', '#4a2a4c', '#7d4f17'];
   S.READING_KINDS = [['', 'Other'], ['article', 'Article'], ['book', 'Book'], ['video', 'Video'], ['course', 'Course'], ['tool', 'Tool'], ['document', 'Document'], ['podcast', 'Podcast']];
   S.ACCESS = [['unknown', 'Access unknown'], ['free', 'Free'], ['paid', 'Paid']];
   S.VERIFY = ['not-checked', 'reachable', 'unreachable', 'blocked', 'broken'];

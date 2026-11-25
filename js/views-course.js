@@ -80,9 +80,14 @@
     }
     return h('div', { class: 'course' },
       h('p', { class: 'crumbs' }, h('a', { href: '#/' }, '← Dashboard')),
-      h('header', { class: 'course-head' },
-        h('div', { class: 'course-banner tile-art art-' + c.color, style: '--c:' + S.COLORS[c.color], 'aria-hidden': 'true' }, h('span', { class: 'tile-label' }, c.code)),
-        h('h1', {}, c.title)),
+      h('header', { class: 'course-head art-' + c.color, style: '--c:' + S.COLORS[c.color] },
+        h('p', { class: 'ch-code' }, c.code),
+        h('h1', {}, c.title),
+        (() => {
+          const st = S.courseStats(c), g = S.grade(c);
+          return h('p', { class: 'ch-meta' },
+            h('span', {}, plural(st.mods, 'module')), h('span', {}, st.pct + '% complete'), g ? h('span', {}, 'Current grade ' + g.pct + '%') : null);
+        })()),
       h('div', { class: 'course-layout' },
         h('nav', { class: 'course-menu', 'aria-label': 'Course menu' },
           h('ul', {}, SECTIONS.map(([key, label]) => h('li', {}, h('a', { href: href(c, key), 'aria-current': key === current ? 'page' : null }, label))))),
@@ -155,7 +160,7 @@
 
   function pageSyllabus(c) {
     if (ui.edit === 'course') return h('div', {}, pageHead('Edit course details'), S.courseForm(c));
-    return h('div', {},
+    return h('div', { class: 'syllabus' },
       pageHead('Syllabus', editBtn('course', 'Edit course details')),
       h('section', {}, h('h3', { class: 'minor' }, 'About this course'), c.description ? h('p', { class: 'pre' }, c.description) : empty('No description yet. Use Edit course details to add one.')),
       h('dl', { class: 'brief' },
@@ -185,7 +190,7 @@
       const ms = S.moduleStats(m);
       const mv = (d) => { c.modules.splice(i, 1); c.modules.splice(i + d, 0, m); commit(); };
       return h('li', { class: 'tile-wrap' },
-        tile({ href: href(c, 'modules', m.id), color: c.color, label: 'Module ' + (i + 1), title: m.title, badge: m.complete ? 'Complete' : '',
+        tile({ href: href(c, 'modules', m.id), color: c.color, label: 'Module', num: i + 1, title: m.title, badge: m.complete ? 'Complete' : '',
           meta: ms.items ? ms.done + ' of ' + plural(ms.items, 'step') + ' done' : 'No steps yet', pct: ms.pct }),
         manage ? h('div', { class: 'tile-tools' },
           h('button', { class: 'linkbtn', type: 'button', disabled: i === 0, onclick: () => mv(-1) }, '← Earlier'),
@@ -282,7 +287,7 @@
     if (ui.edit === a.id) return h('li', { class: 'item' }, assignmentForm(c, m, a));
     const pct = S.pctOf(a), late = !a.done && a.due && a.due < S.todayISO();
     const meta = [
-      a.kind ? h('span', { class: 'badge soft' }, a.kind === 'learn' ? 'Learn' : a.kind === 'apply' ? 'Apply' : 'Demonstrate') : null,
+      a.kind ? S.kindMark(a.kind) : null,
       a.due ? h('span', { class: 'due' + (late ? ' late' : '') }, (late ? 'Overdue · ' : 'Due ') + S.fmtDate(a.due)) : null,
       a.work && a.work.phase === 'reviewed' ? h('span', { class: 'badge soft' }, 'Feedback ready') : null,
       a.points != null ? h('span', { class: 'due' }, a.score != null ? a.score + ' / ' + a.points + ' pts' + (pct != null ? ' · ' + pct + '%' : '') : a.points + ' pts') : null,
@@ -323,13 +328,13 @@
   function pageAssignment(c, m, a) {
     const mi = c.modules.indexOf(m) + 1, w = a.work;
     const status = !w ? 'Not submitted' : w.phase === 'reviewed' ? 'Feedback ready (grade after final review)' : w.final.feedback ? 'Final grade: ' + a.score + ' / ' + a.points + ' pts' : 'Attached as evidence';
-    const sec = (title, ...kids) => h('section', { class: 'msec' }, h('div', { class: 'sec-head' }, h('h3', {}, title)), ...kids);
+    const sec = (title, ...kids) => h('section', { class: 'msec s-' + String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) }, h('div', { class: 'sec-head' }, h('h3', {}, title)), ...kids);
     const row = (k, v) => v ? h('div', { class: 'ameta-i' }, h('span', { class: 'ameta-k' }, k), h('span', {}, v)) : null;
     if (ui.edit === a.id) return h('div', {}, h('p', { class: 'crumbs' }, h('a', { href: href(c, 'assignments') }, '← All assignments')), h('div', { class: 'panel' }, assignmentForm(c, m, a)));
     const hasAI = a.points > 0;
     return h('div', { class: 'apage' },
       h('p', { class: 'crumbs' }, h('a', { href: href(c, 'assignments') }, '← All assignments'), ' · ', h('a', { href: href(c, 'modules', m.id) }, 'Module ' + mi + ': ' + m.title)),
-      h('p', { class: 'eyebrow' }, a.kind ? S.label([['learn', 'Learn'], ['apply', 'Apply'], ['demonstrate', 'Demonstrate']], a.kind) : 'Assignment'),
+      h('p', { class: 'eyebrow' }, a.kind ? S.kindMark(a.kind) : 'Assignment'),
       h('h2', { class: 'mod-h' }, a.title),
       h('div', { class: 'ameta' },
         row('Due', a.due ? S.fmtDate(a.due) + (a.locked ? ' (set by your course timeline)' : '') : 'No due date'),
@@ -348,7 +353,10 @@
       a.steps.length ? sec('What to do', h('ol', { class: 'steps-list' }, a.steps.map((x) => h('li', {}, x)))) : null,
       sec('What to submit', h('p', { class: 'pre' }, (a.submit ? a.submit.replace(/\s*$/, '') + ' ' : '') + FORMAT_SENTENCE[a.format || 'any'])),
       a.rubric.length ? sec('How it is graded', h('p', { class: 'small muted' }, 'The AI reviews your work against these, weighted as shown. You get detailed feedback first, then your final grade after you resubmit (or after 72 hours).'),
-        h('ul', { class: 'plain' }, a.rubric.map((k) => h('li', {}, k.name + ': ', h('b', {}, k.max + ' / ' + a.points + ' points'))))) : null,
+        h('ul', { class: 'rubric' }, a.rubric.map((k) => h('li', {},
+          h('span', { class: 'rb-name' }, k.name),
+          h('span', { class: 'rb-pts' }, h('b', {}, String(k.max)), ' / ' + a.points + ' points'),
+          h('span', { class: 'rb-bar', 'aria-hidden': 'true' }, h('i', { style: 'width:' + Math.min(100, Math.round(k.max / (a.points || k.max || 1) * 100)) + '%' })))))) : null,
       !a.rubric.length && a.criteria.length ? sec('How it is graded', h('p', { class: 'small muted' }, (a.points != null ? a.points + ' points. ' : '') + 'The AI reviews your work against these. You get detailed feedback first, then your final grade after you resubmit (or after 72 hours).'), h('ul', { class: 'plain' }, a.criteria.map((x) => h('li', {}, x)))) : null,
       a.due ? h('p', { class: 'small muted' }, 'Late work is accepted and marked late.') : null,
       a.points > 0 && !a.work && (!a.parts.length && !a.materials || a.kind === 'demonstrate' && a.parts.length && a.basis !== 'portfolio') ? writeBtn(c, m, a) : null,

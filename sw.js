@@ -1,9 +1,9 @@
 /* sovereign. — service worker: caches the app files so it opens offline.
    Your curriculum data lives in localStorage, not here.
    When you change any app file, bump CACHE so installed copies pick up the update. */
-const CACHE = 'sovereign-v3-15';
+const CACHE = 'sovereign-v3-16';
 const FILES = [
-  './', 'index.html', 'manifest.webmanifest', 'css/styles.css', 'css/courses.css', 'css/ai.css',
+  './', 'index.html', 'manifest.webmanifest', 'css/styles.css', 'css/courses.css', 'css/ai.css', 'css/design.css',
   'js/config.js', 'js/store.js', 'js/components.js', 'js/ai-client.js', 'js/files.js', 'js/views-work.js', 'js/views-ai.js', 'js/views-course.js', 'js/views-dash.js', 'js/app.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];

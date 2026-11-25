@@ -163,14 +163,15 @@
   // How a saved piece appears in the Portfolio: what it shows, the work itself, and its AI-reviewed result.
   S.portfolioPiece = function (c, m, a) {
     const f = a.work && a.work.final, fb = f && f.feedback, pct = fb ? S.pctOf(a) : null;
-    return h('li', { class: 'item' }, h('div', { class: 'item-body' },
-      h('div', { class: 'item-title' }, h('a', { href: S.href(c, 'assignments', a.id) }, a.title), ' ', badge(a.kind ? S.label([['learn', 'Learn'], ['apply', 'Apply'], ['demonstrate', 'Demonstrate']], a.kind) : 'Assignment', 'soft')),
-      a.portfolioNote ? h('div', { class: 'item-note' }, a.portfolioNote) : null,
+    return h('li', { class: 'plate' },
+      h('div', { class: 'plate-top' }, a.kind ? S.kindMark(a.kind) : badge('Assignment', 'soft')),
+      h('h3', { class: 'plate-title' }, h('a', { href: S.href(c, 'assignments', a.id) }, a.title)),
+      a.portfolioNote ? h('p', { class: 'plate-dek' }, a.portfolioNote) : null,
+      fb ? h('div', { class: 'plate-score' }, h('strong', {}, pct + '%'), h('span', {}, a.score + ' / ' + a.points + ' pts · ' + S.letter(pct))) : null,
       h('div', { class: 'item-meta' }, h('span', { class: 'code' }, c.code), h('span', { class: 'due' }, 'Module: ' + m.title),
-        fb ? h('span', { class: 'due' }, a.score + ' / ' + a.points + ' pts · ' + pct + '% · ' + S.letter(pct)) : null,
         fb ? h('span', { class: 'badge soft' }, 'AI-reviewed') : null, f && f.late ? h('span', { class: 'badge warn' }, 'Late') : null),
       h('details', { class: 'work-panel' }, h('summary', {}, 'The work' + (fb ? ' and feedback' : '')),
-        h('div', { class: 'wp-body' }, f && f.text ? h('p', { class: 'pre' }, f.text) : null, fileLine(f), fb ? feedbackView(fb, true) : null))));
+        h('div', { class: 'wp-body' }, f && f.text ? h('p', { class: 'pre' }, f.text) : null, fileLine(f), fb ? feedbackView(fb, true) : null)));
   };
 
   S.finalFeedback = (a) => h('div', {}, feedbackView(a.work.final.feedback, true), fileLine(a.work.final));

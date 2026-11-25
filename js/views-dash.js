@@ -106,10 +106,10 @@
       ui.edit === 'newCourse' ? S.newCourseChooser() : null,
       ui.edit === 'newCourseForm' ? S.courseForm(null) : null,
       cs.length
-        ? h('ul', { class: 'tiles' }, cs.map((c) => {
+        ? h('ul', { class: 'covers' }, cs.map((c) => {
             const st = S.courseStats(c);
-            return h('li', { class: 'tile-wrap' }, tile({ href: S.href(c), color: c.color, label: c.code, title: c.title,
-              meta: st.mods ? st.done + ' of ' + plural(st.mods, 'module') + ' complete' : 'No modules yet', pct: st.pct }));
+            return h('li', { class: 'tile-wrap' }, S.cover({ href: S.href(c), color: c.color, code: c.code, title: c.title,
+              meta: st.mods ? st.done + ' of ' + st.mods + (st.mods === 1 ? ' module' : ' modules') : 'No modules yet', pct: st.pct }));
           }))
         : h('p', { class: 'empty' }, 'No courses yet. Use New course to add your first.'));
 
@@ -132,7 +132,16 @@
         h('div', { role: 'tabpanel', class: 'tabpanel' }, ui.tab === 'cal' ? calendarPanel() : upNextPanel())));
 
     return h('div', { class: 'dash' },
-      h('div', {}, h('h1', {}, S.state.name ? 'Welcome, ' + S.state.name : 'Dashboard'), h('p', { class: 'lede muted' }, 'Your courses, and what to do next.'), S.state.name ? null : nameForm(), courses, library),
+      h('div', {},
+        h('header', { class: 'masthead' },
+          h('p', { class: 'eyebrow' }, new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })),
+          h('h1', { class: 'display' }, S.state.name ? 'Welcome, ' + S.state.name + '.' : 'Dashboard'),
+          h('p', { class: 'lede' }, 'Your courses, and what to do next.'),
+          h('dl', { class: 'stats' },
+            h('div', {}, h('dt', {}, 'Courses'), h('dd', {}, String(cs.length))),
+            h('div', {}, h('dt', {}, 'Modules complete'), h('dd', {}, String(S.allModules().filter((x) => x.m.complete).length), h('small', {}, ' / ' + S.allModules().length))),
+            h('div', {}, h('dt', {}, 'Assignments open'), h('dd', {}, String(S.upNext().length))))),
+        S.state.name ? null : nameForm(), courses, library),
       rail);
   };
 
@@ -151,11 +160,18 @@
       h('div', { class: 'item-note' }, [k.issuer, c.code].filter(Boolean).join(' · ')),
       h('div', { class: 'item-actions' }, h('a', { class: 'small', href: S.href(c, 'modules') }, 'Manage'))));
     const empty = (t) => h('p', { class: 'empty' }, t);
-    return h('div', { class: 'narrow' },
-      h('h2', {}, 'Portfolio'),
-      h('p', { class: 'lede muted' }, 'The work and credentials you can point to for this course. Only final versions appear here. AI-reviewed scores are automated assessments, and credentials are self-reported; none of it is verified by anyone else.'),
+    return h('div', { class: 'portfolio' },
+      h('header', { class: 'pf-head' },
+        h('p', { class: 'eyebrow' }, 'Portfolio · ' + course.title),
+        h('h2', { class: 'display' }, 'Selected work'),
+        h('p', { class: 'lede' }, 'The work and credentials you can point to for this course.'),
+        h('p', { class: 'small muted' }, 'Only final versions appear here. AI-reviewed scores are automated assessments, and credentials are self-reported; none of it is verified by anyone else.'),
+        h('dl', { class: 'stats' },
+          h('div', {}, h('dt', {}, 'Pieces'), h('dd', {}, String(pieces.length))),
+          h('div', {}, h('dt', {}, 'Graded'), h('dd', {}, String(graded.length))),
+          h('div', {}, h('dt', {}, 'Credentials'), h('dd', {}, String(earned.length))))),
       h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, 'Portfolio pieces'), h('span', { class: 'count' }, plural(pieces.length, 'piece'))),
-        pieces.length ? h('ul', { class: 'items' }, pieces.map(({ c, m, a }) => S.portfolioPiece(c, m, a))) : empty('Finished demonstrate assignments are saved here as you complete them. You can add or remove any finished assignment from its own page.')),
+        pieces.length ? h('ul', { class: 'plates' }, pieces.map(({ c, m, a }) => S.portfolioPiece(c, m, a))) : empty('Finished demonstrate assignments are saved here as you complete them. You can add or remove any finished assignment from its own page.')),
       h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, 'Graded work'), h('span', { class: 'count' }, plural(graded.length, 'assignment'))),
         graded.length ? h('ul', { class: 'items' }, graded.map(({ c, m, a }) => h('li', { class: 'item' }, h('div', { class: 'item-body' },
           h('div', { class: 'item-title' }, h('a', { href: S.href(c, 'modules', m.id) }, a.title)),
