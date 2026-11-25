@@ -48,6 +48,16 @@
   .wb-ref { padding-right: 2.5rem; border-right: 1px solid var(--rule); }
   .wb-ref .wb-ptabs { position: sticky; top: 0; z-index: 3; background: var(--paper); }
 }
+/* G1: with the global menu pinned the page is 15.5rem narrower, so two panes need a wider window before they fit comfortably.
+   Below that, a pinned menu uses the one-pane switcher (same as phones). With the menu hidden, the page keeps the full width. */
+@media (min-width: 1000px) and (max-width: 1379px) {
+  .shell[data-pinned] .wb-pane:not(.is-focus) { display: none; }
+  .shell[data-pinned] .wb-seg { display: block; }
+  .shell[data-pinned] .wb-ptabs, .shell[data-pinned] .wb-pane-k { display: none; }
+  .shell[data-pinned] .wb-grid { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; margin-top: 0; }
+  .shell[data-pinned] .wb-ref { padding-right: 0; border-right: 0; }
+  .shell[data-pinned] .wb-work.is-sticky { position: static; }
+}
 /* The page itself scrolls. A short work area (the submission form) rides alongside a long brief so both stay in view. */
 @media (min-width: 1000px) and (min-height: 760px) { .wb-work.is-sticky { position: sticky; top: 1rem; } }
 
@@ -131,3 +141,14 @@
 
 @media (max-width: 640px) { .wb-ptabs a { padding: .5rem .7rem; } .wb[data-theme="intellectual"] .wb-head::before { width: 2.2rem; height: 2.2rem; } }
 .wb-doc-note { margin: -.2rem 0 .8rem; font-size: .82rem; font-style: italic; color: var(--muted); }
+
+/* ---- G1 follow-up: the workbench uses the room the hidden menu frees ---- */
+@media (min-width: 1024px) {
+  .content:has(> .wb) { max-width: 120rem; padding-inline: 2rem; }
+}
+@media (min-width: 1700px) { .content:has(> .wb) { padding-inline: 3rem; } }
+@media (min-width: 1000px) {
+  /* 55% reference / 45% your work, with only a modest gutter; text inside keeps its own readable measure */
+  .wb-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 1.5rem; }
+  .wb-ref { padding-right: 1.5rem; }
+}

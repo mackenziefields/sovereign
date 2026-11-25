@@ -23,7 +23,7 @@
       const t = d.text.trim();
       if (!t) throw new Error('Write your answer or choose a file first.');
       if (t.length > L.text) throw new Error('That is longer than the AI can review (about ' + L.text.toLocaleString() + ' characters). Shorten it or attach a PDF.');
-      return { payload: { text: t }, stored: { text: t } };
+      return { payload: { text: t, kind: 'text' }, stored: { text: t } };
     }
     const chk = S.files.check(f, fileOnly);
     if (!chk.ok) throw new Error(chk.msg);
@@ -33,22 +33,41 @@
       const t = (await S.files.readText(f)).trim();
       if (!t) throw new Error('That file is empty.');
       if (t.length > L.text) throw new Error('That file is longer than the AI can review (about ' + L.text.toLocaleString() + ' characters).');
-      return { payload: { text: t }, stored: { text: t, fileName: f.name, fileType: f.type || 'text/plain', fileSize: f.size } };
+      return { payload: { text: t, kind: 'textfile' }, stored: { text: t, fileName: f.name, fileType: f.type || 'text/plain', fileSize: f.size } };
     }
     if (kind === 'pdf') {
       if (f.size > L.pdf) throw new Error('That PDF is over the 2 MB the AI can review. Compress it, or attach it as evidence without AI feedback.');
-      return { payload: { file: { mime: 'application/pdf', base64: await S.files.base64(f) } }, blob: f, stored: { fileName: f.name, fileType: 'application/pdf', fileSize: f.size } };
+      return { payload: { file: { mime: 'application/pdf', base64: await S.files.base64(f) }, kind: 'pdf' }, blob: f, stored: { fileName: f.name, fileType: 'application/pdf', fileSize: f.size } };
     }
     if (kind === 'image') {
       const r = await S.files.downscale(f);
-      return { payload: { file: { mime: r.mime, base64: await S.files.base64(r.blob) } }, blob: r.blob, stored: { fileName: f.name, fileType: r.mime, fileSize: r.blob.size } };
+      return { payload: { file: { mime: r.mime, base64: await S.files.base64(r.blob) }, kind: 'image' }, blob: r.blob, stored: { fileName: f.name, fileType: r.mime, fileSize: r.blob.size } };
     }
     if (kind === 'xlsx') {
       if (f.size > L.xlsx) throw new Error('That Excel file is over 5 MB. Save a smaller copy and try again.');
       const t = await S.files.xlsxToText(f); // cell values only; charts and formatting are not read
-      return { payload: { text: t }, blob: f, stored: { fileName: f.name, fileType: f.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileSize: f.size } };
+      return { payload: { text: t, kind: 'xlsx' }, blob: f, stored: { fileName: f.name, fileType: f.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileSize: f.size } };
     }
     throw new Error('The AI can review text, PDF, image, and Excel (.xlsx) files. Attach this one as evidence without AI feedback instead.');
+  }
+
+  // The first version, rebuilt from this device so it can be sent again ONLY if the learner agreed. Returns { prev } or { why } (never silently skipped).
+  async function preparePrior(sub, current) {
+    if (!sub) return { why: 'The first version is not available.' };
+    try {
+      if (!sub.fileId) return sub.text ? { prev: { text: sub.text } } : { why: 'The first version had no text saved.' };
+      const blob = await S.files.get(sub.fileId);
+      if (!blob) return { why: 'The first version’s file is not on this device (files are not part of backups), so it cannot be compared.' };
+      const t = String(sub.fileType || '');
+      if (t === 'application/pdf' || t.startsWith('image/')) {
+        const b64 = await S.files.base64(blob);
+        if (b64.length + ((current && current.file && current.file.base64) || '').length > 3.2 * 1024 * 1024) return { why: 'The first and revised files together are too large to send for a comparison.' };
+        return { prev: { file: { mime: t, base64: b64 } } };
+      }
+      if (sub.text) return { prev: { text: sub.text } };
+      if (/spreadsheet|excel|xlsx/i.test(t) || /\.xlsx$/i.test(sub.fileName || '')) return { prev: { text: await S.files.xlsxToText(blob) } };
+      return { why: 'That kind of file cannot be re-sent for a comparison.' };
+    } catch (e) { return { why: 'The first version could not be read from this device.' }; }
   }
 
   async function submit(c, m, a, round) {
@@ -59,6 +78,11 @@
       const p = await prepare(d, fileOnly);
       const at = new Date();
       if (p.blob) { fileId = S.uid(); await S.files.put(fileId, p.blob); }
+      if (round === 2 && d.prior) {
+        const pr = await preparePrior(a.work && a.work.first, p.payload);
+        if (!pr.prev) throw new Error(pr.why + ' Untick “Also send my first version” to continue with the earlier findings only.');
+        p.payload.previous = pr.prev;
+      }
       const fb = await S.ai.review(c, m, a, p.payload, round);
       // keep the rubric the AI wrote at the first review so a second review grades the same criteria
       if (round === 1 && !(a.rubric && a.rubric.length)) a.rubric = fb.criteria.map((k) => ({ name: k.name, max: k.max }));
@@ -81,14 +105,20 @@
     d.err = ''; d.busy = true; S.render(false);
     let fileId = '';
     try {
-      const material = round === 1 ? d.material.trim() : (a.office && a.office.material) || '';
-      if (round === 1 && !material) throw new Error('Tell the AI which article, reading, or example you are working from.');
+      const mode = round === 1 ? (d.mode === 'own' ? 'own' : 'practice') : (a.office && a.office.mode) || 'own';
+      const material = mode === 'practice' ? '' : round === 1 ? d.material.trim() : (a.office && a.office.material) || '';
+      if (round === 1 && mode === 'own' && !material) throw new Error('Tell the AI which article, reading, or example you are working from.');
       const p = await prepare(d, false);
+      if (round === 2 && d.prior) {
+        const pr = await preparePrior(a.office && a.office.rounds[0], p.payload);
+        if (!pr.prev) throw new Error(pr.why + ' Untick “Also send my first version” to continue with the earlier findings only.');
+        p.payload.previous = pr.prev;
+      }
       const at = new Date();
       if (p.blob) { fileId = S.uid(); await S.files.put(fileId, p.blob); }
-      const fb = await S.ai.office(c, m, a, p.payload, round, material);
+      const fb = await S.ai.office(c, m, a, p.payload, round, material, mode);
       const sub = { text: '', fileId, fileName: '', fileType: '', fileSize: 0, ...p.stored, at: at.toISOString(), late: false, feedback: fb };
-      a.office = { material, rounds: ((a.office && a.office.rounds) || []).concat([sub]) };
+      a.office = { material, mode, rounds: ((a.office && a.office.rounds) || []).concat([sub]) };
       dropDraft(key); S.save(); toast(round === 1 ? 'Office-hours feedback is ready. It isn’t graded.' : 'Second round of feedback is ready. Nothing here is graded.');
     } catch (e) {
       if (fileId) S.files.del(fileId);
@@ -125,7 +155,11 @@
     return h('div', { class: 'submit-box' },
       d.err ? h('p', { class: 'banner error', role: 'alert' }, d.err) : null,
       !fc.ok ? h('p', { class: 'banner error', role: 'alert' }, fc.msg) : null,
-      o.material ? h('label', { class: 'field' }, h('span', {}, 'What are you working from?'),
+      o.modePick ? h('fieldset', { class: 'mode-pick' }, h('legend', {}, 'What should the AI evaluate?'),
+        [['practice', 'Practice this assignment', 'Your draft is reviewed against this assignment’s instructions, supplied materials and grading criteria. No grade, and nothing changes in your record.'],
+          ['own', 'Explore with my own materials', 'Use a different article, document, case or dataset you chose. The AI judges your work within that material. No grade.']].map(([v, t, d2]) =>
+          h('label', { class: 'consent' }, h('input', { type: 'radio', name: 'oh-mode', checked: (d.mode || 'practice') === v, disabled: d.busy, onchange: () => { d.mode = v; S.render(false); } }), h('span', {}, h('b', {}, t), ' ', h('span', { class: 'small muted' }, d2))))) : null,
+      o.material && (!o.modePick || d.mode === 'own') ? h('label', { class: 'field' }, h('span', {}, 'What are you working from?'),
         h('input', { type: 'text', maxlength: '300', disabled: d.busy, value: d.material, placeholder: 'e.g. the title and link of the article you chose', oninput: (e) => { d.material = e.target.value; } })) : null,
       o.fileOnly
         ? h('p', { class: 'small muted' }, 'This assignment needs a table, chart, or similar layout, so it can’t be typed in a text box. Submit a PDF, an Excel (.xlsx) file, or an image.')
@@ -133,6 +167,8 @@
           h('textarea', { rows: 6, placeholder: 'Type or paste your answer here, or choose a file below.', disabled: d.busy || !!d.file, value: d.text, oninput: (e) => { d.text = e.target.value; writeDraft(o.key, d.text); } })),
       h('label', { class: 'field' }, h('span', {}, o.fileOnly ? 'Your file (PDF, Excel, or image)' : 'Or a file (TXT, MD, CSV, PDF, PNG, JPG, WEBP, GIF, or XLSX)'), fileIn,
         h('small', {}, d.file ? 'Selected: ' + d.file.name + (o.fileOnly ? '.' : '. It will be used instead of the text above.') + (S.files.classify(d.file) === 'xlsx' ? ' Only cell values are read. Charts, images and formatting in Excel are not, so use a PDF or image if the AI needs to see them.' : '') : 'PDFs up to 2 MB. Excel files up to 5 MB (cell values only). Photos are shrunk automatically.')),
+      o.prior ? h('label', { class: 'consent' }, h('input', { type: 'checkbox', checked: !!d.prior, disabled: d.busy, onchange: (e) => { d.prior = e.target.checked; S.render(false); } }),
+        h('span', {}, 'Also send my first version (saved on this device) so the AI can compare it with this revision. If unticked, the AI sees only this revision and the earlier findings, and will say it could not compare the two.')) : null,
       h('label', { class: 'consent' }, agree, h('span', {}, sending + ' will be sent to the AI service to review. It is used for this review only and is not kept by the service. Send it?')),
       h('div', { class: 'btn-row' }, go,
         o.attach && d.file ? h('button', { class: 'btn ghost', type: 'button', disabled: d.busy, onclick: () => attachOnly(c, m, a) }, 'Attach without AI feedback') : null,
@@ -142,9 +178,11 @@
   // The Worker used to cut a criterion name at 120 characters, though assignment criteria run to 200. Show the full rubric wording when a saved name is a cut-off start of it.
   let curRubric = [];
   const fullName = (k, rubric) => { const r = (rubric || curRubric).find((x) => x.name === k.name || (k.name.length >= 100 && x.name.startsWith(k.name))); return r ? r.name : k.name; };
-  function feedbackView(f, showScore, office, a) {
+  // Reviews made before Worker v14 (and any saved feedback) show exactly as they always have.
+  function legacyFeedback(f, showScore, office, a) {
     const rub = a && a.rubric && a.rubric.length ? a.rubric : curRubric;
     return h('div', { class: 'feedback' },
+      f.legacyWorker ? h('p', { class: 'banner' }, 'This review used the AI service’s older method (it did not receive the full assignment context or give evidence for each point). Update the AI service to version 14 for evidence-based reviews.') : null,
       f.summary ? h('p', {}, f.summary) : null,
       f.strengths.length ? h('div', {}, h('h4', { class: 'minor' }, 'What’s working'), list(f.strengths)) : null,
       f.improvements.length ? h('div', {}, h('h4', { class: 'minor' }, 'What to change'), list(f.improvements)) : null,
@@ -152,6 +190,60 @@
       f.criteria.length ? h('div', {}, h('h4', { class: 'minor' }, showScore ? 'By criterion' : 'Criteria this was reviewed against'),
         h('ul', { class: 'plain' }, f.criteria.map((k) => h('li', {}, h("b", {}, fullName(k, rub)), showScore ? ' · ' + k.score + ' / ' + k.max : '', k.comment ? ' — ' + k.comment : '')))) : null,
       h('p', { class: 'small muted' }, 'Reviewed by AI on ' + when(f.at) + (f.cost ? ' · about ' + money(f.cost) : '') + (office ? '. Practice feedback only: nothing here is graded.' : '. This is an automated assessment, not a human grade.')));
+  }
+
+  // Evidence-based reviews (Worker v14): what the reviewer could see, correct work first, then findings sorted by what kind of point they are.
+  const FTYPE = {
+    strength: ['Working well', 'ok', 'Correct or well done.'],
+    error: ['Verified error', 'warn', 'A mistake the AI checked and quoted from your work.'],
+    missing: ['Missing', 'warn', 'A required element the AI could not find anywhere in your work.'],
+    partial: ['Partly supported', 'warn', 'Present, but only partly correct or not fully supported.'],
+    clarity: ['Clarity', 'soft', 'Correct, but could be clearer. Not an error, and never a reason to lose points.'],
+    optional: ['Optional', 'soft', 'Enrichment beyond what is required. Never a reason to lose points.'],
+    unverified: ['Could not verify', 'soft', 'The AI could not check this (for example a claim about a reading), so nothing is concluded from it.'],
+  };
+  const GROUPS = [['strength', 'What’s working'], ['error', 'Verified errors'], ['missing', 'Missing required elements'], ['partial', 'Partly supported'], ['clarity', 'Clarity and presentation'], ['optional', 'Optional ideas'], ['unverified', 'Could not be verified']];
+  const FOLLOW = { addressed: 'Addressed', partly: 'Partly addressed', 'not-addressed': 'Not yet addressed', 'cannot-tell': 'Could not tell' };
+  const CSTATUS = { met: 'Met', partly: 'Partly met', 'not-met': 'Not met', 'not-assessed': 'Not assessed' };
+
+  function findingView(f) {
+    const t = FTYPE[f.type] || FTYPE.optional;
+    return h('li', { class: 'finding f-' + f.type },
+      h('div', { class: 'f-head' }, h('span', { class: 'badge ' + t[1], title: t[2] }, t[0]), f.criterion ? h('span', { class: 'small muted' }, 'Criterion: ' + f.criterion) : null),
+      h('p', { class: 'f-claim' }, f.claim),
+      f.quote ? h('blockquote', { class: 'f-quote' }, '“' + f.quote + '”', h('span', { class: 'small muted' }, f.located === true ? ' Found in your text' + (f.where ? ' (' + f.where + ')' : '') + '.' : f.located === false ? ' Not found exactly in your text.' : ' Quoted by the AI from your file. This app could not check where it is.')) : null,
+      S.exhibitsView.refLine(f),
+      f.note ? h('p', { class: 'small muted' }, f.note) : null,
+      f.caution ? h('p', { class: 'small' }, f.caution) : null,
+      f.fix ? h('p', { class: 'f-fix' }, h('b', {}, 'Suggested change: '), f.fix) : null,
+      f.example ? h('p', { class: 'f-example' }, h('b', {}, f.illustrative ? 'Illustration (not from your assignment materials): ' : 'Example: '), f.example) : null);
+  }
+
+  function feedbackView(f, showScore, office, a) {
+    if (!f.findings || !f.context) return legacyFeedback(f, showScore, office, a);
+    const rub = a && a.rubric && a.rubric.length ? a.rubric : curRubric, ins = f.inspection || {}, c = f.context;
+    const ctxLine = [c.steps ? 'assignment steps' : '', c.materials ? 'supplied materials' : '', c.keyIdeas ? 'module key ideas' : ''].filter(Boolean).join(', ');
+    const modeNote = c.mode === 'practice' ? 'Practice on this assignment: reviewed against its real instructions, materials and criteria. Ungraded.' : c.mode === 'own' ? 'Explore with your own material: reviewed against the material you named. Ungraded.' : '';
+    const compNote = c.compared === 'both-versions' ? 'Compared with your first version (you agreed to send it).' : c.compared === 'findings-only' ? 'Your first version was not available to the AI, so it could not compare the two versions. It only knew the earlier findings.' : '';
+    const assessed = f.criteria.filter((k) => k.assessed !== false);
+    return h('div', { class: 'feedback' },
+      modeNote ? h('p', { class: 'small muted' }, modeNote) : null,
+      h('details', { class: 'inspect', open: !!(ins.limited || (ins.couldNotInspect && ins.couldNotInspect.length)) }, h('summary', {}, 'What the reviewer could see' + (ins.limited ? ' · review limitation' : '')),
+        ins.received ? h('p', { class: 'small' }, ins.received) : null,
+        list(ins.facts, 'plain small'),
+        ins.couldNotInspect && ins.couldNotInspect.length ? h('div', {}, h('p', { class: 'small' }, h('b', {}, 'Could not read or see:')), list(ins.couldNotInspect, 'plain small')) : null,
+        ctxLine ? h('p', { class: 'small muted' }, 'The reviewer was given: ' + ctxLine + (c.readings === 'titles-only' ? '; reading titles only (not their text)' : '') + '.') : null,
+        compNote ? h('p', { class: 'small muted' }, compNote) : null),
+      ins.limited ? h('p', { class: 'banner', role: 'status' }, 'Review limitation: ' + (f.criteria.length - assessed.length) + ' of ' + f.criteria.length + ' grading criteria could not be fairly assessed because the AI could not read the evidence. They were left out, not scored low. ' + (showScore ? 'The score below covers only the assessed criteria and is provisional. ' : '') + 'To have them assessed, resubmit in a supported format: typed text, a PDF with selectable text, or an Excel file with the values in cells.') : null,
+      f.summary ? h('p', {}, f.summary) : null,
+      GROUPS.map(([ty, title]) => { const items = f.findings.filter((x) => x.type === ty); return items.length ? h('div', {}, h('h4', { class: 'minor' }, title), h('ul', { class: 'findings' }, items.map(findingView))) : null; }),
+      !f.findings.length ? h('p', { class: 'small muted' }, 'The AI found nothing to flag.') : null,
+      f.followUp && f.followUp.length ? h('div', {}, h('h4', { class: 'minor' }, 'Earlier points'), h('ul', { class: 'plain' }, f.followUp.map((x) => h('li', {}, h('b', {}, FOLLOW[x.status] || ''), ': ', x.claim, x.note ? ' — ' + x.note : '')))) : null,
+      f.nextSteps.length ? h('div', {}, h('h4', { class: 'minor' }, 'Next steps (optional)'), list(f.nextSteps)) : null,
+      f.criteria.length ? h('div', {}, h('h4', { class: 'minor' }, showScore ? 'By criterion' : 'Criteria this was reviewed against'),
+        h('ul', { class: 'plain' }, f.criteria.map((k) => h('li', {}, h('b', {}, fullName(k, rub)), ' · ', CSTATUS[k.status] || '', showScore && k.assessed !== false ? ' · ' + k.score + ' / ' + k.max : '', k.comment ? ' — ' + k.comment : '', k.adjusted ? h('span', { class: 'small muted' }, ' (Adjusted: ' + k.adjusted + ')') : null)))) : null,
+      showScore && ins.limited ? h('p', { class: 'small' }, 'Provisional score: ' + f.score + ' of ' + f.max + ' points on the assessed criteria.') : null,
+      h('p', { class: 'small muted' }, 'Reviewed by AI on ' + when(f.at) + (f.cost ? ' · about ' + money(f.cost) : '') + (office ? '. Practice feedback only: nothing here is graded.' : '. This is an automated assessment, not a human grade.') + ' Quotes are shown as found only where the app could check them.'));
   }
 
   function fileLine(sub) {
@@ -164,6 +256,12 @@
       slot.append(h('a', { href: url, download: sub.fileName || 'file', target: '_blank', rel: 'noopener' }, sub.fileName), ' · ' + Math.max(1, Math.round(sub.fileSize / 1024)) + ' KB · kept on this device only');
     }).catch(() => { slot.textContent = sub.fileName + ' · could not be read from this device.'; });
     return h('p', {}, slot);
+  }
+
+  // Review Studio (js/review-studio.js): the submitted work beside its feedback. Read-only; it never changes a grade, record or deadline.
+  function studioButton(c, m, a, sub, o) {
+    if (!sub || !sub.feedback || !S.reviewStudio) return null;
+    return S.reviewStudio.button({ c, m, a, sub, feedback: sub.feedback, showScore: !!o.showScore, office: !!o.office, title: a.title, meta: o.meta || '', scoreLine: o.scoreLine || '', rubric: a.rubric || [], legacy: () => legacyFeedback(sub.feedback, !!o.showScore, !!o.office, a) });
   }
 
   // Save a finished piece to this course's Portfolio (or take it out). Demonstrate work is saved by default when it is finalized.
@@ -196,10 +294,11 @@
   S.officePanel = function (c, m, a, bare) {
     const ready = S.ai && S.ai.ready && S.ai.ready(), o = a.office, n = o ? o.rounds.length : 0, key = 'oh:' + a.id, d = dr(key);
     const body = [
-      h('p', { class: 'small muted' }, 'Want to work from a real article, reading, or example you chose yourself, instead of the one provided? Do the assignment with your own material here and get feedback in up to two rounds. This is practice: it is never graded and doesn’t change your grade or Portfolio.'),
-      o && o.material ? h('p', { class: 'small' }, h('b', {}, 'Working from: '), o.material) : null,
-      o ? o.rounds.map((r, i) => h('div', { class: 'oh-round' }, h('h4', { class: 'minor' }, 'Round ' + (i + 1) + ' · ' + when(r.at)), r.feedback ? feedbackView(r.feedback, false, true) : null, fileLine(r))) : null,
-      n < 2 ? (ready ? inputForm(c, m, a, { key, label: n ? 'Get second-round feedback' : 'Get office-hours feedback', material: n === 0, textLabel: n ? 'Your revised work' : 'Your work', onSend: () => officeSubmit(c, m, a, n + 1) }) : h('p', { class: 'small' }, 'Office hours need the AI service. Add its address and access code under Data & Backup → AI.')) : h('p', { class: 'small muted' }, 'You’ve used both rounds. Start over to try different material.'),
+      h('p', { class: 'small muted' }, 'Practice here in up to two rounds. Choose to practise this assignment as written, or to work from material you chose yourself. Office hours are never graded and never change your grade, submissions or Portfolio.'),
+      o && o.mode === 'practice' ? h('p', { class: 'small' }, h('b', {}, 'Practising: '), 'this assignment, with its own instructions, materials and criteria.') : null,
+      o && o.mode !== 'practice' && o.material ? h('p', { class: 'small' }, h('b', {}, 'Working from: '), o.material) : null,
+      o ? o.rounds.map((r, i) => h('div', { class: 'oh-round' }, h('h4', { class: 'minor' }, 'Round ' + (i + 1) + ' · ' + when(r.at)), r.feedback ? [studioButton(c, m, a, r, { office: true, meta: 'Office hours, round ' + (i + 1) }), feedbackView(r.feedback, false, true)] : null, fileLine(r))) : null,
+      n < 2 ? (ready ? inputForm(c, m, a, { key, label: n ? 'Get second-round feedback' : 'Get office-hours feedback', material: n === 0, modePick: n === 0, prior: n === 1, textLabel: n ? 'Your revised work' : 'Your work', onSend: () => officeSubmit(c, m, a, n + 1) }) : h('p', { class: 'small' }, 'Office hours need the AI service. Add its address and access code under Data & Backup → AI.')) : h('p', { class: 'small muted' }, 'You’ve used both rounds. Start over to try different material.'),
       n ? h('div', { class: 'btn-row' }, h('button', { class: 'linkbtn danger', type: 'button', onclick: () => {
         if (!confirm('Clear this office-hours session, including its feedback? This cannot be undone.')) return;
         (a.office.rounds || []).forEach((r) => { if (r.fileId) S.files.del(r.fileId); });
@@ -220,7 +319,7 @@
     const w = a.work, fileOnly = a.format === 'file';
     const ready = S.ai && S.ai.ready && S.ai.ready();
     const canReview = a.points > 0;
-    const form = (round) => inputForm(c, m, a, { key: a.id, label: round === 1 ? 'Get AI feedback' : 'Submit for final review', fileOnly, attach: round === 1, onSend: () => submit(c, m, a, round) });
+    const form = (round) => inputForm(c, m, a, { key: a.id, label: round === 1 ? 'Get AI feedback' : 'Submit for final review', fileOnly, attach: round === 1, onSend: () => submit(c, m, a, round), prior: round === 2 });
     let submitPart, feedbackPart, state;
     if (!w) {
       state = 'none';
@@ -246,6 +345,7 @@
       ];
       feedbackPart = [
         h('p', {}, badge('First review', 'soft'), ' ', w.first.late ? badge('Late', 'warn') : null, ' ', h('span', { class: 'small muted' }, 'Submitted ' + when(w.first.at))),
+        studioButton(c, m, a, w.first, { meta: 'First review, submitted ' + when(w.first.at) }),
         feedbackView(w.first.feedback, false), fileLine(w.first),
       ];
     } else {
@@ -268,6 +368,7 @@
         h('div', { class: 'grade-line' }, badge('Final', 'solid'), ' ', f.late ? badge('Late', 'warn') : null, ' ',
           h('b', {}, a.score + ' / ' + a.points + ' pts'), ' · ', pct + '%', ' · ', h('b', {}, S.letter(pct))),
         h('p', { class: 'small muted' }, 'Submitted ' + when(f.at) + '. An AI-generated assessment, not a human grade. It is also recorded on the Grades page and in your Portfolio.'),
+        studioButton(c, m, a, f, { showScore: true, meta: 'Final review, submitted ' + when(f.at), scoreLine: 'Final: ' + a.score + ' / ' + a.points + ' pts · ' + pct + '% · ' + S.letter(pct) }),
         feedbackView(fb, true), fileLine(f),
       ] : h('p', { class: 'empty' }, 'This was attached as evidence, so there is no AI feedback.');
     }

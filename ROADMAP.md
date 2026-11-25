@@ -25,10 +25,16 @@ Vision: an internationally respected independent university with the art directi
 |---|---|---|---|
 | 0 | Audit, preservation, plan | ✅ complete, awaiting review (`docs/PHASE-0-AUDIT.md`) | none |
 | 1 | **Learning Studio**: Module and Assignment redesign | ✅ released: build 19, `d858ce0`, Worker v9 | 0 approved |
-| 2 | **Academic Experience**: Syllabus, Grades, Portfolio redesign | 🟡 built (build 20), awaiting your review. Not committed | 1 released |
-| 2b | **Visual refresh and Home** (Track A): palette tokens, navy shell, Up Next Home, Reading Room columns | 🟡 built (build 21), awaiting your review. Not committed | 2 built |
-| 2d | **Check content** (does a reading's page hold the reading?) | 🟡 built (build 22, Worker v13), mock-tested and one real test (5 of 5 correct, $0.006) | none |
-| 2c | **Syllabus reliability** (Track B): audit, stages, paste, review screen, assignment revisions | 🟡 built (build 21, Worker v11), mock-tested only; a real-retrieval test needs your cost approval | none |
+| 2 | **Academic Experience**: Syllabus, Grades, Portfolio redesign | ✅ released (build 20 to 23) | 1 released |
+| 2b | **Visual refresh and Home** (Track A): palette tokens, navy shell, Up Next Home, Reading Room columns | ✅ released (build 21) | 2 built |
+| 2d | **Check content** (does a reading's page hold the reading?) | ✅ released (build 22, Worker v13), one real test (5 of 5, $0.006) | none |
+| 2c | **Syllabus reliability** (Track B): audit, stages, paste, review screen, assignment revisions | ✅ released (builds 21 to 23), real tests R1 to R5 | none |
+| S1 | **Review accuracy and Office Hours reliability** (1A context + evidence schema + modes; 1B eval + capped real test; 1C Review Studio) | 🟡 1A + 1B done (Worker v14, real-AI evaluated, $0.4953); 1C Review Studio complete (build 25, approved, not yet released). Limitations: see TESTING.md | Worker v14 |
+| S2 | **Evidence packets** (spec: docs/PHASE2-SPEC.md). 2A Evidence Architect: tables, documents, timelines, charts, CSV, automatic generation in course build, upgrade with preview | 🟡 2A built (build 26, Worker v15), mock-tested, awaiting your review and the design checkpoint. 2B workspace/design, 2C evidence-aware review, 2D learner import not started | S1; Worker v15 |
+| G1 | **Global UX: auto-hiding overlay navigation** (edge trigger, hover or keyboard opens a floating sidebar that never reflows the page, pin preference kept locally, touch menu button; review `.content` max-width and workbench widths). Separate from Phase 2, tested on its own | ✅ built and approved by you (build 27, incl. full-width workbench, 55/45 split, Expand table); unreleased | none |
+| S3 | **Standalone course capstone** (generation, workbench, Portfolio link; grade policy approved first) | ⬜ | S1; Worker v16 |
+| S4 | **Designed PDFs**: Syllabus, Portfolio, Feedback Report on one engine; rename "Course Sheet" to "Syllabus" | ⬜ | S3 |
+| S5 | **Dashboard Learning Progress** replaces Module Library | ⬜ | S3 |
 | 3 | **Discover**: search, library, collections, Save to Course | ⬜ | 1 (resource cards), and the resource model below |
 | 4 | **Study Notebook and Reading Assistant** | ⬜ | 3 (library and resource model), a Worker text-retrieval design |
 | 5 | **Knowledge Checks and Adaptive Practice** | ⬜ | 1 (stage UI), Worker changes (needs approval) |

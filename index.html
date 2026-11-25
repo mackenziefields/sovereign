@@ -23,6 +23,9 @@
   <link rel="stylesheet" href="css/nav.css">
   <link rel="stylesheet" href="css/academic.css">
   <link rel="stylesheet" href="css/refresh.css">
+  <link rel="stylesheet" href="css/review.css">
+  <link rel="stylesheet" href="css/exhibits.css">
+  <link rel="stylesheet" href="css/nav-overlay.css">
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -32,6 +35,7 @@
       <button id="menu-btn" class="menu-btn" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
     </header>
 
+    <button id="nav-edge" class="nav-edge" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation menu" title="Open navigation"></button>
     <aside id="sidebar" class="sidebar" aria-label="Primary">
       <a class="wordmark" href="#/" aria-label="sovereign. dashboard">sovereign<span>.</span></a>
       <p class="tagline">Learn. Apply. Demonstrate.</p>
@@ -46,6 +50,7 @@
         <p class="side-k">Courses</p>
         <ul id="side-courses"></ul>
       </nav>
+      <button id="nav-pin" class="nav-pin" type="button" aria-pressed="false">Pin menu open</button>
       <p class="side-note">Saved in this browser only. It does not sync across devices.</p>
     </aside>
     <div id="scrim" class="scrim" hidden></div>
@@ -61,12 +66,15 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="js/config.js"></script>
+  <script src="js/exhibits.js"></script>
   <script src="js/store.js"></script>
   <script src="js/components.js"></script>
+  <script src="js/exhibits-view.js"></script>
   <script src="js/files.js"></script>
   <script src="js/ai-client.js"></script>
   <script src="js/views-ai.js"></script>
   <script src="js/views-work.js"></script>
+  <script src="js/review-studio.js"></script>
   <script src="js/views-course.js"></script>
   <script src="js/studio.js"></script>
   <script src="js/syllabus.js"></script>

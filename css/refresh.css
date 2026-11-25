@@ -172,3 +172,18 @@ button:focus-visible, .btn:focus-visible, a:focus-visible { outline-color: var(-
 @media (min-width: 640px) { .rev-cols { grid-template-columns: 1fr 1fr; } }
 .rev-cols > div { min-width: 0; padding: .7rem .8rem; background: var(--paper); border-radius: var(--radius); }
 .syl-paste .consent { display: flex; gap: .6rem; align-items: flex-start; margin: .75rem 0; }
+
+/* Evidence-based feedback (build 24) */
+.findings { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .6rem; }
+.finding { background: var(--surface, #fff); border: 1px solid var(--line, #d9dde3); border-left: 4px solid var(--line, #d9dde3); border-radius: 4px; padding: .6rem .8rem; }
+.finding.f-strength { border-left-color: var(--indigo, #2643d8); }
+.finding.f-error, .finding.f-missing { border-left-color: var(--oxblood, #681632); }
+.finding.f-partial { border-left-color: #b58900; }
+.f-head { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.f-claim { margin: .35rem 0; }
+.f-quote { margin: .35rem 0; padding: .3rem .6rem; border-left: 3px solid var(--line, #d9dde3); font-style: italic; }
+.f-quote .small { font-style: normal; }
+.inspect { margin: .4rem 0 .8rem; }
+.inspect > summary { cursor: pointer; font-weight: 600; }
+.mode-pick { border: 1px solid var(--line, #d9dde3); border-radius: 4px; padding: .6rem .8rem; margin: 0 0 .8rem; display: grid; gap: .5rem; }
+.mode-pick legend { padding: 0 .3rem; font-weight: 600; }

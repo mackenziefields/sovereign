@@ -279,30 +279,59 @@
     const each = Math.floor((a.points / n) * 10) / 10;
     return cr.map((t, i) => ({ name: t.slice(0, 120), max: i === n - 1 ? Math.round((a.points - each * (n - 1)) * 10) / 10 : each }));
   }
-  // Office hours: practice feedback on the person's own material, up to two rounds, never graded.
-  ai.office = async function (course, mod, a, payload, round, material, opts) {
-    const prior = a.office && a.office.rounds[0] && a.office.rounds[0].feedback;
+  // Supplied materials as the reviewer sees them. Worker v16+ takes the evidence packet as its own field (up to 14,000 characters, fairly shared
+  // between exhibits). An older Worker only reads 7,000 characters of "materials", so there the packet is squeezed in after the original text, as before.
+  const NEW_REVIEW = 16, EXH_BUDGET = 14000;
+  const packetMaterials = (a) => {
+    const text = a.materials || '';
+    if (ai.workerVersion && ai.workerVersion >= NEW_REVIEW) return text;
+    const ex = S.exhibits.asText(a, 6200 - Math.min(text.length, 1500));
+    return ex.text ? [text.slice(0, 1500), ex.text].filter(Boolean).join('\n\n') : text;
+  };
+  const packetField = (a) => (ai.workerVersion && ai.workerVersion >= NEW_REVIEW && !a.realEvidence ? S.exhibits.asText(a, EXH_BUDGET).text : '');
+  // What the reviewer is told about the assignment (v14). Reading TEXTS are never included: only titles, and the reviewer is told so.
+  const reviewContext = (mod, a, kind, mode) => ({
+    stage: S.stageOf(a), format: a.format || '', submit: a.submit || '', mode, kind: kind || '',
+    steps: (a.parts || []).map((p) => ({ title: p.title, questions: p.questions })),
+    materials: a.realEvidence ? '' : packetMaterials(a), exhibits: packetField(a),
+    module: { title: mod.title, objectives: mod.objectives, keyIdeas: mod.keyIdeas },
+    readings: (mod.readings || []).filter((x) => x.source !== 'placeholder').slice(0, 8).map((x) => x.title),
+  });
+  const priorFindings = (fb) => (fb && fb.findings ? fb.findings.filter((f) => f.type !== 'strength').map((f) => ({ type: f.type, claim: f.claim })) : []);
+  const finish = (r) => { const fb = { ...r.feedback, cost: (r.usage && r.usage.cost) || 0 }; if (!fb.context) fb.legacyWorker = true; return fb; }; // an older Worker answers in the old format: say so, never pretend it had the full context
+
+  // Office hours: ungraded practice, up to two rounds. mode "practice" = the same assignment, materials and criteria; "own" = the learner's own material.
+  // payload: { text } or { file }, plus { kind, previous } (previous = the first version, only when the learner agreed to send it again).
+  // The Worker's version decides how exhibits are sent (see packetMaterials). One free /health call per session, only when needed.
+  const versionFor = async (a) => { if (ai.workerVersion || !(a.exhibits && a.exhibits.length)) return; try { const hl = await ai.health(); if (hl && hl.version) ai.workerVersion = hl.version; } catch (e) { /* the real call reports it */ } };
+  ai.office = async function (course, mod, a, payload, round, material, mode, opts) {
+    await versionFor(a);
+    const { kind, previous, ...submission } = payload;
+    const prior = a.office && a.office.rounds[0] && a.office.rounds[0].feedback, practice = mode === 'practice';
     const r = await ai.call('/review', {
-      mode: 'office', context: material,
-      course: { title: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '' },
-      assignment: { title: a.title, description: a.description },
-      round: round === 2 ? 2 : 1, previousImprovements: round === 2 && prior ? prior.improvements : [], submission: payload,
+      mode: 'office', course: { title: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '' },
+      assignment: { title: a.title, description: a.description }, context: reviewContext(mod, a, kind, practice ? 'practice' : 'own'), ownMaterial: practice ? '' : material,
+      ...(practice ? { rubric: rubricFor(a) } : {}),
+      round: round === 2 ? 2 : 1, previousImprovements: round === 2 && prior ? prior.improvements : [], previousFindings: round === 2 ? priorFindings(prior) : [], submission,
+      ...(round === 2 && previous ? { previousSubmission: previous } : {}),
     }, opts || {});
     if (!S.state.courses.includes(course) || !mod.assignments.includes(a)) throw new AIError('gone', 'That assignment was removed while it was being reviewed.');
     if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
-    return { ...r.feedback, cost: (r.usage && r.usage.cost) || 0 };
+    return finish(r);
   };
   ai.review = async function (course, mod, a, payload, round, opts) {
+    await versionFor(a);
+    const { kind, previous, ...submission } = payload;
     const first = a.work && a.work.first && a.work.first.feedback;
     const r = await ai.call('/review', {
       course: { title: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '' },
-      assignment: { title: a.title, description: a.description, points: a.points },
-      round: round === 2 ? 2 : 1, rubric: rubricFor(a), previousImprovements: round === 2 && first ? first.improvements : [],
-      submission: payload,
+      assignment: { title: a.title, description: a.description, points: a.points }, context: reviewContext(mod, a, kind, 'graded'),
+      round: round === 2 ? 2 : 1, rubric: rubricFor(a), previousImprovements: round === 2 && first ? first.improvements : [], previousFindings: round === 2 ? priorFindings(first) : [],
+      submission, ...(round === 2 && previous ? { previousSubmission: previous } : {}),
     }, opts || {});
     if (!S.state.courses.includes(course) || !mod.assignments.includes(a)) throw new AIError('gone', 'That assignment was removed while it was being reviewed.');
     if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
-    return { ...r.feedback, cost: (r.usage && r.usage.cost) || 0 };
+    return finish(r);
   };
 
   // Refuses to start AI work against an older copy of the Worker that doesn't have the newest features.
@@ -310,6 +339,7 @@
   ai.requireCurrent = async function () {
     let hl = null;
     try { hl = await ai.health(); } catch (e) { return; } // unreachable: the real call will report it
+    if (hl && hl.version) ai.workerVersion = hl.version;
     if (!(hl && hl.version >= ai.NEEDS_VERSION)) throw new AIError('outdated', 'The AI service is an older version than this app needs. Paste the latest worker.js into your Cloudflare Worker (Edit code, replace everything, Deploy), then try again.');
   };
 
@@ -333,6 +363,10 @@
       if (!d || !a || !mod.assignments.includes(a)) return;
       if (a.origin === 'ai' || !a.description) { a.description = d.description; a.purpose = ''; } // a person's own wording is kept
       a.materials = a.realEvidence ? '' : S.labelFiction(d.materials); a.basis = d.basis; a.portfolioNote = d.portfolioNote || ''; a.parts = d.parts; a.format = d.format; a.submit = d.submit; a.estimate = d.estimate; a.steps = [];
+      if (S.exhibits.needsPacket(a) && !(a.exhibits || []).length) { // a required packet is planned here and built right after (course build) or by the button
+        const plan = Array.isArray(d.exhibitPlan) ? d.exhibitPlan : [];
+        a.packet = { state: plan.length ? 'required' : 'incomplete', plan, at: now(), model: '', upgraded: false, note: plan.length ? '' : 'The AI did not say which exhibits this assignment needs.' };
+      }
       if (a.realEvidence) S.setEvidence(mod, a); // real-evidence tasks get only sources whose links were checked; if none, they are marked "Source needed", never given an invented scenario
       if (!a.work) { a.rubric = d.rubric; a.criteria = []; } // the grading criteria can't change once work has been submitted
       done++;
@@ -340,6 +374,58 @@
     if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
     S.save();
     return { done, total: list.length };
+  };
+
+  /* ---- Evidence packets (Phase 2A) ---- */
+  ai.PACKET_VERSION = 15;
+  const packetBody = (course, mod, a, notes) => ({
+    topic: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '',
+    module: { title: mod.title, overview: mod.overview, objectives: mod.objectives, keyIdeas: mod.keyIdeas },
+    assignment: { title: a.title, kind: a.kind, description: a.description, steps: a.parts, criteria: (a.rubric || []).map((k) => k.name), materials: a.realEvidence ? '' : (a.materials || ''), plan: (a.packet && a.packet.plan) || [] },
+    notes: notes || '',
+  });
+  // Asks for a packet and returns it as a DRAFT. Nothing is saved: the person approves first (upgrades) or savePacket is called (course build).
+  ai.draftPacket = async function (course, mod, a, o) {
+    o = o || {};
+    if (a.realEvidence) throw new AIError('bad_input', 'This assignment uses real sources, so no fictional exhibits are written for it.');
+    await ai.requireCurrent();
+    if (ai.workerVersion && ai.workerVersion < ai.PACKET_VERSION) throw new AIError('outdated', 'Evidence packets need AI service version ' + ai.PACKET_VERSION + ' or newer (yours is ' + ai.workerVersion + '). Paste the latest worker.js into your Cloudflare Worker (Edit code, replace everything, Deploy), then try again.');
+    const r = await ai.call('/exhibits', packetBody(course, mod, a, o.notes), o.signal ? { signal: o.signal } : {});
+    const v = S.exhibits.sanitize(r.exhibits, { strict: true });
+    return { exhibits: v.exhibits, dropped: (r.dropped || []).concat(v.dropped), usage: r.usage, notes: o.notes || '' };
+  };
+  // Saves an approved draft onto the assignment. Only exhibits and packet bookkeeping change: never the instructions, steps, rubric, materials text, work, grades or feedback.
+  ai.savePacket = function (course, a, draft, o) {
+    if (!(S.state.courses.includes(course))) throw new AIError('gone', 'That course was removed.');
+    const plan = (a.packet && a.packet.plan) || [];
+    a.exhibits = draft.exhibits;
+    let state = S.exhibits.packetStatus(a) === 'ready' ? 'ready' : 'incomplete', note = '';
+    if (draft.dropped && draft.dropped.length) { state = 'incomplete'; note = draft.dropped.length + ' exhibit' + (draft.dropped.length === 1 ? '' : 's') + ' could not be used: ' + draft.dropped.slice(0, 3).map((x) => (x.id ? 'Exhibit ' + x.id + ' (' + x.reason + ')' : x.reason)).join('; ') + '.'; }
+    else if (plan.length && (a.exhibits || []).length < plan.length) { state = 'incomplete'; note = 'Only ' + a.exhibits.length + ' of the ' + plan.length + ' planned exhibits were built.'; }
+    if (!(a.exhibits || []).length) { state = 'incomplete'; note = note || 'No exhibit passed validation.'; }
+    a.packet = { state, plan, at: now(), model: (draft.usage && draft.usage.model) || '', upgraded: !!(o && o.upgraded), note };
+    if (course.ai && course.ai.generated && draft.usage) course.ai.usage.push(usageRow(draft.usage));
+    S.save();
+    return state;
+  };
+  ai.removePacket = function (a) { a.exhibits = []; a.packet = null; S.save(); };
+  // Course build: write the packet for every assignment of one module that needs one. Returns how many are still missing.
+  const PACKET_STOP = ['budget', 'global_limit', 'ip_limit', 'hour_limit', 'day_limit', 'bad_code', 'locked', 'not_configured', 'no_code', 'cancelled', 'upstream_auth', 'bad_model', 'outdated'];
+  ai.buildPackets = async function (course, mod, o) {
+    const todo = mod.assignments.filter((a) => S.exhibits.needsPacket(a) && !a.work && !(a.exhibits || []).length && a.packet && a.packet.plan.length);
+    let missing = mod.assignments.filter((a) => S.exhibits.needsPacket(a) && !(a.exhibits || []).length).length - todo.length; // required, but never planned
+    for (let n = 0; n < todo.length; n++) {
+      const a = todo[n];
+      if (o.onStep) o.onStep('Exhibits for “' + a.title + '” (' + (n + 1) + ' of ' + todo.length + ')');
+      let ok = false;
+      for (let tryN = 0; tryN < 2 && !ok; tryN++) {
+        try { const d = await ai.draftPacket(course, mod, a, { signal: o.signal }); ok = ai.savePacket(course, a, d) === 'ready'; }
+        catch (e) { if (PACKET_STOP.includes(e.code)) { missing += todo.length - n; S.save(); throw Object.assign(e, { packetsMissing: missing }); } if (a.packet) a.packet.note = e.message; }
+      }
+      if (!ok) missing++;
+    }
+    S.save();
+    return { missing };
   };
 
   // Phase 1: outline (saved immediately as a partial course). Phase 2: materials, one module at a time.
@@ -356,7 +442,7 @@
     set({ steps: [{ label: 'Course outline saved', state: 'done' }].concat(course.modules.map((m, i) => ({ label: 'Materials and assignments: ' + m.title, state: i === 0 ? 'active' : 'todo' }))) });
 
     const STOP = ['budget', 'global_limit', 'ip_limit', 'hour_limit', 'day_limit', 'bad_code', 'locked', 'not_configured', 'no_code', 'cancelled', 'upstream_auth', 'bad_model'];
-    let problem = '', missing = 0, detailsMissing = 0;
+    let problem = '', missing = 0, detailsMissing = 0, packetsMissing = 0;
     for (let i = 0; i < course.modules.length; i++) {
       run.steps[i + 1].state = 'active'; set({});
       try {
@@ -368,6 +454,12 @@
           try { const d = await ai.writeDetails(course, course.modules[i], course.modules[i].assignments.filter((a) => !a.parts.length), { signal: run.ctl.signal }); if (d.done >= d.total) break; if (tryN) detailsMissing++; }
           catch (e) { if (STOP.includes(e.code)) throw e; if (tryN) detailsMissing++; }
         }
+        const label = run.steps[i + 1].label;
+        try {
+          const pk = await ai.buildPackets(course, course.modules[i], { signal: run.ctl.signal, onStep: (t) => { run.steps[i + 1].label = t; set({}); } });
+          packetsMissing += pk.missing; if (pk.missing && run.steps[i + 1].state === 'done') run.steps[i + 1].state = 'warn';
+        } catch (e) { if (e.packetsMissing) packetsMissing += e.packetsMissing; throw e; }
+        finally { run.steps[i + 1].label = label; }
       } catch (e) {
         run.steps[i + 1].state = 'fail'; problem = e.message;
         if (STOP.includes(e.code)) { for (let j = i + 1; j < course.modules.length; j++) run.steps[j + 1].state = 'skipped'; break; }
@@ -375,10 +467,10 @@
       set({});
     }
     const failed = run.steps.slice(1).filter((s) => s.state === 'fail' || s.state === 'skipped').length;
-    course.ai.status = failed || detailsMissing ? 'partial' : 'complete'; // missing assignment pages count as incomplete, so the person is told rather than shown "ready"
+    course.ai.status = failed || detailsMissing || packetsMissing ? 'partial' : 'complete'; // missing assignment pages count as incomplete, so the person is told rather than shown "ready"
     course.ai.note = failed
       ? failed + ' of ' + course.modules.length + ' modules still need learning materials (' + problem + ') Open a module and choose “Find materials with AI” to try again, or add your own.'
-      : [missing ? missing + ' module' + (missing === 1 ? '' : 's') + ' had no verifiable source; they are marked “Source needed”.' : '', detailsMissing ? detailsMissing + ' module' + (detailsMissing === 1 ? '' : 's') + ' still need their assignment details: open the assignment and choose “Write full assignment with AI”.' : ''].filter(Boolean).join(' ');
+      : [missing ? missing + ' module' + (missing === 1 ? '' : 's') + ' had no verifiable source; they are marked “Source needed”.' : '', detailsMissing ? detailsMissing + ' module' + (detailsMissing === 1 ? '' : 's') + ' still need their assignment details: open the assignment and choose “Write full assignment with AI”.' : '', packetsMissing ? packetsMissing + ' assignment' + (packetsMissing === 1 ? '' : 's') + ' still need their exhibits (the case files, documents and data the work is built on): open the assignment, choose Materials, then “Build the exhibits with AI”.' : ''].filter(Boolean).join(' ');
     S.save();
     set({ phase: 'done', courseId: course.id, problem: course.ai.status === 'partial' ? course.ai.note : '' });
     return course;

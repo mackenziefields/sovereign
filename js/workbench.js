@@ -79,11 +79,19 @@
           h('p', {}, 'Work from these sources. Their links responded and the page title matched when the course was built. That does not mean anyone reviewed the content or that it says what the task assumes, so read them yourself.'),
           h('ul', { class: 'plain' }, src.map((x) => h('li', {}, x.url ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.title) : x.title))))
           : h('div', { class: 'wb-doc-body' }, h('p', { role: 'status' }, h('b', {}, 'Source needed. '), 'No real source for this task could be verified, so none is supplied and nothing was made up. Find one yourself, add it to this module’s readings, or use “Find materials” in the Reading Room.'))));
-    } else if (a.materials) out.push(h('article', { class: 'wb-doc' },
-      h('p', { class: 'wb-doc-k' }, 'Supplied material'),
-      a.origin === 'ai' ? h('p', { class: 'wb-doc-note' }, h('b', {}, 'Fictional. '), 'Written by the AI for this assignment. The people, organizations, figures and sources in it are invented.') : null,
-      h('div', { class: 'wb-doc-body' }, a.materials.split(/\n{2,}/).map((p) => h('p', {}, p)))));
-    else out.push(empty(a.basis === 'readings' || a.kind === 'learn' ? 'This assignment works from the module’s readings, listed below.' : 'No materials were supplied with this assignment. If it needs a case, document, or data, add it with Edit.'));
+    } else {
+      // Evidence packet (Phase 2A): exhibits sit with the text materials. Older text-only assignments show exactly what they always did.
+      const hasEx = (a.exhibits || []).length > 0, upgraded = !!(a.packet && a.packet.upgraded);
+      const text = a.materials ? h('article', { class: 'wb-doc' },
+        h('p', { class: 'wb-doc-k' }, hasEx ? (upgraded ? 'Original supplied text (kept)' : 'The situation') : 'Supplied material'),
+        a.origin === 'ai' ? h('p', { class: 'wb-doc-note' }, h('b', {}, 'Fictional. '), 'Written by the AI for this assignment. The people, organizations, figures and sources in it are invented.') : null,
+        h('div', { class: 'wb-doc-body' }, a.materials.split(/\n{2,}/).map((p) => h('p', {}, p)))) : null;
+      const pan = S.exhibitsView ? S.exhibitsView.panel(c, m, a) : [];
+      if (text && !(hasEx && upgraded)) out.push(text);
+      out.push(...pan);
+      if (text && hasEx && upgraded) out.push(h('div', { class: 'ex-orig' }, text));
+      if (!text && !pan.length) out.push(empty(a.basis === 'readings' || a.kind === 'learn' ? 'This assignment works from the module’s readings, listed below.' : 'No materials were supplied with this assignment. If it needs a case, document, or data, add it with Edit.'));
+    }
     if (rs.length) out.push(sec('Module readings', h('ul', { class: 'plain' }, rs.map((x) => h('li', {}, x.url ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.title) : x.title)))));
     return out;
   }

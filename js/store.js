@@ -2,7 +2,7 @@
 (function (S) {
   'use strict';
 
-  S.BUILD = 23; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
+  S.BUILD = 27; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
   const KEY = 'sovereign.v3';
   const OLD_KEYS = ['sovereign.v2', 'sovereign.v1']; // earlier versions; migrated, never deleted automatically
   S.MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -111,13 +111,30 @@
   S.makeSyllabus = (y) => normSyllabus(y, (v) => str(v, 60) || S.uid(), (v) => S.cleanUrl(str(v, 2000)) || '');
 
   // Feedback from an AI review of submitted work. The score is an automated assessment, not a human grade.
+  // Reviews made by Worker v14 and later add evidence-linked findings, an account of what could be inspected, and follow-ups. Those
+  // fields are only present on new reviews; earlier saved feedback is read exactly as before and is never rewritten.
+  S.FINDING_TYPES = ['strength', 'error', 'missing', 'partial', 'clarity', 'optional', 'unverified'];
+  const inList = (v, list, d) => (list.includes(v) ? v : d);
+  function normFinding(f) {
+    f = obj(f); if (!str(f.claim, 700).trim()) return null;
+    return { type: inList(f.type, S.FINDING_TYPES, 'optional'), criterion: str(f.criterion, 200), claim: str(f.claim, 700), quote: str(f.quote, 300), where: str(f.where, 120), alreadyPresent: str(f.alreadyPresent, 300), fix: str(f.fix, 700), example: str(f.example, 700),
+      exampleSource: inList(f.exampleSource, ['supplied', 'illustrative', 'none'], 'none'), located: f.located === true ? true : f.located === false ? false : null, note: str(f.note, 300), caution: str(f.caution, 300), illustrative: f.illustrative === true,
+      ref: f.ref && typeof f.ref === 'object' && /^[A-F]$/.test(f.ref.exhibit || '') ? { exhibit: f.ref.exhibit, row: str(f.ref.row, 20), column: str(f.ref.column, 60) } : null };
+  }
   function normFeedback(f) {
     f = obj(f);
     if (!f.at && !f.summary) return null;
+    const v2 = obj(f.context).schema === 2, ins = obj(f.inspection), ctx = obj(f.context);
     return {
       summary: str(f.summary, 3000), strengths: strs(f.strengths, 8, 600), improvements: strs(f.improvements, 8, 800), nextSteps: strs(f.nextSteps, 8, 600),
-      criteria: arr(f.criteria, 10).map((k) => { k = obj(k); return { name: str(k.name, 200) || 'Criterion', max: num(k.max) || 0, score: num(k.score) || 0, comment: str(k.comment, 800) }; }),
+      criteria: arr(f.criteria, 10).map((k) => { k = obj(k); const o = { name: str(k.name, 200) || 'Criterion', max: num(k.max) || 0, score: num(k.score) || 0, comment: str(k.comment, 800) }; if (v2) { o.status = inList(k.status, ['met', 'partly', 'not-met', 'not-assessed'], 'partly'); o.assessed = k.assessed !== false; o.adjusted = str(k.adjusted, 300); } return o; }),
       score: num(f.score) || 0, max: num(f.max) || 0, model: str(f.model, 60), at: str(f.at, 40), cost: num(f.cost) || 0,
+      ...(v2 ? {
+        findings: arr(f.findings, 14).map(normFinding).filter(Boolean),
+        inspection: { received: str(ins.received, 400), couldNotInspect: strs(ins.couldNotInspect, 8, 300), facts: strs(ins.facts, 6, 500), limited: ins.limited === true },
+        followUp: arr(f.followUp, 12).map((x) => { x = obj(x); return { claim: str(x.claim, 400), status: inList(x.status, ['addressed', 'partly', 'not-addressed', 'cannot-tell'], 'cannot-tell'), note: str(x.note, 400) }; }).filter((x) => x.claim),
+        context: { schema: 2, mode: inList(ctx.mode, ['graded', 'practice', 'own'], 'graded'), compared: inList(ctx.compared, ['both-versions', 'findings-only', 'none'], 'none'), steps: ctx.steps === true, materials: ctx.materials === true, keyIdeas: ctx.keyIdeas === true, readings: inList(ctx.readings, ['titles-only', 'none'], 'none') },
+      } : (f.legacyWorker === true ? { legacyWorker: true } : {})),
     };
   }
   // One submission: typed text and/or a file. The file itself lives in IndexedDB (device only); only its details are kept here.
@@ -130,7 +147,7 @@
   function normOffice(o) {
     o = obj(o);
     const rounds = arr(o.rounds, 2).map(normSub).filter(Boolean);
-    return rounds.length ? { material: str(o.material, 500), rounds } : null;
+    return rounds.length ? { material: str(o.material, 500), mode: o.mode === 'practice' ? 'practice' : 'own', rounds } : null; // saved sessions from before the two modes were always "own material"
   }
   function normWork(w) {
     w = obj(w);
@@ -143,6 +160,13 @@
   const normParts = (v) => arr(v, 8).map((p) => { p = obj(p); return { title: str(p.title, 120).trim(), questions: strs(p.questions, 8, 500) }; }).filter((p) => p.title || p.questions.length);
   function normRevisions(v) {
     return arr(v, 5).map((r) => { r = obj(r); const b = obj(r.before); return { at: str(r.at, 40), note: str(r.note, 300), readings: strs(r.readings, 5, 300), before: { description: str(b.description), parts: normParts(b.parts), materials: str(b.materials) } }; }).filter((r) => r.at);
+  }
+
+  // Evidence packet bookkeeping (Phase 2A). The exhibits themselves are sanitized by S.exhibits; this keeps what was planned and when.
+  function normPacket(p) {
+    p = obj(p); if (!p.state && !p.at && !arr(p.plan).length) return null;
+    return { state: inList(p.state, ['required', 'ready', 'incomplete', 'declined'], 'incomplete'), at: str(p.at, 40), model: str(p.model, 60), upgraded: p.upgraded === true, note: str(p.note, 300),
+      plan: arr(p.plan, 6).map((x) => { x = obj(x); return { title: str(x.title, 120), type: inList(x.type, ['table', 'timeline', 'document', 'chart'], 'document'), purpose: str(x.purpose, 300) }; }).filter((x) => x.title) };
   }
 
   function normRubric(r) {
@@ -193,7 +217,7 @@
           assignments: arr(m.assignments).map((a) => {
             a = obj(a);
             return { id: id(a.id), title: str(a.title, 300) || 'Untitled assignment', description: str(a.description), due: S.validDate(str(a.due, 10)), points: num(a.points), score: num(a.score), done: a.done === true, kind: ['learn', 'apply', 'demonstrate'].includes(a.kind) ? a.kind : '', origin: a.origin === 'ai' ? 'ai' : 'user', locked: a.locked === true && !!S.validDate(str(a.due, 10)), rubric: normRubric(a.rubric), work: normWork(a.work),
-              purpose: str(a.purpose, 2000), materials: str(a.materials, 6000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'file', 'any'].includes(a.format) ? a.format : '', basis: ['readings', 'scenario', 'portfolio'].includes(a.basis) ? a.basis : '', portfolioNote: str(a.portfolioNote, 500), realEvidence: a.realEvidence === true, evidence: (a.evidence && typeof a.evidence === 'object' && ['verified', 'needed'].includes(a.evidence.status)) ? { status: a.evidence.status, sources: (Array.isArray(a.evidence.sources) ? a.evidence.sources : []).slice(0, 8).map((s) => ({ title: str(s && s.title, 300), url: url(s && s.url) })).filter((s) => s.title) } : null, portfolio: a.portfolio === true, office: normOffice(a.office), revisions: normRevisions(a.revisions),
+              purpose: str(a.purpose, 2000), materials: str(a.materials, 6000), steps: strs(a.steps, 12, 500), format: ['text', 'pdf', 'image', 'file', 'any'].includes(a.format) ? a.format : '', basis: ['readings', 'scenario', 'portfolio'].includes(a.basis) ? a.basis : '', portfolioNote: str(a.portfolioNote, 500), realEvidence: a.realEvidence === true, evidence: (a.evidence && typeof a.evidence === 'object' && ['verified', 'needed'].includes(a.evidence.status)) ? { status: a.evidence.status, sources: (Array.isArray(a.evidence.sources) ? a.evidence.sources : []).slice(0, 8).map((s) => ({ title: str(s && s.title, 300), url: url(s && s.url) })).filter((s) => s.title) } : null, portfolio: a.portfolio === true, office: normOffice(a.office), revisions: normRevisions(a.revisions), exhibits: S.exhibits.sanitize(a.exhibits).exhibits, packet: normPacket(a.packet),
               parts: arr(a.parts, 8).map((p) => { p = obj(p); return { title: str(p.title, 120).trim(), questions: strs(p.questions, 8, 500) }; }).filter((p) => p.title || p.questions.length), submit: str(a.submit, 1000), criteria: strs(a.criteria, 8, 300), estimate: str(a.estimate, 60) };
           }),
         };
@@ -353,7 +377,7 @@
   /* ----- builders and starter content ----- */
 
   const R = (title, url, note) => ({ id: S.uid(), title, url: url || '', note: note || '', done: false });
-  const A = (title, description, o) => ({ id: S.uid(), title, description: description || '', due: '', points: null, score: null, done: false, kind: '', origin: 'user', locked: false, rubric: [], work: null, purpose: '', materials: '', steps: [], format: '', basis: '', portfolioNote: '', portfolio: false, office: null, parts: [], submit: '', criteria: [], estimate: '', ...o });
+  const A = (title, description, o) => ({ id: S.uid(), title, description: description || '', due: '', points: null, score: null, done: false, kind: '', origin: 'user', locked: false, rubric: [], work: null, purpose: '', materials: '', steps: [], format: '', basis: '', portfolioNote: '', portfolio: false, office: null, parts: [], exhibits: [], packet: null, submit: '', criteria: [], estimate: '', ...o });
   const M = (title, o) => ({ id: S.uid(), title, overview: '', readings: [], keyIdeas: '', reflection: '', extras: [], assignments: [], complete: false, syllabi: [], objectives: [], selfCheck: [], duration: '', origin: 'user', edited: false, ...o });
   const C = (code, title, color, description, modules, o) => ({
     id: S.uid(), code, title, color, designTheme: S.randomTheme(), description, objective: '', deliverable: '', syllabus: '', outcomes: [], duration: '', pathway: '', licensureNote: '', ai: null, startDate: '', announcements: [], modules, credentials: [],

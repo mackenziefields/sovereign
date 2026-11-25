@@ -67,10 +67,60 @@
   });
   scrim.addEventListener('click', () => setMenu(false));
   sidebar.addEventListener('click', (e) => { if (e.target.closest('a[data-route], #side-courses a')) setMenu(false); });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && sidebar.classList.contains('open')) { setMenu(false); menuBtn.focus(); }
-  });
   window.matchMedia('(min-width: 1024px)').addEventListener('change', () => setMenu(false));
+
+  /* ----- G1: desktop overlay navigation (edge handle, hover, pin) ----- */
+  const shell = document.querySelector('.shell');
+  const edge = document.getElementById('nav-edge');
+  const pinBtn = document.getElementById('nav-pin');
+  const PIN_KEY = 'sovereign.navPinned';
+  const OPEN_DELAY = 140, CLOSE_DELAY = 450;
+  let openTimer = 0, closeTimer = 0;
+  const wide = window.matchMedia('(min-width: 1024px)');
+  const isPinned = () => shell.hasAttribute('data-pinned');
+  const overlayMode = () => wide.matches && !isPinned();
+  function setEdgeOpen(open) { edge.setAttribute('aria-expanded', String(open)); }
+  const origSetMenu = setMenu;
+  setMenu = function (open) { origSetMenu(open); setEdgeOpen(open); };
+  function setPinned(on, save) {
+    shell.toggleAttribute('data-pinned', on);
+    pinBtn.setAttribute('aria-pressed', String(on));
+    pinBtn.textContent = on ? 'Unpin menu' : 'Pin menu open';
+    if (save) { try { localStorage.setItem(PIN_KEY, on ? '1' : '0'); } catch (e) { /* storage blocked: the choice lasts until reload */ } }
+    setMenu(false);
+  }
+  let saved = null; try { saved = localStorage.getItem(PIN_KEY); } catch (e) { /* ignore */ }
+  setPinned(saved === '1', false);
+  pinBtn.addEventListener('click', () => { setPinned(!isPinned(), true); (isPinned() ? pinBtn : edge).focus(); });
+
+  const clearTimers = () => { clearTimeout(openTimer); clearTimeout(closeTimer); };
+  const keyboardInside = () => !!sidebar.querySelector(':focus-visible');
+  function scheduleClose() {
+    clearTimeout(closeTimer);
+    closeTimer = setTimeout(() => { if (overlayMode() && !keyboardInside()) setMenu(false); }, CLOSE_DELAY);
+  }
+  edge.addEventListener('pointerenter', (e) => {
+    if (e.pointerType !== 'mouse' || !overlayMode()) return;
+    clearTimers(); openTimer = setTimeout(() => { if (overlayMode()) setMenu(true); }, OPEN_DELAY);
+  });
+  edge.addEventListener('pointerleave', () => clearTimeout(openTimer));
+  edge.addEventListener('click', () => {
+    clearTimers();
+    setMenu(true);
+    sidebar.querySelector('a[data-route]').focus();
+  });
+  sidebar.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') clearTimeout(closeTimer); });
+  sidebar.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && overlayMode() && sidebar.classList.contains('open')) scheduleClose(); });
+  // Keyboard: leaving the menu with Tab closes it; Escape closes and returns to the handle.
+  sidebar.addEventListener('focusout', (e) => {
+    if (overlayMode() && sidebar.classList.contains('open') && e.relatedTarget && !sidebar.contains(e.relatedTarget)) setMenu(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+      clearTimers(); setMenu(false);
+      (overlayMode() ? edge : menuBtn).focus();
+    }
+  });
 
   /* ----- routing ----- */
   window.addEventListener('hashchange', () => {

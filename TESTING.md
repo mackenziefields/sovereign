@@ -272,3 +272,129 @@ One call, five readings with real links. Cost **$0.0063** (4,988 tokens in, 264 
 **Not tested:** the real SDSU PDF through this change (no paid call was made); how many linked readings a real PDF yields is unknown, and may be few because the Worker cannot read a PDF's text. Preview data restored.
 
 | F3 | Data & Backup cleanup (Browser, seeded): a citation-only syllabus reading, a linked syllabus reading, one of your own readings and a placeholder, all without links except the linked one | Only the citation-only reading was listed and removed after the confirm; the linked, own and placeholder readings stayed; the section disappeared; data restored afterward | Pass |
+
+## Phase 1A: evidence-based reviews (build 24, Worker v14; **Mock** only, run 2026-11-25)
+Method: the real Worker code run in the preview through `worker/mock/harness.js`, with canned model answers per scenario. These prove the code checks and the client wiring, **not** model quality (that is Phase 1B).
+- Graded round 1 ('good'): prompt contained steps, supplied materials, key ideas, reading titles marked TITLES ONLY (no reading URL or text), numbered rubric; findings located; criterion deduction kept because a verified partial finding backs it; context shows schema 2.
+- 'badquote': claimed error with a quote not in the work became "could not verify"; the deduction was removed (full credit, `adjusted`).
+- 'nodeduct': only an optional finding, so full credit (8/8).
+- 'missingPresent': "missing" with the element present became a clarity finding.
+- 'invented': a example row beyond the materials was labelled illustrative.
+- 'limited': criterion marked not assessed, score 5/5 provisional, "could not inspect" shown, missing-element caution attached, banner and open inspection panel in the UI.
+- 'allunread': Worker answered 422 `unreadable`; nothing saved.
+- Round 2: without consent, `compared: findings-only`, no first-version block, follow-up list returned; with consent, `both-versions`, first version sent.
+- Office Hours: practice mode sends supplied materials and the criteria as a guide, no points; own mode omits supplied materials and sends the learner's description; the assignment's saved work and score were untouched.
+- Old saved feedback (no findings) renders in the original layout; feedback without `context` shows the older-method banner.
+- Preview data restored from backup afterward.
+
+### Phase 1B plan (not run; needs your approval of the cost)
+Eval set v1 fixtures E1–E7 are in `docs/REVIEW-AUDIT.md`. Plan: the same PDF, instructions and rubric reviewed repeatedly (3 runs each); planted-error and missing-denominator text variants; Office Hours practice and own-material tested separately; every significant disagreement logged with its cause, not averaged. Estimated about $0.50 to $0.70; proposed cap $0.75. **No paid call will be made without your approval.**
+
+## Phase 1B: REAL API evaluation (test Worker v14, 2026-11-25; Real API)
+Fixture: fictional Oakvale eviction-cleaning note, 3-criterion rubric (arithmetic 3, denominator 3, clarity/length 2), supplied log (1,200 raw, 100 duplicates, 26 test records, 1,074 valid; 18,000 households). **Fixture flaw:** my texts were about 70 to 90 words against a stated 150 to 250, so every run correctly flagged length. 11 real calls, **$0.3585 total** (about $0.027 to $0.043 each; $0.75 cap not approached). Nothing was committed.
+
+| Run | Work | Score | Result |
+|---|---|---|---|
+| A1 | planted error (1,094 for 1,074) | 6/8 | error found, quote verified; denominator full credit |
+| A2 | same | 5/8 | same error and quote; criterion 1 scored 1/3 vs 1.5/3 in A1 |
+| B1 | correct | 8/8 | no length deduction (clarity note only) |
+| B2 | same | 7.5/8 | length marked partial, 1.5/2 |
+| C1 | correct arithmetic, no denominator | 5/8 | denominator typed **partial**, 1/3 |
+| C2 | same | 4.5/8 | denominator typed **missing**, status not-met but 0.5/3 |
+| R2 no consent | B revising C | 7/8 | compared = findings-only; follow-up: denominator addressed, length not |
+| R2 with first version | same | 7/8 | compared = both-versions; same follow-up; one extra clarity finding (note's claim that staff entered test records is not in the supplied materials) |
+| Office practice | A text | ungraded | context mode practice; verified error found; no points |
+| Office own material | own text, own spreadsheet | ungraded | honest "could not check the spreadsheet" unverified finding; no points |
+| Image (chart, no note) | PNG | 3/8 | see issue 3 |
+
+### Findings
+1. Supported deductions: the planted error was found 2 of 2 with a verified quote; correct work was not penalised for the error; the missing denominator was deducted 2 of 2.
+2. **Inconsistent typing and size (substantive disagreement):** the same missing denominator was "partial" (1/3) in one run and "missing" (0.5/3) in another; the same correct work lost 0 or 0.5 point for length; the same error cost 1.5 or 2 points. The AI agrees on what is wrong but not on how many points. Likely cause: the Worker does not fix the point value of a status. Not averaged away; candidate fix (1C): code-set point bands per status, or report a range.
+3. **Possible leniency (inflation):** in the image run, the clarity/length criterion was set to full credit by the "no verified backing" rule although the required written note was absent (the AI's own deduction was overridden). The rule protects against unsupported deductions but can undo a legitimate one when the supporting finding is filed under a different criterion. Candidate fix: allow a backing finding on any criterion, or flag an "adjusted" criterion for the learner.
+4. A `not-met` criterion scored 0.5/3 (status and score disagree). Candidate fix: clamp score to the status band.
+5. Minor noise: a spurious "assigned readings were not read" unverified finding on assignments that do not use readings (A2, image).
+6. Not tested with real AI: a genuinely unreadable file (no scanned PDF fixture), and old-Worker fallback.
+
+### Post-evaluation fixes (Mock, 2026-11-25; not yet re-tested with the real AI)
+Direct `processReview` checks: partly 1/3 became 1.2/3; partly 2.9/3 became 2.4/3; not-met 2/3 became 0.8/3 (status and score agree); an unbacked deduction still returned full credit with an "adjusted" note. The bands narrow but do not remove the spread (a partly-met 3-point criterion can still land between 1.2 and 2.4), so repeated real reviews may still differ by about a point. A capped real re-test (proposed about $0.10-0.15, same fixture, missing-denominator x2 plus the image run) needs your approval.
+
+### Re-test after the fixes (Real API, test Worker redeployed, 2026-11-25; 4 calls, $0.1368; running total for Phase 1B $0.4953 of $0.75)
+| Run | Work | Score | Result |
+|---|---|---|---|
+| C3 | no denominator | 4.5/8 | denominator typed missing, not-met 0.5/3 |
+| C4 | same | 4.5/8 | identical (previously "partial" 1/3 vs "missing" 0.5/3) |
+| A3 | planted error | 5.5/8 | error found and quoted; partly 1.5/3 (earlier runs 6 and 5) |
+| Image again | chart only, no note | 2/8 | missing note now typed missing on the length criterion, not-met 0.5/2 (earlier: full credit) |
+
+Missing-denominator work is now consistent across runs (2 of 2 identical, and consistent with the earlier "missing" run). The planted-error spread is narrower (5, 5.5, 6, was 5 and 6). The leniency in the image case is gone. Still open: only 3 planted-error runs and 2 identical-fixture reruns, so consistency is indicated, not proven; the genuinely unreadable file case was never tested with the real AI.
+
+## Phase 2A: Evidence packets (build 26; Browser pane, MOCK Worker with canned data; no real AI calls, $0)
+Not a test of real model quality or real cost. Real-AI testing is planned for 2C and needs your approved estimate.
+
+| # | Check | Result |
+|---|---|---|
+| E1 | Engine unit checks (18): strict sanitize, row ids, verbatim values (formula cell, blank, "about 900", duplicates), exact-CSV round trip byte for byte, safe CSV guards only risky cells, stored data untouched by export, rate / median / exclusions, strict number reading, over-limit rejected not truncated, needsPacket, packetStatus | 18 of 18 pass |
+| E2 | Worker validation (14): defaults, env override, ceiling clamp, garbage env, short row rejected not padded, 81 rows rejected, raised limit accepted, long cell rejected, values verbatim, fictional forced, 7th exhibit rejected, over-length document and over-length paragraph rejected, unknown block dropped, chart with bad column rejected | 14 of 14 pass (one real bug found and fixed: an over-long paragraph was being silently cut) |
+| E3 | Course build (mock, 6 modules): learn tasks get none; document-only assignments get memo and transcript; data assignments get tables and a rate chart; 12 packets | Pass |
+| E4 | Failure paths: chart with a bad reference, empty answer, API error, daily request limit mid-build | Course marked partial with a specific note, packet states `incomplete` or `required`, retry button shown, no "ready" claim. Pass |
+| E5 | Rendering: table (sticky header, row ids), chart (bars, formula, excluded rows, data table), memo and transcript (hostile `<script>` text rendered inert), exhibit tabs, 375px phone (no horizontal page scroll; table scrolls inside its box) | Pass (functional layer only) |
+| E6 | Upgrade flow on an assignment with a submission and a grade: preview shows warnings and carried-over figures (3 of 6 found); Discard saves nothing; Approve adds the packet; instructions, steps, rubric, text, work, score unchanged (byte compare); Remove restores the earlier state; backup round trip keeps exhibits; old data normalizes with empty exhibits | Pass |
+
+**Not done or not verified:** real AI output quality and cost; the visual art direction (2B; a design checkpoint with desktop and mobile mockups is required before it is called complete); the workbench reference pane is narrow on desktop and wide tables need the 2B layout; screen reader pass; contrast audit; timeline text fields are still shortened silently if over their small caps (labels 200, detail 600 characters); the Worker's `/exhibits` was only run against canned answers.
+
+## Phase 1C: Review Studio (build 25; Browser pane with seeded fixtures; no AI calls, $0)
+
+**Visual refinement re-check (editorial masthead, manuscript, annotation rail, mobile dock; seeded fixtures, $0).** Passed: desktop typed text with a selected comment; desktop PDF with highlight and page controls; 375px mobile (passage scrolls into view, dock shows the comment); all four course themes switch the masthead type and signature colour; unlocatable quote disclosed and not highlighted; missing file disclosed; legacy feedback shows its notice with the work beside it; Escape closes and focus returns to the opener. Not re-run after the redesign: scanned PDF and image-only fixtures, an automated contrast audit, PDF zoom at every level.
+Fixtures (test course only, removed afterwards and data restored from backup): a typed-text first review with 8 findings; a 2-page text PDF (`test-data/oakvale-note.pdf`, generated for this test) with a graded final review; a PDF with no text (`test-data/scan-like.pdf`); an image; a missing file; an older (pre-1A) saved feedback; and the real older feedback already in the preview course. Screenshots: `docs/review-studio/`.
+- **Typed text:** 6 highlights placed (blue/yellow); located points say "Found in your work"; a repeated word reports "appears 4 times; the first is shown"; a quote that is not in the text shows the not-located disclosure and no highlight (the partial finding); a missing-element point says there is nothing to highlight; a short quote is never highlighted.
+- **PDF (PDF.js, local):** both pages rendered; highlights placed on page 1 and page 2 with the page shown; a quote spanning a page break and a quote not in the PDF were **not** highlighted and said so; selecting a page-2 point scrolled to it; pages re-fit when the pane is resized.
+- **Scanned or text-less PDF, image, missing file:** banner plus per-point disclosure, no highlights, feedback intact.
+- **Older feedback:** opens beside its work in the original layout with the "no passage references" note.
+- **Desktop (1280 wide):** two panes. **Mobile (375 wide):** tabs; selecting a located point switches to Your work and scrolls to the highlight; "Back to feedback" returns to the point.
+- **Keyboard:** Tab reaches Close, the text, the stepper and each point; Enter selects a point and announces "Showing in your work: …"; Escape closes and focus returns to "Open Review Studio".
+- **Data integrity:** opening the studio, selecting points and closing left localStorage byte-identical. PDF.js files appeared in the service-worker cache after first use.
+- **Not tested:** a real offline start (airplane mode) of a PDF opened for the first time; screen readers (VoiceOver/NVDA); Safari, Firefox and older browsers (highlighting uses the CSS Custom Highlight API with a whole-line fallback); PDFs over about 40 pages (only the first 40 are shown); right-to-left or heavily hyphenated text; zoom controls inside the PDF (pages fit the width; browser zoom works).
+
+## Remaining limitations from Phase 1B (kept here so they are not forgotten)
+1. **Scanned PDFs and image-only submissions.** The reviewer may be unable to read them. Phase 1A marks unreadable criteria "not assessed" and asks for a supported format, but this was verified with mock answers only: no real scanned PDF or photo of handwriting was tested with the real AI. A readable chart image was tested once (it was read). The studio cannot highlight passages in scans or images.
+2. **No locating inside images or non-text PDFs** (no OCR; none planned without a privacy-safe local option).
+3. **Score spread:** a partly-met criterion can still land anywhere in its 40-80% band across runs (observed 5 to 6 out of 8 for the same work). Two or three runs per case is not proof of stability.
+4. **Fixture limits:** every real test used one short fictional exercise; other subjects, long documents, tables and spreadsheets are untested with the real AI.
+5. **Reading titles only:** the reviewer never sees the text of an assigned reading, so claims about readings stay "could not verify".
+6. **Old Workers:** a Worker below v14 still works but gives the older review shape (flagged to the learner); the studio then opens it as older feedback.
+7. **Cross-page quotes and repeated phrases** are not highlighted/pinned precisely (see above).
+
+
+## G1 overlay navigation (build 27) — tested in the preview browser, no AI involved
+- **Verified:** default desktop state hides the menu and leaves the page at full width; hover-open, delayed close, keyboard open (focus lands on Dashboard), Escape (focus returns to the handle) all worked; page left/width/grid width identical before, during and after opening (no reflow); pin toggles the old layout, survives reload via localStorage, unpin restores overlay; phone width (375) keeps Menu button with no edge handle or pin and no horizontal scroll; workbench widths at 1440 (unpinned 677/612 panes; pinned 546/494) and 1100 (unpinned 498/451; pinned falls back to one pane).
+- **Not verified:** a real touch device or hover-less tablet (CSS only, `hover: none`); screen readers; Safari/Firefox (uses `:has()` and `:focus-visible`); high-contrast mode; a brief flash of the unpinned layout before scripts apply a saved pin on slow loads; print preview.
+
+## Workbench width follow-up (build 27, preview, mock data)
+- Measured (menu hidden, window width / workbench / Reference / Your Work): 1100 / 1021 / 548 / 449; 1280 / 1201 / 647 / 530; 1440 / 1361 / 735 / 602; 1920 / 1809 / 982 / 803. Side margins 32px (48px total gutters at 1920: 48px each). Mobile 375: one pane, no horizontal scroll. Expand table dialog: no scrolling and single-line rows at 1100.
+- Not verified: other course designs/themes at every width, very long documents, pinned menu at 1920, real touch devices.
+- **Expand table on a phone (375px, mock):** dialog 360px wide, focus moved inside, table scrolls sideways inside the dialog (page has no horizontal scroll), Close/Escape removed it, the route stayed the same and a typed draft in the submission box was unchanged. **Standing check for the rest of Phase 2:** repeat this (draft kept, navigation intact, Escape/Close, focus returns) whenever exhibit views change; also test at tablet width and with a screen reader.
+
+## Phase 2 design checkpoint (dev-only pages, not released)
+- `design-checkpoint.html` (+ `design-checkpoint-frame.html`) render the real exhibit components in the Editorial and Modernist designs, as a ~650px desktop Reference panel and a 375px phone, for a table (A), chart (D) and document (E). Exclude both files from releases like `themes-demo.html`.
+- **Issues seen, to fix in 2B if you approve the direction:** chart text becomes about 5px tall on a phone (SVG just scales down; needs a phone layout with larger labels or a list-first view); the exhibit tab strip scrolls sideways and truncates titles on both sizes; tables on a phone show only about two columns before scrolling (the Expand table dialog is the answer, but the table could pin the first data column); sample chart values come from a trimmed table so the numbers differ from the demo course.
+- Only two of four themes shown; Intellectual and Institution not yet checked.
+
+## 2B first pass (mock data, preview)
+- Verified: checkpoint page shows all four designs (Editorial, Modernist, Intellectual, Institution frames render; Editorial, Modernist and Intellectual were looked at, Institution only loaded); in the app at 375px: 4 bar rows at 16px, tabs 142px wide in two columns, no page-wide horizontal scroll on table, chart, or chart with data shown; Expand table still opens and closes.
+- Found and fixed: hidden chart data table forced a 722px page width on phones (also true in builds 26 and earlier).
+- Not verified: line charts on a phone visually, Institution theme by eye, high-contrast and screen reader behavior, tablet width, long titles in other languages.
+
+## 2C evidence-aware review (build 27, Worker v16) — MOCK only
+- **Verified with the mock Anthropic answers and the real worker.js:** the review prompt contains the EVIDENCE PACKET section with [A-12] style ids and the new rule 16; a valid ref (A-12, Case no.) is kept; a row that does not exist (A-99), an unknown exhibit (Z) are dropped with a note; a wrong column is dropped but the row kept; fair sharing: 200 rows + 2 small exhibits fit in 14,000 characters, and at a 3,000-character budget the big table shows 42 of 200 rows while the small exhibits stay whole; the Riverton packet is about 4,600 characters; an old Worker (v15) path unchanged; refLine text renders for tables, paragraphs and legacy findings; saved data was untouched (15 courses intact).
+- **Incident while building (no data lost):** a syntax slip in js/exhibits.js made the app start empty for a moment; the stored data stayed intact and an identical unreadable copy was removed after the fix.
+- **Not verified:** any real AI behaviour. Whether the real reviewer cites real rows correctly, over-cites, or mishandles the deliberate flaws; cost per review with a packet (estimate +1,200 input tokens for Riverton, roughly $0.004 more per review at typical Sonnet-class prices, unmeasured); Review Studio display on a phone; the deployed Worker (you must deploy v16 to your test Worker).
+- **Proposed real test (needs your approval):** 4 reviews on the Riverton demo assignment using a short written answer you approve, about 0.05 to 0.08 dollars each, so about 0.20 to 0.32 total, cap 0.40.
+
+## 2C real-AI test (your test Worker v16, claude-sonnet-5-5, approved cap 0.40)
+- **Run:** 4 graded reviews of 3 short written answers to the Riverton demo assignment (naive counts; careful with data cleaning and rates; wrong arithmetic with an invented row A-45; the naive answer repeated). Nothing was saved to the assignment; no submission or grade changed. **Cost (Worker figure): 0.0669, 0.0766, 0.0601, 0.0723 = 0.276 total, about 0.069 per review.**
+- **What worked:** every count the reviewer gave was correct when I recounted the rows by hand (Eastside 7, Westside 5, Northgate 3, Southend 4); it caught the duplicate (A-12/A-13), the TEST entry (A-17), the "East side"/"Oakpark"/"Hill St." variants, the blank and $450,000 amounts, the missing denominator from Exhibit B, and the invented row ("Row A-45 does not exist; Exhibit A ends at A-20"). Every ref the app kept pointed at an id that exists. The careful answer was credited for its cleaning and its per-100 rates, and its rounding mistakes were found with the correct recalculation.
+- **What did not work well:** (1) A ref that exists is not always the right place: the Worker checks existence only. Examples: a finding about wrong neighbourhood counts was tagged to A-4 or A-13 (a related row, not the claim), a finding about the invented row A-45 was tagged to A-15, a strength about Exhibit A was tagged to C-1. The label "In the exhibits: ..." can therefore overstate precision. (2) Score instability: the same naive answer scored 3/3 on the last criterion in one run and 0.5/3 in the other (2.5 points of 20), though the other three criteria matched. (3) One finding showed the model correcting itself mid-sentence ("Westside has 6 ... = 5"). (4) One ref (nonexistent location) was correctly dropped with a note.
+- **Not tested:** document and timeline exhibits in real reviews, packets that need sampling (more than about 14,000 characters), revisions (round 2), PDF or image submissions, other subjects, Review Studio on a phone with refs, repeated runs beyond two.
+- **Suggested follow-up (not done):** soften the label to "Related exhibit location" or tighten the rule so a ref is given only for the exact cell the claim is about; consider a second pass or lower variance for the lowest-weight criterion.
+
+- **Tightened after the real test (mock-checked only):** rule 16 now allows a ref only when one row or paragraph is the exact evidence (the duplicate itself, the misquoted value itself); totals, counts, rates, missing elements and invented rows get no ref. The label is now "Related exhibit location:". The Worker file parses; the mock review test (valid, missing-row, wrong-column, unknown-exhibit refs) is unchanged because the code check did not change. **The new wording has not been tested with the real AI**, so whether it reduces loosely attached refs is unknown; the test Worker must be redeployed with this worker.js to use it.
