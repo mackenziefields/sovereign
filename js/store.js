@@ -2,7 +2,7 @@
 (function (S) {
   'use strict';
 
-  S.BUILD = 32; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
+  S.BUILD = 33; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
   const KEY = 'sovereign.v3';
   const OLD_KEYS = ['sovereign.v2', 'sovereign.v1']; // earlier versions; migrated, never deleted automatically
   S.MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -451,6 +451,26 @@
     else if (cp) { out.pct = null; out.basis = 'capstone-only'; out.provisional = true; } // nothing to combine with yet; not guessed
     else { out.pct = null; out.basis = 'none'; out.provisional = true; }
     return out;
+  };
+
+  /* ----- learning progress (Phase 5; read-only, nothing stored) ----- */
+  // Same four states as the assignment screens: todo, submitted, feedback (reviewed, inside the 72 hours), done.
+  const workKey = (a) => (a.work && a.work.phase === 'reviewed' ? 'feedback' : a.done || (a.work && a.work.final) ? 'done' : a.work ? 'submitted' : 'todo');
+  S.progressOf = function (c) {
+    const mods = c.modules.map((m) => {
+      const st = S.moduleStats(m);
+      return { m, st, state: m.complete ? 'complete' : st.done > 0 ? 'progress' : 'todo' };
+    });
+    const counts = { todo: 0, submitted: 0, feedback: 0, done: 0, total: 0 };
+    c.modules.forEach((m) => m.assignments.forEach((a) => { counts[workKey(a)]++; counts.total++; }));
+    const cs = S.courseStats(c), cur = mods.find((x) => x.state !== 'complete') || null;
+    let cap = null;
+    if (c.capstone) {
+      const a = S.capstoneOf(c);
+      if (a) { const g = a.points > 0 && a.score != null; cap = { status: 'ready', a, key: workKey(a), weight: c.capstone.weight, graded: g, score: g ? a.score : null, points: a.points, pct: g ? S.pctOf(a) : null }; }
+      else if (c.capstone.status === 'incomplete') cap = { status: 'incomplete', a: null, key: 'incomplete', weight: c.capstone.weight, graded: false };
+    }
+    return { mods, modsTotal: cs.mods, modsDone: cs.done, pct: cs.pct, current: cur, counts, capstone: cap, grade: S.courseGrade(c) };
   };
 
   /* ----- builders and starter content ----- */

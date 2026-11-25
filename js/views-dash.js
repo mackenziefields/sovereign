@@ -1,4 +1,4 @@
-/* sovereign. — first run, Dashboard (course tiles, To Do, Calendar, Module Library), My Work, Data & Backup. */
+/* sovereign. — first run, Dashboard (course tiles, To Do, Calendar, Learning progress), My Work, Data & Backup. */
 (function (S) {
   'use strict';
   const { h, field, select, progressBar, checkbox, badge, plural, toast, go, commit, tile } = S;
@@ -96,6 +96,51 @@
       h('button', { class: 'btn ghost', type: 'submit' }, 'Save name'));
   }
 
+  /* ---------- learning progress (replaces the module library) ---------- */
+  const STATE_LABEL = { complete: 'Complete', progress: 'In progress', todo: 'Not started' };
+  const WORK_LABEL = { todo: 'Not started', submitted: 'Submitted', feedback: 'Feedback ready', done: 'Complete', incomplete: 'Not finished' };
+  const pctText = (g) => (g.pct == null ? 'Not graded yet' : g.pct + '% ' + S.letter(g.pct));
+  function gradeNote(g) {
+    if (g.pct == null) return 'Not graded yet';
+    if (g.basis === 'combined') return pctText(g) + ' (modules ' + (100 - g.weight) + '%, capstone ' + g.weight + '%)';
+    return pctText(g) + (g.provisional ? ' (provisional: capstone not graded yet)' : '');
+  }
+  function progressRow(c) {
+    const p = S.progressOf(c), key = 'prog:' + c.id, cap = p.capstone, k = p.counts;
+    const d = h('details', { class: 'prog-card', open: ui.open.has(key) });
+    d.addEventListener('toggle', () => { if (d.open) ui.open.add(key); else ui.open.delete(key); });
+    const segs = p.mods.map((x) => h('li', { class: 'seg ' + x.state, title: x.m.title + ': ' + STATE_LABEL[x.state] }));
+    const summary = p.modsTotal ? p.modsDone + ' of ' + p.modsTotal + (p.modsTotal === 1 ? ' module' : ' modules') + ' complete' : 'No modules yet';
+    d.append(
+      h('summary', {},
+        h('span', { class: 'code' }, c.code),
+        h('span', { class: 'prog-title' }, h('b', {}, c.title), h('small', {}, summary + (cap && cap.status === 'ready' ? ' · capstone: ' + WORK_LABEL[cap.key].toLowerCase() : ''))),
+        h('span', { class: 'mod-pct' }, p.pct + '%')),
+      h('div', { class: 'prog-body' },
+        p.modsTotal ? h('ol', { class: 'segs', role: 'img', 'aria-label': summary }, segs) : null,
+        h('dl', { class: 'prog-facts' },
+          h('div', {}, h('dt', {}, 'Where you are'), h('dd', {}, p.current
+            ? h('a', { href: S.href(c, 'modules', p.current.m.id) }, p.current.m.title) : (p.modsTotal ? 'All modules complete' : '—'),
+            p.current ? h('small', {}, ' ' + p.current.st.done + ' of ' + p.current.st.items + ' items done') : null)),
+          h('div', {}, h('dt', {}, 'Assignments'), h('dd', {}, k.total
+            ? k.done + ' complete · ' + k.feedback + ' feedback ready · ' + k.submitted + ' submitted · ' + k.todo + ' not started' : 'None yet')),
+          h('div', {}, h('dt', {}, 'Course grade'), h('dd', {}, gradeNote(p.grade)))),
+        cap ? h('div', { class: 'prog-cap' },
+          h('b', {}, 'Course capstone'),
+          h('span', {}, cap.status === 'incomplete' ? 'Not finished: open the course to finish it.'
+            : WORK_LABEL[cap.key] + (cap.graded ? ' · ' + cap.score + ' / ' + cap.points + ' (' + cap.pct + '%)' : '') + (cap.weight ? ' · counts ' + cap.weight + '%' : '')),
+          cap.a ? h('a', { href: S.href(c, 'assignments', cap.a.id) }, cap.key === 'todo' ? 'Start the capstone' : 'Open the capstone') : null) : null,
+        p.modsTotal ? h('ul', { class: 'lib' }, p.mods.map((x) => h('li', {}, h('a', { href: S.href(c, 'modules', x.m.id) },
+          h('span', { class: 'code' }, STATE_LABEL[x.state]), h('span', {}, h('b', {}, x.m.title)), h('span', { class: 'mod-pct' }, x.m.complete ? 'Complete' : x.st.pct + '%'))))) : null));
+    return h('li', {}, d);
+  }
+  function progressSection() {
+    const cs = S.state.courses;
+    return h('section', { 'aria-label': 'Learning progress' },
+      h('div', { class: 'section-head' }, h('h2', {}, 'Learning progress'), h('span', { class: 'count' }, plural(S.allModules().length, 'module'))),
+      cs.length ? h('ul', { class: 'prog-list' }, cs.map(progressRow)) : h('p', { class: 'empty' }, 'Your progress through each course will appear here.'));
+  }
+
   V.dashboard = function () {
     const cs = S.state.courses;
     const tab = (key, label) => h('button', { class: 'tab', type: 'button', role: 'tab', 'aria-selected': String(ui.tab === key), onclick: () => { ui.tab = key; S.render(false); } }, label);
@@ -113,17 +158,7 @@
           }))
         : h('p', { class: 'empty' }, 'No courses yet. Use New course to add your first.'));
 
-    const library = h('section', {},
-      h('div', { class: 'section-head' }, h('h2', {}, 'Module library'), h('span', { class: 'count' }, plural(S.allModules().length, 'module'))),
-      S.allModules().length
-        ? h('ul', { class: 'lib' }, S.allModules().map(({ c, m }) => {
-            const ms = S.moduleStats(m);
-            return h('li', {}, h('a', { href: S.href(c, 'modules', m.id) },
-              h('span', { class: 'code' }, c.code),
-              h('span', {}, h('b', {}, m.title), h('small', {}, c.title)),
-              h('span', { class: 'mod-pct' }, m.complete ? 'Complete' : ms.pct + '%')));
-          }))
-        : h('p', { class: 'empty' }, 'Modules from all your courses will be listed here.'));
+    const library = progressSection();
 
     const rail = h('aside', { class: 'rail', 'aria-label': 'To Do' },
       h('div', { class: 'rail-box' },
@@ -140,7 +175,8 @@
           h('dl', { class: 'stats' },
             h('div', {}, h('dt', {}, 'Courses'), h('dd', {}, String(cs.length))),
             h('div', {}, h('dt', {}, 'Modules complete'), h('dd', {}, String(S.allModules().filter((x) => x.m.complete).length), h('small', {}, ' / ' + S.allModules().length))),
-            h('div', {}, h('dt', {}, 'Assignments open'), h('dd', {}, String(S.upNext().length))))),
+            h('div', {}, h('dt', {}, 'Assignments open'), h('dd', {}, String(S.upNext().length))),
+            cs.some((c) => S.capstoneOf(c)) ? h('div', {}, h('dt', {}, 'Capstones finished'), h('dd', {}, String(cs.filter((c) => { const a = S.capstoneOf(c); return a && (a.done || (a.work && a.work.final)); }).length), h('small', {}, ' / ' + cs.filter((c) => S.capstoneOf(c)).length))) : null)),
         S.state.name ? null : nameForm(), courses, library),
       rail);
   };

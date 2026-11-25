@@ -121,3 +121,23 @@ input[type="number"]:focus-visible, input[type="date"]:focus-visible { outline: 
 .wc-title small { color: var(--muted); font-size: .82rem; display: block; overflow-wrap: anywhere; }
 .wc-body { padding: 0 1.1rem 1.25rem; }
 .wc-body .brief-card { margin: 0 0 1.25rem; }
+
+/* Phase 5: Learning progress on the Dashboard */
+.prog-list { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--ink); }
+.prog-card { border-bottom: 1px solid var(--rule); }
+.prog-card > summary { display: grid; grid-template-columns: 5.5rem 1fr auto; gap: .75rem; align-items: center; min-height: 56px; padding: .7rem 0; cursor: pointer; list-style: none; }
+.prog-card > summary::-webkit-details-marker { display: none; }
+.prog-card > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.prog-title b { display: block; font-weight: 500; }
+.prog-title small { color: var(--muted); font-size: .85rem; }
+.prog-body { padding: .2rem 0 1rem 6.25rem; display: grid; gap: .9rem; }
+.segs { list-style: none; margin: 0; padding: 0; display: flex; gap: 3px; }
+.seg { flex: 1 1 0; min-width: 6px; height: 10px; border: 1px solid var(--ink); background: transparent; }
+.seg.complete { background: var(--ink); }
+.seg.progress { background: repeating-linear-gradient(135deg, var(--ink) 0 2px, transparent 2px 5px); }
+.prog-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .8rem 1.5rem; margin: 0; }
+.prog-facts dt { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.prog-facts dd { margin: .15rem 0 0; }
+.prog-cap { display: flex; flex-wrap: wrap; gap: .4rem 1rem; align-items: baseline; padding: .6rem .8rem; border: 1px solid var(--ink); }
+.prog-body .lib a { grid-template-columns: 7rem 1fr auto; min-height: 44px; padding: .45rem 0; }
+@media (max-width: 640px) { .prog-card > summary { grid-template-columns: 1fr auto; } .prog-card > summary .code { grid-column: 1 / -1; } .prog-body { padding-left: 0; } }

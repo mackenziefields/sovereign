@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Learning progress tests</title>
+<!-- Run in a browser: http://localhost:8765/tests/progress.test.html . Fictional data; S.save is stubbed; nothing is stored. -->
+<style>body{font:14px/1.5 system-ui;margin:20px}.pass{color:#0a6b2d}.fail{color:#b3261e;font-weight:700}pre{white-space:pre-wrap}</style></head>
+<body><h1>Learning progress tests</h1><pre id="out">running…</pre><div id="mount" hidden></div>
+<script src="../js/config.js"></script><script src="../js/exhibits.js"></script><script src="../js/store.js"></script><script src="../js/components.js"></script><script src="../js/studio.js"></script><script src="../js/views-dash.js"></script><script src="fixtures.js"></script>
+<script>
+(function () {
+  const before = localStorage.getItem('sovereign.v3');
+  const S = window.Sovereign, results = [];
+  S.save = () => {};
+  if (!S.href) S.href = (c, k, id) => '#/' + c.id + (k ? '/' + k : '') + (id ? '/' + id : ''); // the real one lives in app.js
+  const t = (name, fn) => { try { const r = fn(); results.push([name, r === true || r === undefined, r === true || r === undefined ? '' : String(r)]); } catch (e) { results.push([name, false, 'threw: ' + e.message]); } };
+  const fx = (o) => S.fixtureCourse('editorial', o);
+  const cap = (c) => c.capstone.assignments[0];
+
+  t('no modules and no capstone: zeros, no current module, no capstone', () => { const c = fx({ capstone: false }); c.modules = []; const p = S.progressOf(c); return (p.modsTotal === 0 && p.pct === 0 && p.current === null && p.capstone === null && p.counts.total === 0) || JSON.stringify(p.counts); });
+  t('every module complete: no current module and 100%', () => { const c = fx({ capstone: false }); c.modules.forEach((m) => { m.complete = true; }); const p = S.progressOf(c); return (p.current === null && p.pct === 100 && p.modsDone === p.modsTotal) || 'cur ' + p.current + ' pct ' + p.pct; });
+  t('mid-course: first unfinished module is current, states are labelled', () => { const c = fx({ capstone: false }); c.modules.forEach((m, i) => { m.complete = i === 0; }); const p = S.progressOf(c); return (p.current && p.current.m === c.modules[1] && p.mods[0].state === 'complete' && p.modsDone === 1) || 'wrong current'; });
+  t('a module with some items done and not complete is "progress"', () => { const c = fx({ capstone: false }); const m = c.modules[0]; m.complete = false; m.readings.forEach((r) => { r.done = false; }); m.assignments.forEach((a) => { a.done = false; }); if (m.readings[0]) m.readings[0].done = true; else m.assignments[0].done = true; return S.progressOf(c).mods[0].state === 'progress'; });
+  t('a module with nothing done is "todo"', () => { const c = fx({ capstone: false }); const m = c.modules[0]; m.complete = false; m.readings.forEach((r) => { r.done = false; }); m.assignments.forEach((a) => { a.done = false; a.work = null; }); return S.progressOf(c).mods[0].state === 'todo'; });
+  t('assignment counts add up to the total and match each work state', () => { const c = fx({ capstone: false }); const as = c.modules.flatMap((m) => m.assignments); as.forEach((a) => { a.done = false; a.work = null; }); as[0].work = { phase: 'reviewed', first: {}, final: null }; if (as[1]) { as[1].work = { phase: 'final', final: {} }; as[1].done = true; } const k = S.progressOf(c).counts; return (k.feedback === 1 && k.total === as.length && k.todo + k.submitted + k.feedback + k.done === k.total) || JSON.stringify(k); });
+  t('capstone: final and graded shows score, percent and weight', () => { const c = fx(); const p = S.progressOf(c).capstone; return (p.status === 'ready' && p.key === 'done' && p.graded && p.score === 94 && p.pct === 94 && p.weight === 20) || JSON.stringify(p); });
+  t('capstone: not started', () => { const c = fx(); const a = cap(c); a.work = null; a.done = false; a.score = null; const p = S.progressOf(c).capstone; return (p.key === 'todo' && !p.graded && p.pct === null) || JSON.stringify(p); });
+  t('capstone: submitted (not graded)', () => { const c = fx(); const a = cap(c); a.work = { phase: 'first', final: null }; a.done = false; a.score = null; const p = S.progressOf(c).capstone; return (p.key === 'submitted' && !p.graded) || JSON.stringify(p); });
+  t('capstone: feedback ready inside the 72 hours', () => { const c = fx(); const a = cap(c); a.work = { phase: 'reviewed', first: {}, final: null }; a.done = false; a.score = null; return S.progressOf(c).capstone.key === 'feedback'; });
+  t('capstone: an incomplete record is reported, not hidden and not counted', () => { const c = fx(); c.capstone.status = 'incomplete'; c.capstone.assignments = []; const p = S.progressOf(c); return (p.capstone && p.capstone.status === 'incomplete' && p.capstone.a === null) || 'missing'; });
+  t('grade: combined 80/20 when both exist', () => { const c = fx(); const g = S.progressOf(c).grade; return (g.basis === 'combined' && g.pct != null && !g.provisional) || JSON.stringify(g); });
+  t('grade: ungraded capstone is provisional and is not counted as zero', () => { const c = fx(); const a = cap(c); a.work = null; a.done = false; a.score = null; const g = S.progressOf(c).grade, m = S.grade(c); return (g.provisional && g.pct === m.pct) || JSON.stringify(g); });
+  t('grade: nothing graded gives null, never 0', () => { const c = fx({ capstone: false }); c.modules.forEach((m) => m.assignments.forEach((a) => { a.score = null; })); return S.progressOf(c).grade.pct === null; });
+  t('30-module course builds quickly', () => { const c = fx({ capstone: false }); const base = c.modules[0]; for (let i = 0; i < 30; i++) c.modules.push(JSON.parse(JSON.stringify(base))); const t0 = performance.now(); const p = S.progressOf(c); return (p.mods.length === c.modules.length && performance.now() - t0 < 200) || 'slow'; });
+  t('progressOf does not change the course', () => { const c = fx(); const snap = JSON.stringify(c); S.progressOf(c); return JSON.stringify(c) === snap; });
+
+  /* rendering */
+  const withState = (courses, fn) => { const keep = S.state; S.state = Object.assign({}, keep || {}, { courses, name: '' }); try { return fn(); } finally { S.state = keep; } };
+  const dash = (courses) => withState(courses, () => { const n = S.views.dashboard(); const d = document.getElementById('mount'); d.textContent = ''; d.appendChild(n); return d; });
+  t('dashboard: no courses shows an empty message and no Module library', () => { const d = dash([]); return (/Your progress through each course/.test(d.textContent) && !/Module library/.test(d.textContent)) || d.textContent.slice(0, 200); });
+  t('dashboard: a course row shows modules, capstone and grade, with no NaN or undefined', () => { const d = dash([fx()]); const x = d.textContent; return (/Learning progress/.test(x) && /Course capstone/.test(x) && /Course grade/.test(x) && !/NaN|undefined|null/.test(x)) || x.slice(0, 400); });
+  t('dashboard: the module list is kept inside the course row', () => { const c = fx(); const d = dash([c]); return d.querySelectorAll('.prog-card .lib a').length === c.modules.length; });
+  t('dashboard: the segment bar has a text label and one segment per module', () => { const c = fx(); const d = dash([c]), o = d.querySelector('ol.segs'); return (o && o.getAttribute('aria-label') && o.children.length === c.modules.length) || 'bar'; });
+  t('dashboard: a course without a capstone shows no capstone box', () => { const d = dash([fx({ capstone: false })]); return !d.querySelector('.prog-cap') && !/Capstones finished/.test(d.textContent); });
+  t('dashboard: "Capstones finished" appears when a capstone exists', () => { const d = dash([fx()]); return /Capstones finished/.test(d.textContent); });
+  t('dashboard: a course with no modules says so', () => { const c = fx({ capstone: false }); c.modules = []; const d = dash([c]); return /No modules yet/.test(d.textContent) && !d.querySelector('ol.segs'); });
+  t('localStorage is unchanged by these tests', () => localStorage.getItem('sovereign.v3') === before);
+
+  const bad = results.filter((r) => !r[1]);
+  document.getElementById('out').innerHTML = results.map((r) => '<span class="' + (r[1] ? 'pass' : 'fail') + '">' + (r[1] ? 'PASS' : 'FAIL') + '</span> ' + r[0] + (r[2] ? '\n      ' + r[2] : '')).join('\n');
+  document.title = 'RESULT ' + (results.length - bad.length) + '/' + results.length;
+})();
+</script></body></html>

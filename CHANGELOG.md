@@ -2,6 +2,13 @@
 
 Reconstructed from the repository history (`git log`). Dates are all 2026-11-24 for the build session unless noted. "Tested" is described in `TESTING.md`.
 
+## Build 33 · Phase 5: Dashboard Learning Progress
+- The Dashboard's "Module library" is replaced by "Learning progress": one row per course with a labelled module bar (complete / in progress / not started, by fill pattern and text, not colour alone), the current module with a link, assignment counts (complete, feedback ready, submitted, not started), and the course grade.
+- The course capstone shows as its own box: not started, submitted, feedback ready, complete with score, or "not finished". The grade shows "provisional" until the capstone is graded and never counts it as zero; "Not graded yet" instead of 0.
+- Each course row expands to the same module list the library had, so every module is still one click away.
+- The top strip adds "Capstones finished" only when a course has a capstone.
+- Display only: no saved-data changes, no Worker changes, no AI calls. New helper `S.progressOf(course)`; new `tests/progress.test.html` (24 tests).
+
 ## Build 32 · Phase 4B Step E: edge cases, stress and real-data tooling
 - Security fix: a course title or code containing `</style>` could break out of the PDF footer's style block. Footer text is now a CSS-escaped string, and the theme attribute is restricted to letters.
 - New edge-case and stress tests: hostile text everywhere, missing name/code/dates, a 400-character title, emoji and right-to-left text, courses with no modules, reports for work with no review, and a 30-project course.

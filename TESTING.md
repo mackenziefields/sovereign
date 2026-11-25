@@ -489,3 +489,8 @@ A hand-made review cited `U1-2` (column Neighborhood) and `U1-99`, with `feedbac
 - 30-project course: Professional (Letter) and Academic (A4) build in well under 5 seconds.
 - Limited-backup helper tested with a fictional two-course backup: only the chosen course is written, the name is replaced, the other course's text is absent.
 - Not done: real coursework (waiting for you; see docs/PHASE4-REALDATA-TEST.md), browsers other than Edge/Chromium for the print-to-PDF step, very large attached PDFs.
+
+## Phase 5: Dashboard Learning Progress (fictional data, browser pane, $0)
+- `tests/progress.test.html`: 24 of 24 pass. Covers no modules, all complete, mid-course, module states, assignment counts, every capstone state (not started, submitted, feedback ready, final and graded, incomplete), grade basis (combined, provisional, none), a 30-module course, the course object unchanged, and rendering with no NaN/undefined and no stored data touched.
+- Seen in the running app (three fictional courses: with a graded capstone, with none, with an ungraded capstone): rows, bars, capstone box, expand to module list; at phone width (375px) no sideways scrolling.
+- Not done: real coursework; browsers other than Chromium.
