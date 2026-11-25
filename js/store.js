@@ -2,7 +2,7 @@
 (function (S) {
   'use strict';
 
-  S.BUILD = 31; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
+  S.BUILD = 32; // matches the number at the end of CACHE in sw.js; shown on Data & Backup so you can tell which version is running
   const KEY = 'sovereign.v3';
   const OLD_KEYS = ['sovereign.v2', 'sovereign.v1']; // earlier versions; migrated, never deleted automatically
   S.MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -161,12 +161,21 @@
     if (!rounds.length && !data) return null;
     return { material: str(o.material, 500), mode: o.mode === 'practice' ? 'practice' : o.mode === '' && !rounds.length ? '' : 'own', rounds, ...(data ? { data } : {}) }; // saved sessions from before the two modes were always "own material"
   }
+  // What is kept of the FIRST review once a resubmission becomes the final grade (Phase 4A). Only real saved facts: when, the score, the rubric results and the
+  // findings. It is never made up for older records, and it never decides the grade (the final review stays authoritative).
+  function normFirstSummary(x) {
+    x = obj(x); if (!x.at) return null;
+    return { at: str(x.at, 40), late: x.late === true, score: num(x.score) || 0, max: num(x.max) || 0, model: str(x.model, 60), summary: str(x.summary, 800),
+      criteria: arr(x.criteria, 10).map((k) => { k = obj(k); return { name: str(k.name, 200) || 'Criterion', max: num(k.max) || 0, score: num(k.score) || 0, status: inList(k.status, ['met', 'partly', 'not-met', 'not-assessed', ''], ''), assessed: k.assessed !== false, comment: str(k.comment, 400) }; }),
+      findings: arr(x.findings, 14).map((f) => { f = obj(f); return { type: inList(f.type, S.FINDING_TYPES, 'optional'), criterion: str(f.criterion, 200), claim: str(f.claim, 700), quote: str(f.quote, 300), where: str(f.where, 120), located: f.located === true ? true : f.located === false ? false : null, fix: str(f.fix, 400) }; }).filter((f) => f.claim) };
+  }
   function normWork(w) {
     w = obj(w);
     const first = normSub(w.first), final = normSub(w.final);
     if (!first && !final) return null;
     const phase = final ? 'final' : 'reviewed';
-    return { phase, deadline: str(w.deadline, 40), first: final ? null : first, final };
+    const fs = final ? normFirstSummary(w.firstSummary) : null;
+    return { phase, deadline: str(w.deadline, 40), first: final ? null : first, final, ...(fs ? { firstSummary: fs } : {}) };
   }
   // Earlier versions of an assignment's wording, kept when the person approves an AI revision so it can be restored. Wording only: points, rubric, work and grades are never part of it.
   const normParts = (v) => arr(v, 8).map((p) => { p = obj(p); return { title: str(p.title, 120).trim(), questions: strs(p.questions, 8, 500) }; }).filter((p) => p.title || p.questions.length);
@@ -231,6 +240,17 @@
 
   S.makeCapstone = (x) => normCapstone(x, (v) => str(v, 60) || S.uid(), (v) => S.cleanUrl(str(v, 2000)) || '');
 
+  // Per-course export preferences (Phase 4B). Configuration only: which pieces, in what order, paper, optional text the learner chose to keep. Never copies submitted work.
+  function normPub(x) {
+    x = obj(x); const notes = {}, nsrc = obj(x.notes);
+    Object.keys(nsrc).slice(0, 60).forEach((k) => { const v = str(nsrc[k], 1500); if (v.trim()) notes[str(k, 60)] = v; });
+    const out = { mode: x.mode === 'professional' ? 'professional' : 'academic', size: x.size === 'a4' ? 'a4' : 'letter', grades: x.grades === true,
+      include: Array.isArray(x.include) ? [...new Set(x.include.map((v) => str(v, 60)).filter(Boolean))].slice(0, 80) : null,
+      intro: str(x.intro, 3000), closing: str(x.closing, 2000), notes, remember: x.remember === true };
+    if (!out.remember) { out.intro = ''; out.closing = ''; out.notes = {}; } // text is only kept when the learner chose to keep it
+    return out;
+  }
+
   function normCourse(c, i) {
     c = obj(c);
     const seen = new Set();
@@ -256,6 +276,7 @@
         return { id: id(k.id), name: str(k.name, 300) || 'Untitled credential', issuer: str(k.issuer, 300), url: url(k.url), note: str(k.note), status: oneOf(k.status, S.CRED_STATUS, 'considering'), requirement: k.requirement === 'required' || k.requirement === 'suggested' ? k.requirement : '', origin: k.origin === 'ai' ? 'ai' : 'user' };
       }),
       ...(c.capstone ? (() => { const k = normCapstone(c.capstone, id, url); return k ? { capstone: k } : {}; })() : {}),
+      ...(c.pub ? { pub: normPub(c.pub) } : {}),
       work: { title: str(w.title, 200), criteria: strs(w.criteria, 12, 400), description: str(w.description), reflection: str(w.reflection), status: oneOf(w.status, S.WORK_STATUS, 'not-started'), url: url(w.url) },
     };
   }
@@ -374,11 +395,19 @@
   S.isLate = (a, atMs) => { const d = S.dueEnd(a); return d != null && atMs > d; };
   S.hoursLeft = (a, nowMs) => (a.work && a.work.deadline ? (new Date(a.work.deadline).getTime() - (nowMs || Date.now())) / 3600000 : null);
 
+  // A compact, real record of a review (when, score, rubric results, findings), taken from the saved submission. Returns null when there is no review to summarise.
+  S.summarizeReview = function (sub) {
+    const fb = sub && sub.feedback; if (!fb || !sub.at) return null;
+    return normFirstSummary({ at: sub.at, late: sub.late === true, score: fb.score, max: fb.max, model: fb.model, summary: fb.summary, criteria: fb.criteria,
+      findings: (fb.findings || []).map((f) => ({ type: f.type, criterion: f.criterion, claim: f.claim, quote: f.quote, where: f.where, located: f.located, fix: f.fix })) });
+  };
   // Makes this submission the final one: records the points on the Grades page and removes the first round's file and feedback.
   S.finalizeWork = function (a, sub) {
     const old = a.work && a.work.first, keep = sub || (a.work && a.work.first);
     if (!keep || !keep.feedback) return false;
-    a.work = { phase: 'final', deadline: a.work ? a.work.deadline : '', first: null, final: keep };
+    // Keep a small summary of the first review when a different submission replaces it (or carry one that already exists). Never for the first review becoming the grade.
+    const fs = old && old !== keep ? S.summarizeReview(old) : (a.work && a.work.firstSummary) || null;
+    a.work = { phase: 'final', deadline: a.work ? a.work.deadline : '', first: null, final: keep, ...(fs ? { firstSummary: fs } : {}) };
     const fb = keep.feedback; // if the points were changed after the review, keep the same percentage
     a.score = a.points > 0 && fb.max > 0 ? Math.round((fb.score / fb.max) * a.points * 10) / 10 : fb.score;
     a.done = true;

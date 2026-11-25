@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Publication attachments regression tests</title>
+<!-- Run in a browser: http://localhost:8765/tests/publish-attach.test.html . Fictional files built in memory; S.files.get is stubbed so nothing is read from or written to storage, and S.save is stubbed. -->
+<style>body{font:14px/1.5 system-ui;margin:20px}.pass{color:#0a6b2d}.fail{color:#b3261e;font-weight:700}pre{white-space:pre-wrap}</style></head>
+<body><h1>Publication attachments regression tests</h1><pre id="out">running…</pre>
+<script src="../js/config.js"></script><script src="../js/exhibits.js"></script><script src="../js/store.js"></script><script src="../js/components.js"></script><script src="../js/files.js"></script><script src="../js/dataset-import.js"></script><script src="../js/publish-model.js"></script><script src="../js/publish.js"></script><script src="../js/publish-attach.js"></script><script src="../js/publish-docs.js"></script><script src="fixtures.js"></script>
+<script>
+(async function () {
+  const before = localStorage.getItem('sovereign.v3');
+  const S = window.Sovereign, P = S.publish, A = P.attach, results = [];
+  S.save = () => {};
+  if (!S.stageOf) S.stageOf = (a) => (a.kind === 'learn' || a.kind === 'demonstrate' ? a.kind : 'apply');
+  const t = async (name, fn) => { try { const r = await fn(); results.push([name, r === true || r === undefined, r === true || r === undefined ? '' : String(r)]); } catch (e) { results.push([name, false, 'threw: ' + e.message]); } };
+
+  /* ---- in-memory files ---- */
+  const store = {}; S.files.get = async (id) => store[id] || null;
+  const enc = new TextEncoder();
+  const u32 = (n) => [n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >>> 24) & 255], u16 = (n) => [n & 255, (n >> 8) & 255];
+  function zip(files) { // stored (no compression); the reader does not check CRCs
+    const parts = [], cd = []; let off = 0;
+    Object.entries(files).forEach(([name, text]) => { const nb = enc.encode(name), db = enc.encode(text);
+      const lh = new Uint8Array([0x50, 0x4b, 3, 4, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...u32(db.length), ...u32(db.length), ...u16(nb.length), 0, 0]);
+      parts.push(lh, nb, db);
+      cd.push(new Uint8Array([0x50, 0x4b, 1, 2, 20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...u32(db.length), ...u32(db.length), ...u16(nb.length), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...u32(off)]), nb);
+      off += lh.length + nb.length + db.length; });
+    const cdLen = cd.reduce((n, p) => n + p.length, 0), n = Object.keys(files).length;
+    const eocd = new Uint8Array([0x50, 0x4b, 5, 6, 0, 0, 0, 0, ...u16(n), ...u16(n), ...u32(cdLen), ...u32(off), 0, 0]);
+    return new Blob([...parts, ...cd, eocd]);
+  }
+  function pdf(n) { // a plain n-page PDF with one line of text per page
+    const objs = [], add = (s) => { objs.push(s); return objs.length; };
+    add('<< /Type /Catalog /Pages 2 0 R >>'); add('<< /Type /Pages /Kids [' + Array.from({ length: n }, (_, i) => (4 + i * 2) + ' 0 R').join(' ') + '] /Count ' + n + ' >>'); add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    for (let i = 0; i < n; i++) { const c = 'BT /F1 28 Tf 60 700 Td (Fictional page ' + (i + 1) + ') Tj ET'; add('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ' + (5 + i * 2) + ' 0 R >>'); add('<< /Length ' + c.length + ' >>\nstream\n' + c + '\nendstream'); }
+    let out = '%PDF-1.4\n', offs = []; objs.forEach((o, i) => { offs.push(out.length); out += (i + 1) + ' 0 obj\n' + o + '\nendobj\n'; });
+    const x = out.length; out += 'xref\n0 ' + (objs.length + 1) + '\n0000000000 65535 f \n' + offs.map((o) => String(o).padStart(10, '0') + ' 00000 n \n').join('') + 'trailer\n<< /Size ' + (objs.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + x + '\n%%EOF';
+    return new Blob([out], { type: 'application/pdf' });
+  }
+  const png = () => new Promise((res) => { const c = document.createElement('canvas'); c.width = 240; c.height = 120; const g = c.getContext('2d'); g.fillStyle = '#2643d8'; g.fillRect(0, 0, 240, 120); c.toBlob(res, 'image/png'); });
+  const WNS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const wp = (txt, style, list) => '<w:p><w:pPr>' + (style ? '<w:pStyle w:val="' + style + '"/>' : '') + (list ? '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>' : '') + '</w:pPr><w:r><w:t>' + txt + '</w:t></w:r></w:p>';
+  const docx = (extra) => zip({ 'word/document.xml': '<?xml version="1.0"?><w:document ' + WNS + '><w:body>' + wp('Records request', 'Heading1') + wp('I asked the district for the invoices.') + wp('First item', '', true) + '<w:tbl><w:tr><w:tc>' + wp('Agency') + '</w:tc><w:tc>' + wp('Date') + '</w:tc></w:tr><w:tr><w:tc>' + wp('District') + '</w:tc><w:tc>' + wp('March 4') + '</w:tc></w:tr></w:tbl><w:p><w:r><w:drawing/></w:r></w:p>' + (extra || '') + '</w:body></w:document>' });
+  const CNS = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"';
+  const cache0 = (kind, vals) => '<c:' + kind + '><c:ptCount val="' + vals.length + '"/>' + vals.map((v, i) => '<c:pt idx="' + i + '"><c:v>' + v + '</c:v></c:pt>').join('') + '</c:' + kind + '>';
+  const chart = (type, title) => '<?xml version="1.0"?><c:chartSpace ' + CNS + '><c:chart><c:title><c:tx><c:rich><a:p><a:r><a:t>' + title + '</a:t></a:r></a:p></c:rich></c:tx></c:title><c:plotArea><c:' + type + '><c:ser><c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Requests</c:v></c:pt></c:strCache></c:strRef></c:tx><c:cat><c:strRef>' + cache0('strCache', ['Jan', 'Feb', 'Mar']) + '</c:strRef></c:cat><c:val><c:numRef>' + cache0('numCache', [4, 9, 6]) + '</c:numRef></c:val></c:ser></c:' + type + '></c:plotArea></c:chart></c:chartSpace>';
+  const sheetXml = (n) => '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' + Array.from({ length: n }, (_, i) => '<row r="' + (i + 1) + '">' + (i === 0 ? '<c r="A1" t="inlineStr"><is><t>Month</t></is></c><c r="B1" t="inlineStr"><is><t>Requests</t></is></c>' : '<c r="A' + (i + 1) + '" t="inlineStr"><is><t>M' + i + '</t></is></c><c r="B' + (i + 1) + '"><v>' + (i * 3) + '</v></c>') + '</row>').join('') + '</sheetData></worksheet>';
+  const xlsx = (rows, charts) => { const f = { 'xl/workbook.xml': '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Log" sheetId="1" r:id="rId1"/></sheets></workbook>', 'xl/_rels/workbook.xml.rels': '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>', 'xl/worksheets/sheet1.xml': sheetXml(rows) }; (charts || []).forEach((c, i) => { f['xl/charts/chart' + (i + 1) + '.xml'] = c; }); return zip(f); };
+
+  const sub = (id, name, type, blob) => { store[id] = blob; return { text: '', fileId: id, fileName: name, fileType: type, fileSize: blob ? blob.size : 0, at: '2026-10-30T10:00:00Z' }; };
+  const IMG = sub('i1', 'screenshot.png', 'image/png', await png());
+  const DOC = sub('d1', 'request-letters.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', docx());
+  const XLS = sub('x1', 'log.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xlsx(100, [chart('barChart', 'Requests by month'), chart('pieChart', 'Share'), chart('scatterChart', 'Odd')]));
+  const PDF = sub('p1', 'packet.pdf', 'application/pdf', pdf(3));
+  const BADP = sub('p2', 'broken.pdf', 'application/pdf', new Blob(['this is not a pdf']));
+  const BADD = sub('d2', 'broken.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', new Blob(['not a zip file at all, just text']));
+  const GONE = { text: '', fileId: 'gone', fileName: 'lost.pdf', fileType: 'application/pdf', fileSize: 1000, at: '' };
+  const ON = (extra) => Object.assign({ on: true }, extra || {});
+
+  await t('kinds are recognised from type or name', () => A.kindOf(IMG) === 'image' && A.kindOf(DOC) === 'docx' && A.kindOf(XLS) === 'xlsx' && A.kindOf(PDF) === 'pdf' && A.kindOf({ fileId: 'z', fileName: 'a.pages', fileType: '' }) === 'other' && A.kindOf({ text: 'x' }) === 'none');
+  await t('nothing is shown unless the learner ticked the file', () => A.nodes(PDF, null) === null && A.nodes(PDF, { on: false }) === null);
+  await t('a ticked file that is not prepared yet says so (never silently dropped)', () => { const r = A.nodes(PDF, ON({ from: 1, to: 2 })); return (r && r.pending && /Preparing/.test(r.status)) || JSON.stringify(r); });
+
+  await t('image: embedded as a data picture with alt text and caption', async () => { const r = await A.load(IMG, ON()); const n = A.nodes(IMG, ON()); return (r.status === 'ready' && r.parts[0].src.startsWith('data:image/') && /Image submitted/.test(r.parts[0].alt) && n.nodes.length === 1 && /Embedded image/.test(n.status)) || JSON.stringify(r).slice(0, 200); });
+  await t('Word: headings, paragraphs, list and table are read; images are reported as not included', async () => { const r = await A.load(DOC, ON()); const ps = r.parts.filter((p) => p.t === 'p'), tb = r.parts.find((p) => p.t === 'table'); return (r.status === 'ready' && ps[0].level === 1 && ps.some((p) => p.list) && tb && tb.head[0] === 'Agency' && tb.rows[0][1] === 'March 4' && /images and drawings/.test(r.notes.join(' '))) || JSON.stringify(r.notes); });
+  await t('Word: a damaged file is reported, with no invented content', async () => { const r = await A.load(BADD, ON()); return (r.status === 'error' && r.parts.length === 0 && /could not be read/.test(r.summary)) || JSON.stringify(r); });
+  await t('Excel: values become a table; rows are capped and the cap is stated', async () => { const r = await A.load(XLS, ON({ rows: 30 })); const tb = r.parts.find((p) => p.t === 'table'); return (r.status === 'ready' && tb.head[0] === 'Month' && tb.rows.length === 29 && tb.more === 70 && /Cell values only/.test(r.notes.join(' '))) || JSON.stringify({ rows: tb && tb.rows.length, more: tb && tb.more }); });
+  await t('Excel: a different row cap gives a different, still honest table', async () => { const r = await A.load(XLS, ON({ rows: 10 })); const tb = r.parts.find((p) => p.t === 'table'); return (tb.rows.length === 9 && tb.more === 90) || tb.rows.length; });
+  await t('Excel: bar and pie charts are redrawn as SVG; an unsupported chart is named, not faked', async () => { const r = await A.load(XLS, ON({ rows: 30 })); const ch = r.parts.filter((p) => p.t === 'chart'); return (ch.length === 2 && /<svg/.test(ch[0].svg) && /Requests by month/.test(ch[0].svg) && /<path/.test(ch[1].svg) && /Not drawn: a scatter chart/.test(r.notes.join(' ')) && /redrawn from the numbers/.test(r.notes.join(' '))) || JSON.stringify(r.notes); });
+  await t('PDF: only the chosen pages are drawn, the rest are reported, searchable-text loss is stated', async () => { const r = await A.load(PDF, ON({ from: 1, to: 2 })); return (r.status === 'ready' && r.parts.length === 2 && r.parts.every((p) => p.src.startsWith('data:image/jpeg')) && /pages 1 to 2 of 3/.test(r.summary) && /3 pages; pages 1 to 2 are included/.test(r.notes.join(' ')) && /cannot be searched/.test(r.notes.join(' '))) || JSON.stringify({ n: r.parts.length, s: r.summary, notes: r.notes }); });
+  await t('PDF: a whole short file is included with no "rest not included" note', async () => { const r = await A.load(PDF, ON({ from: 1, to: 3 })); return (r.parts.length === 3 && !/The rest are not/.test(r.notes.join(' '))) || r.notes.join(' | '); });
+  await t('PDF: the size limit stops early and says exactly where', async () => { const keep = A.LIM.bytes; A.LIM.bytes = 100; const r = await A.load(PDF, ON({ from: 1, to: 3, rows: 7 })); A.LIM.bytes = keep; return (r.status === 'error' && /No pages could be included/.test(r.summary) && /alone is over the size limit/.test(r.notes.join(' '))) || JSON.stringify({ s: r.summary, n: r.notes }); });
+  await t('PDF: an unreadable file is reported, nothing is invented', async () => { const r = await A.load(BADP, ON({ from: 1, to: 1 })); return (r.status === 'error' && r.parts.length === 0 && /could not be read|password/.test(r.summary)) || JSON.stringify(r); });
+  await t('a file missing from this device is reported as such', async () => { const r = await A.load(GONE, ON()); return (r.status === 'missing' && /not on this device/.test(r.summary)) || JSON.stringify(r); });
+  await t('page count is probed without drawing pages', async () => { const m = await A.probe(PDF); return m.pages === 3 || JSON.stringify(m); });
+  await t('original file bytes are unchanged by preparing them', async () => { const b = store.p1, n = b.size; await A.load(PDF, ON({ from: 1, to: 3 })); return store.p1 === b && b.size === n; });
+
+  /* ---- inside the publications ---- */
+  const c = S.fixtureCourse('modernist'); const a1 = c.modules[1].assignments[0]; a1.work.final = Object.assign({}, a1.work.final, { fileId: 'd1', fileName: DOC.fileName, fileType: DOC.fileType, fileSize: DOC.fileSize });
+  const a2 = c.modules[1].assignments[1]; a2.work.final = Object.assign({}, a2.work.final, { fileId: 'i1', fileName: IMG.fileName, fileType: IMG.fileType, fileSize: IMG.fileSize });
+  const txtOf = (o) => { const out = P.builders.publication.build(c, Object.assign(P.builders.publication.init(c, {}), o), {}); const d = document.createElement('div'); const add = (n) => { if (n == null || n === false) return; if (Array.isArray(n)) n.forEach(add); else d.appendChild(n.nodeType ? n : document.createTextNode(String(n))); }; add(out.nodes); return d; };
+  await t('without a tick, the document says the files are not embedded', () => { const d = txtOf({ mode: 'professional', include: ['fd1', 'fd2'] }); return (/Not embedded in this document/.test(d.textContent) && !d.querySelector('img')) || 'wrongly embedded'; });
+  await A.load(DOC, ON()); await A.load(IMG, ON());
+  await t('ticking one file shows it, labelled; the other stays "not embedded" (per-file choice)', () => { const d = txtOf({ mode: 'professional', include: ['fd1', 'fd2'], att: { fd1: ON() } }); return (/Included in this document/.test(d.textContent) && /Records request/.test(d.textContent) && /March 4/.test(d.textContent) && !d.querySelector('img') && /Not embedded/.test(d.textContent) && /screenshot\.png/.test(d.textContent)) || d.textContent.slice(0, 300); });
+  await t('an image is placed in the document when ticked', () => { const d = txtOf({ mode: 'academic', include: ['fd1', 'fd2'], att: { fd2: ON() } }); const im = d.querySelector('img'); return (im && im.src.startsWith('data:image/') && /Image submitted/.test(im.alt)) || 'no image'; });
+  await t('a ticked file that failed is explained inside the document', () => { c.modules[1].assignments[0].work.final.fileId = 'd2'; Object.assign(c.modules[1].assignments[0].work.final, { fileName: BADD.fileName, fileSize: BADD.fileSize }); return A.load(BADD, ON()).then(() => { const d = txtOf({ mode: 'professional', include: ['fd1'], att: { fd1: ON() } }); return (/Not embedded/.test(d.textContent) && /could not be read/.test(d.textContent)) || d.textContent.slice(0, 300); }); });
+  await t('the finished page is a complete HTML document containing the picture', async () => { await A.load(IMG, ON()); const h = P.html('publication', c, 'letter', { mode: 'professional', include: ['fd2'], att: { fd2: ON() } }); return (h && /<img[^>]+data:image/.test(h) && /@page/.test(h)) || 'no picture in page'; });
+  await t('attachment choices are never saved with the course', () => { const o = P.builders.publication.init(c, {}); o.att = { fd1: ON() }; P.docs.persist(c, Object.assign(o, { mode: 'professional', include: ['fd1'] })); return !('att' in c.pub) || JSON.stringify(c.pub); });
+  /* ---- the dialog ---- */
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  c.modules[1].assignments[0].work.final.fileId = 'd1'; Object.assign(c.modules[1].assignments[0].work.final, { fileName: DOC.fileName, fileType: DOC.fileType, fileSize: DOC.fileSize });
+  delete c.pub; // the persistence test above saved a one-piece selection
+  P.open('publication', c); await wait(900);
+  const dlg = document.getElementById('pub-dialog'), fs = [...dlg.querySelectorAll('fieldset')].find((f) => /Files you submitted/.test(f.textContent)), boxes = () => [...fs.querySelectorAll('input[type=checkbox]')];
+  await t('the dialog lists submitted files, all unticked by default', () => !!fs && boxes().length === 2 && boxes().every((b) => !b.checked) || 'fieldset ' + !!fs);
+  await t('the preview has no embedded file until one is ticked', () => !/data:image/.test(dlg.querySelector('.pub-frame').srcdoc));
+  await t('ticking the image shows it in the preview and states what was done', async () => { const img = boxes().find((b) => /screenshot/.test(b.parentNode.textContent)); img.click(); await wait(1500); const d2 = document.getElementById('pub-dialog'); const fs2 = [...d2.querySelectorAll('fieldset')].find((f) => /Files you submitted/.test(f.textContent)); return (/data:image/.test(d2.querySelector('.pub-frame').srcdoc) && /Embedded image/.test(fs2.textContent)) || fs2.textContent.slice(0, 300); });
+  await t('unticking removes it again (per-file exclusion)', async () => { const d2 = document.getElementById('pub-dialog'), fs2 = [...d2.querySelectorAll('fieldset')].find((f) => /Files you submitted/.test(f.textContent)); [...fs2.querySelectorAll('input[type=checkbox]')].find((b) => /screenshot/.test(b.parentNode.textContent)).click(); await wait(1500); return !/data:image/.test(document.getElementById('pub-dialog').querySelector('.pub-frame').srcdoc) || 'still embedded'; });
+  document.getElementById('pub-dialog').remove();
+  await t('localStorage is unchanged by these tests', () => localStorage.getItem('sovereign.v3') === before);
+
+  window.__t = { c, A, P, ON, DOC, IMG, XLS, PDF, store };
+  const bad = results.filter((r) => !r[1]);
+  document.getElementById('out').innerHTML = results.map((r) => '<span class="' + (r[1] ? 'pass' : 'fail') + '">' + (r[1] ? 'PASS' : 'FAIL') + '</span> ' + r[0] + (r[2] ? '\n      ' + r[2] : '')).join('\n');
+  document.title = 'RESULT ' + (results.length - bad.length) + '/' + results.length;
+})();
+</script></body></html>

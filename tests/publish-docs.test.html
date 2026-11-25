@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Publication documents regression tests</title>
+<!-- Run in a browser: http://localhost:8765/tests/publish-docs.test.html . Fictional data only; it never calls S.save (S.save is stubbed) and checks saved data is unchanged. -->
+<style>body{font:14px/1.5 system-ui;margin:20px}.pass{color:#0a6b2d}.fail{color:#b3261e;font-weight:700}pre{white-space:pre-wrap}</style></head>
+<body><h1>Publication documents regression tests</h1><pre id="out"></pre>
+<script src="../js/config.js"></script><script src="../js/exhibits.js"></script><script src="../js/store.js"></script><script src="../js/components.js"></script><script src="../js/publish-model.js"></script><script src="../js/publish.js"></script><script src="../js/publish-docs.js"></script><script src="fixtures.js"></script>
+<script>
+(function () {
+  const before = localStorage.getItem('sovereign.v3');
+  const S = window.Sovereign, P = S.publish, D = P.docs, results = [];
+  if (!S.stageOf) S.stageOf = (a) => (a.kind === 'learn' || a.kind === 'demonstrate' ? a.kind : 'apply'); // identical to js/studio.js, which needs the whole app UI
+  let saves = 0; S.save = function () { saves++; };
+  const t = (name, fn) => { try { const r = fn(); results.push([name, r === true || r === undefined, r === true || r === undefined ? '' : String(r)]); } catch (e) { results.push([name, false, 'threw: ' + e.message]); } };
+  const build = (kind, c, o) => { const b = P.builders[kind]; return b.build(c, Object.assign(b.init(c, {}), o || {}), {}); };
+  const add = (d, n) => { if (n == null || n === false) return; if (Array.isArray(n)) n.forEach((x) => add(d, x)); else d.appendChild(n.nodeType ? n : document.createTextNode(String(n))); };
+  const dom = (out) => { const d = document.createElement('div'); add(d, out.nodes || []); return d; };
+  const text = (out) => dom(out).textContent;
+  const fx = (o) => S.fixtureCourse('editorial', o);
+
+  t('fixture builds and is publishable', () => { const c = fx(); return S.pubModel.assertPublishable(c).ok || 'fixture is not publishable'; });
+
+  /* --- selection and order --- */
+  t('eligible lists only finished pieces; professional keeps Demonstrate + capstone', () => {
+    const c = fx(), a = D.eligible(c, 'academic').map((x) => x.a.id), p = D.eligible(c, 'professional').map((x) => x.a.id);
+    return (a.includes('fa2') && !a.includes('fd3') && a.includes('fcap') && !p.includes('fa2') && p.includes('fd1') && p.includes('fcap')) || JSON.stringify([a, p]); });
+  t('the learner’s order is respected', () => { const c = fx(); const s = D.selection(c, { mode: 'professional', include: ['fd2', 'fcap', 'fd1'] }); return s.map((x) => x.a.id).join() === 'fd2,fcap,fd1' || s.map((x) => x.a.id).join(); });
+  t('ineligible or unknown ids are dropped, duplicates removed', () => { const c = fx(); const s = D.selection(c, { mode: 'professional', include: ['fd3', 'nope', 'fd1', 'fd1'] }); return s.map((x) => x.a.id).join() === 'fd1' || s.map((x) => x.a.id).join(); });
+  t('an explicitly empty selection stays empty (not replaced by defaults)', () => D.selection(fx(), { mode: 'professional', include: [] }).length === 0);
+  t('default professional selection puts the capstone first', () => D.defaultInclude(fx(), 'professional')[0] === 'fcap');
+
+  /* --- Professional Portfolio: no grading by default --- */
+  const proText = text(build('publication', fx(), { mode: 'professional' }));
+  t('professional hides grades, rubrics, first-review scores, history by default', () => !/\b94%|\b88%|23%|Rubric|FIRST REVIEW|first review|Stage 1|Assessment history|AI-generated|rubric/i.test(proText) || proText.match(/\b94%|\b88%|23%|Rubric|first review|Stage 1|Assessment history|AI-generated/i)[0]);
+  t('professional still shows the actual work and project titles', () => /Public Records Request Packet/.test(proText) && /Paragraph 1 of the capstone/.test(proText));
+  t('professional never implies accreditation', () => /not an accredited|does not (?:imply|constitute)|not accredited|not a credential/i.test(proText) || 'no disclaimer found');
+  t('professional with grades on shows AI-generated labelled grades', () => { const x = text(build('publication', fx(), { mode: 'professional', grades: true })); return (/94%/.test(x) && /AI-generated/i.test(x)) || 'missing'; });
+  t('professional never prints first-review score even with grades on', () => !/23%/.test(text(build('publication', fx(), { mode: 'professional', grades: true }))));
+
+  /* --- Academic Record --- */
+  const acText = text(build('publication', fx(), { mode: 'academic' }));
+  t('academic shows 80/20 course grade, history, rubric and AI label', () => /80/.test(acText) && /20/.test(acText) && /23%/.test(acText) && /94%/.test(acText) && /Rubric/i.test(acText) && /AI-generated/i.test(acText) || 'missing parts');
+  t('academic labels credentials as self-reported and keeps the final project separate', () => /Self-reported/i.test(acText) && /Not graded by Sovereign/i.test(acText));
+  t('academic states the resubmission timing only as saved (53 hours, inside window)', () => /53 hours/.test(acText) && /inside the 72-hour window/.test(acText));
+  t('academic does not list the unreviewed draft as completed work', () => !/A draft that has a first review only/.test(acText));
+  t('modes differ', () => proText !== acText);
+
+  /* --- gate and empty states --- */
+  t('a contradictory record blocks the academic export and names the item', () => { const c = fx(); c.modules[1].assignments[0].work.final.feedback.score = 70; const out = build('publication', c, { mode: 'academic', include: ['fd1'] }); return !!out.blocked || 'not blocked'; });
+  t('nothing is rewritten when blocked (stored score unchanged)', () => { const c = fx(); c.modules[1].assignments[0].work.final.feedback.score = 70; build('publication', c, { mode: 'academic', include: ['fd1'] }); return c.modules[1].assignments[0].work.final.feedback.score === 70 && c.modules[1].assignments[0].score === 88; });
+  t('a course with no finished work gives an empty professional portfolio, not a broken page', () => { const c = fx({ capstone: false }); c.modules.forEach((m) => m.assignments.forEach((a) => { a.work = null; })); const out = build('publication', c, { mode: 'professional' }); return !!out.empty || /nothing|no finished|no project/i.test(text(out)) || 'no empty state'; });
+  t('a partly completed course (no capstone) still builds an academic record', () => { const out = build('publication', fx({ capstone: false }), { mode: 'academic' }); return !out.blocked && /provisional|module average|Course grade/i.test(text(out)); });
+
+  /* --- attachments: honest --- */
+  t('a Word file is reported as not embedded, never as included', () => { const x = text(build('publication', fx(), { mode: 'professional', include: ['fd1'] })); return (/request-letters\.docx/.test(x) && /Not embedded/i.test(x)) || 'missing honest file card'; });
+
+  /* --- links --- */
+  t('contents entries are internal links to ids that exist', () => { const d = dom(build('publication', fx(), { mode: 'professional' })); const as = [...d.querySelectorAll('a[href^="#"]')]; const ids = as.length && as.every((a) => d.querySelector('[id="' + a.getAttribute('href').slice(1) + '"]')); return (as.length >= 3 && ids) || 'links ' + as.length; });
+
+  /* --- feedback report --- */
+  const fbCourse = fx(), cap = S.capstoneOf(fbCourse);
+  t('feedback report builds for the capstone, shows history and findings kinds', () => { const out = P.builders.feedback.build(fbCourse, Object.assign(P.builders.feedback.init(fbCourse, { assignmentId: cap.id }), {}), { assignmentId: cap.id }); const x = text(out); return (/23%/.test(x) && /94%/.test(x) && /Verified error/.test(x) && /Optional suggestion/.test(x) && /not a human/i.test(x)) || 'missing'; });
+  t('feedback report leaves the submission out unless chosen', () => { const o = P.builders.feedback.init(fbCourse, { assignmentId: cap.id }); const a = text(P.builders.feedback.build(fbCourse, o, { assignmentId: cap.id })), b = text(P.builders.feedback.build(fbCourse, Object.assign({}, o, { includeSubmission: true }), { assignmentId: cap.id })); return (!/Paragraph 9 of the capstone/.test(a) && /Paragraph 9 of the capstone/.test(b)) || 'submission inclusion wrong'; });
+
+  /* --- settings persistence --- */
+  t('persist keeps text only when "remember" is on', () => { const c = fx(); D.persist(c, { mode: 'professional', size: 'a4', grades: true, include: ['fcap'], intro: 'Hello', closing: 'Bye', notes: { fcap: 'n' }, remember: false }); const a = c.pub; D.persist(c, { mode: 'professional', size: 'a4', grades: true, include: ['fcap'], intro: 'Hello', closing: 'Bye', notes: { fcap: 'n' }, remember: true }); return (a.intro === '' && a.closing === '' && !Object.keys(a.notes).length && c.pub.intro === 'Hello' && c.pub.notes.fcap === 'n') || JSON.stringify([a, c.pub]); });
+  t('saved settings survive a backup round trip (normalize) and are shaped safely', () => { const c = fx(); D.persist(c, { mode: 'professional', size: 'a4', grades: true, include: ['fcap', 'fd1'], intro: 'Hi', closing: '', notes: {}, remember: true }); const r = S.normalize(JSON.parse(JSON.stringify({ app: 'sovereign', courses: [c] }))).courses[0]; return (r.pub && r.pub.mode === 'professional' && r.pub.size === 'a4' && r.pub.grades === true && r.pub.include.join() === 'fcap,fd1' && r.pub.intro === 'Hi') || JSON.stringify(r.pub); });
+  t('hostile settings are normalised (bad mode/size, non-array include)', () => { const r = S.normalize({ app: 'sovereign', courses: [Object.assign({}, JSON.parse(JSON.stringify(fx())), { pub: { mode: 'x', size: 'huge', grades: 'yes', include: 'fd1', intro: 5 } })] }).courses[0].pub; return (r.mode === 'academic' && (r.size === 'letter' || r.size === null) && r.grades === true || r.grades === false) && (r.include === null || Array.isArray(r.include)) || JSON.stringify(r); });
+  t('a course with no saved settings has no pub field (nothing invented)', () => !('pub' in fx()));
+
+  /* --- engine --- */
+  t('document html is a full page with theme, print CSS, Letter or A4 page size', () => { const c = fx(); const l = P.html('publication', c, 'letter', { mode: 'professional' }), a = P.html('publication', c, 'a4', { mode: 'professional' }); return (/data-theme="editorial"/.test(l) && /size:\s*8\.5in 11in|size: letter/i.test(l) && /210mm|A4/i.test(a)) || 'frame wrong'; });
+  t('no <base> tag (keeps #links internal)', () => !/<base\s/i.test(P.html('publication', fx(), 'letter', { mode: 'professional' })));
+
+  /* --- typography floors (Step D): read the real stylesheet --- */
+  const css = (() => { const x = new XMLHttpRequest(); x.open('GET', '../css/publish.css?t=' + Date.now(), false); x.send(); return x.responseText.replace(/\/\*[\s\S]*?\*\//g, ''); })();
+  const rules = css.split('}').map((r) => r.split('{')).filter((a) => a.length === 2).map((a) => ({ sel: a[0].trim(), body: a[1] }));
+  const decorative = (r) => /content:\s*"/.test(r.body) && /(::before|::after)/.test(r.sel);
+  t('no text smaller than 7.5pt (decorative ornaments excepted)', () => { const bad = []; rules.filter((r) => !decorative(r)).forEach((r) => { const m = r.body.match(/font(?:-size)?:[^;]*?\b(\d+(?:\.\d+)?)pt/g) || []; m.forEach((x) => { const v = parseFloat(x.match(/(\d+(?:\.\d+)?)pt$/)[1]); if (v < 7.5) bad.push(r.sel.slice(0, 50) + ' ' + v + 'pt'); }); }); return bad.length === 0 || bad.join('; '); });
+  t('captions and metadata are 8.5pt or larger', () => { const bad = []; rules.forEach((r) => { if (/\.(aside-n|meta|hist \.d|notice|figcaption|disclaimer|colophon)\b|figcaption/.test(r.sel) && !decorative(r)) { const m = r.body.match(/font-size:\s*(\d+(?:\.\d+)?)pt/); if (m && parseFloat(m[1]) < 8.5) bad.push(r.sel.slice(0, 40) + ' ' + m[1]); } }); return bad.length === 0 || bad.join('; '); });
+  t('small uppercase labels are tracked at .12em or less', () => { const bad = []; rules.forEach((r) => { if (/text-transform:\s*uppercase/.test(r.body) && !/\.doc\b|pub-sec-head|o-no/.test(r.sel)) { const m = r.body.match(/letter-spacing:\s*(\.?\d*\.?\d+)em/); if (m && parseFloat(m[1]) > 0.1201) bad.push(r.sel.slice(0, 40) + ' ' + m[1]); } }); return bad.length === 0 || bad.join('; '); });
+  t('every theme sets its own running footer, 8pt or larger', () => { const c = fx(); return ['modernist', 'editorial', 'intellectual', 'institution'].every((th) => { c.designTheme = th; const h = P.html('publication', c, 'letter', { mode: 'professional' }); const m = h.match(/@bottom-(?:left|right)\s*\{[^}]*font:[^;]*?(\d+(?:\.\d+)?)pt/g) || []; return m.length === 2 && m.every((x) => parseFloat(x.match(/(\d+(?:\.\d+)?)pt/)[1]) >= 8); }) || 'footer sizes'; });
+  t('the four themes have different footers', () => { const c = fx(), set = new Set(); ['modernist', 'editorial', 'intellectual', 'institution'].forEach((th) => { c.designTheme = th; set.add(P.html('publication', c, 'letter', { mode: 'professional' }).match(/@page \{[^}]*\}[^}]*\}/)[0]); }); return set.size === 4 || set.size; });
+
+  /* --- data safety --- */
+  t('localStorage is unchanged by the tests', () => localStorage.getItem('sovereign.v3') === before);
+
+  const bad = results.filter((r) => !r[1]);
+  document.getElementById('out').innerHTML = results.map((r) => '<span class="' + (r[1] ? 'pass' : 'fail') + '">' + (r[1] ? 'PASS' : 'FAIL') + '</span> ' + r[0] + (r[2] ? '\n      ' + r[2] : '')).join('\n');
+  document.title = 'RESULT ' + (results.length - bad.length) + '/' + results.length;
+})();
+</script></body></html>

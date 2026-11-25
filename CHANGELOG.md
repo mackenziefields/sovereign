@@ -2,6 +2,49 @@
 
 Reconstructed from the repository history (`git log`). Dates are all 2026-11-24 for the build session unless noted. "Tested" is described in `TESTING.md`.
 
+## Build 32 · Phase 4B Step E: edge cases, stress and real-data tooling
+- Security fix: a course title or code containing `</style>` could break out of the PDF footer's style block. Footer text is now a CSS-escaped string, and the theme attribute is restricted to letters.
+- New edge-case and stress tests: hostile text everywhere, missing name/code/dates, a 400-character title, emoji and right-to-left text, courses with no modules, reports for work with no review, and a 30-project course.
+- Confirmed in real exported PDFs: every Professional Portfolio contents link jumps to the right project page, in all four designs and both paper sizes.
+- `test-data/limited-backup.html`: a local helper (not shipped) that turns a full backup into a one-course test backup, with the name replaced, so real coursework can be tried on a separate copy. `docs/PHASE4-REALDATA-TEST.md` is the step-by-step guide.
+
+## Build 32 · Phase 4B Step C: files inside the publications
+- New `js/publish-attach.js`. In the Portfolio export dialog, a "Files you submitted" section lists each selected piece's file with an unticked box. Nothing is shown unless the learner ticks that file, and the choice is for that export only (never saved).
+- Images: embedded (scaled to fit within 1600 px). PDF: chosen pages (default first 10, at most 30 per file) drawn as page pictures with the PDF.js copy already in `js/vendor` (no second copy). Word (.docx): headings, paragraphs, lists and tables as text. Excel (.xlsx): cell values for the first sheets with a row cap (default 30), plus bar, line and pie charts redrawn from the numbers saved in the workbook.
+- Honest labels throughout: what was embedded, what was left out (page ranges, row caps, images and headers in Word, formatting, unsupported chart types), that PDF pages are pictures (text not searchable), and that a file missing from this device, damaged or unsupported is "not embedded" with the reason. A size ceiling stops long PDF embeds and says where.
+- Everything runs on this device. No upload, no conversion service, originals never changed, no new dependency.
+- Not covered: the Feedback Report does not include files; Excel charts of other kinds (scatter, area and so on) are named, not drawn; Word images and text boxes are not included.
+
+## Build 32 · Phase 4B Step D: typography and design polish
+- Type floors enforced in `css/publish.css`: body 9.8pt or larger, captions and metadata 8.5pt, uppercase labels 7.5pt with tracking at most .12em, table text 9pt or larger, running footers 8pt or larger. Contrast checked for every accent and grey on its background (lowest 4.83:1, above the 4.5:1 floor).
+- Each design has its own running footer: Modernist (title left, bold page number right), Editorial (italic, "— n —"), Intellectual (blue page number left, italic title right), Institution (title left, "◆ n ◆" right).
+- Institution interior made more efficient: shorter framed openers, tighter section heads and pull quotes, so more content fits per page without losing the formal look.
+- Fixed a Rubric-results heading stranded at a page foot, and a cut-off preview on narrow windows.
+
+## Build 32 · Phase 4B Step B: two portfolio exports
+- **Academic Record** and **Professional Portfolio** modes on one engine, with a Portfolio export dialog: choose type, choose and reorder completed projects, per-piece notes, optional introduction and closing, include or leave out grades (AI-generated, labelled), Letter or A4, design override for one export, live preview that shrinks to fit narrow windows.
+- Professional Portfolio shows no grades, rubrics, first-review scores or history unless the learner opts in; even then the first-review score is never printed and nothing implies accreditation.
+- Per-course export settings saved in the course (`pub`), included in backups, resettable. Typed text is saved only if "Remember my text" is ticked.
+- Feedback Report ("Save report as PDF" on a final review): assessment history, strengths, findings grouped by kind with quote and location, rubric, next steps, AI disclaimer; the submission is included only if chosen.
+- Not yet: attachments are shown as honest "Not embedded in this document" cards (images, Word, Excel and PDF pages arrive in Step C). Visual polish is Step D.
+
+## Build 32 · Phase 4A: data integrity for publications
+- **First-review summary kept (your Option B):** when a resubmission becomes the final grade, a small summary of the first review (time, score, rubric results, findings) is now saved with the assignment (`work.firstSummary`). The final review stays the grade. Nothing is made up for older records and no saved assessment is changed; the first review becoming the grade stores no summary.
+- **Publication model (`js/publish-model.js`):** the only place published documents read grades and dates. Checks that rubric scores, the review score and maximum, the Grades-page score and the course grade agree, using the app's own rounding rules (one 0.1 step is allowed and noted; more is a substantive inconsistency). If a record is inconsistent the export is blocked with a diagnostic and nothing is changed. Timeline statements (such as "inside the 72-hour window") are printed only when the saved timestamps prove them; first review times that are not saved are labelled "derived" or omitted.
+- **Tests:** `tests/publish-model.test.html`.
+- Sample PDFs corrected (rubric now adds to 94, honest dates).
+
+## Build 32 · Phase 4 design samples v2
+- New sample PDFs in `docs/pdf-samples/v2/`: Portfolio (8-9 pages) and Feedback Report (6 pages) in all four themes. Fictional content; made by Edge print-to-PDF from `css/publish.css`.
+- `css/publish.css` gained shared components (chapter openers, contents, inclusion statuses, work text, figures, file-reference cards, assessment history, findings by kind, steps, seal, notices) and a different interior per theme: Modernist (Swiss grid, big numerals), Editorial (centred heads, drop cap, pull quotes), Intellectual (marginal column, short accent rule), Institution (framed openers, roman numerals, seal).
+
+## Build 32 · Phase 4-1: publication engine and the Syllabus PDF
+- **New shared engine** (`js/publish.js`, `css/publish.css`): a document is built from saved data in its own publication layout (cover, numbered sections, running footer with page numbers) inside a preview dialog, then saved through the browser's own "Save as PDF". It is not a print of the app page. Nothing is uploaded and no saved data changes. A one-click download can be added later on the same HTML.
+- **Dialog:** page size (US Letter default, A4 option, remembered), a live preview, three plain steps, then "Save as PDF" (waits for the fonts, then opens the print window).
+- **Syllabus PDF:** cover; overview and outcomes; modules with objectives, learning materials (clickable links) and assignments; schedule; capstone (only when ready); grading policy including the 80/20 rule and the provisional label; credentials marked self-reported; final project; notes. Tables repeat their header row and never split a row; module headings stay with their content.
+- **Theme:** the course's own design drives cover, headings, rules, table headers, callouts and footer in all four themes (Modernist, Editorial, Intellectual, Institution).
+- "Course sheet" renamed **Syllabus**; a "Save as PDF" button on the Syllabus page.
+
 ## Unreleased · Phase 3-5: capstone on Grades and Portfolio (not committed)
 - **Grades page (only for courses with a ready capstone):** the "Current Grade" is the combined grade, labelled **provisional** until the capstone is graded, plus a "How your course grade is calculated" table that separates the module average (80%), the capstone grade (20%) and the course grade, with a one-line explanation of the case you are in (combined, provisional, or capstone graded but no module scores yet). The capstone has its own group in the assignment table. The course header says "(provisional)" the same way.
 - **Portfolio:** the finished capstone is a "Culminating project" card under "Course capstone" (work, score, feedback). A self-reported final project, if you wrote one, stays untouched under its own heading "Self-reported final project", so the two are never confused. Without a capstone the Portfolio is exactly as before.

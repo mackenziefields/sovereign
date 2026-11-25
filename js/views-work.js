@@ -378,6 +378,7 @@
           h('b', {}, a.score + ' / ' + a.points + ' pts'), ' · ', pct + '%', ' · ', h('b', {}, S.letter(pct))),
         h('p', { class: 'small muted' }, 'Submitted ' + when(f.at) + '. An AI-generated assessment, not a human grade. It is also recorded on the Grades page and in your Portfolio.'),
         studioButton(c, m, a, f, { showScore: true, meta: 'Final review, submitted ' + when(f.at), scoreLine: 'Final: ' + a.score + ' / ' + a.points + ' pts · ' + pct + '% · ' + S.letter(pct) }),
+        h('p', {}, h('button', { class: 'btn ghost', type: 'button', onclick: () => S.publish.open('feedback', c, { assignmentId: a.id }) }, 'Save report as PDF')),
         feedbackView(fb, true), fileLine(f),
       ] : h('p', { class: 'empty' }, 'This was attached as evidence, so there is no AI feedback.');
     }

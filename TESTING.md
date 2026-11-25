@@ -445,3 +445,47 @@ A hand-made review cited `U1-2` (column Neighborhood) and `U1-99`, with `feedbac
 - Guards: data replaced after ticking: send refused with a plain message; Worker 16: box replaced by an explanation, and a direct send refused in code; Studio showed "Your own dataset was included" and "Your data, exhibit U1, row U1-2".
 - Sampling: a 2,000-row, 30-column sheet fits 25 rows in the 8,000-character budget and states "Only the first 25 of 2000 rows ... Do not make claims about the rest". The dialog tells the learner the same before sending.
 - Not tested: real Claude behaviour with learner data (including prompt-injection text inside a dataset), cost of a review that includes data, the dialog on a phone, Safari/Firefox. Preview data was restored (the assignment's work, office session, data, blobs and the three mock usage rows were removed; your real test-Worker settings were restored).
+
+## Phase 4-1: publication engine and Syllabus PDF (run 2026-11-25, mock data only, no AI calls)
+- Syntax check of `js/publish.js` in the browser; dialog opens for a real course, preview iframe loads the theme fonts and shows the cover and five sections.
+- Real PDFs made with headless Microsoft Edge (the same print path a learner uses) for four courses and themes in Letter and A4, plus a temporary course with a ready capstone: `docs/pdf-samples/syllabus-export-tests/`. Checked in the browser PDF viewer: cover prints with its background (dark Institution cover with frame), footer and page numbers on inner pages, table headers repeat, no row split, links underlined, capstone card and 80/20 table present with the provisional wording.
+- Found and fixed: a stray parenthesis stopped the script loading; due dates wrapped in the schedule (now no-wrap).
+- Not tested: Safari and Firefox (no page numbers there by design), a human print through the real dialog, very long modules (more than about 12 pages), the Portfolio and Feedback Report (not built yet).
+
+## Phase 4A: data integrity for publications (run 2026-11-25, mock data only, no AI calls)
+- **Automated regression tests:** `tests/publish-model.test.html` (36 tests, all pass). Run it in the browser at `http://localhost:8765/tests/publish-model.test.html` (the page title shows `RESULT n/36`). It uses fictional data and never calls `S.save`; the last test checks that saved data is untouched.
+- Covers: the 92-vs-94 sample bug is caught and named; 0.1 is a rounding step (allowed, noted), 0.2 is substantive; float noise; maximum mismatch; Grades-page score that does not follow from the review; points edited later; "not assessed" criteria excluded; recorded percentage taken from `S.pctOf`; first-review-only (no grade yet); the export gate blocks and names a contradictory assignment and checks only selected ones; 80/20 final vs provisional equals `S.courseGrade`; no capstone unchanged; timeline (inside the window, after it, exactly at the deadline, older record with a derived first time, first review became the grade, missing deadline, missing timestamps, attached evidence, late flag); first-review summary kept on resubmission with real values, not fabricated when the first review becomes the grade, survives save/load, older records gain no keys, malformed summary dropped; the model never writes.
+- **Mutation check:** loosening the rounding tolerance to 5 made 3 tests fail (33/36); restored.
+- **Against the preview browser's saved test data (read-only, nothing saved):** the gate flags the two inconsistent mock reviews with their numbers, the other 5 pass, and `localStorage` was byte-identical before and after.
+- Samples corrected: the rubric now adds to 94, the dates and the 72-hour statement follow the app's rule, and the sample generator asserts both the rubric total and the 80/20 course grade so they cannot drift again.
+- Not tested: the headless-Edge command-line run of the test page printed nothing on this machine, so the tests were run in the preview browser.
+
+## Phase 4B Step B: Academic Record, Professional Portfolio, Feedback Report (run 2026-11-25, fictional data only, no AI calls)
+- `tests/publish-docs.test.html` (open in the browser, title shows RESULT n/N): 31/31 pass. Covers selection and order, ineligible ids, empty selection, Professional hides grades/rubric/first-review/history, grades opt-in labelled AI-generated, first-review score never printed, no accreditation claim, Academic shows 80/20, history, rubric, self-reported labels, resubmission timing only as saved, unfinished work excluded, blocked on contradictory records (and nothing rewritten), empty and partly complete courses, Word file shown as not embedded, internal contents links resolve, Feedback Report with and without the submission, settings persistence (text only with Remember), backup round trip, hostile settings, no `<base>`, Letter/A4, saved data untouched.
+- `tests/publish-model.test.html`: still 36/36.
+- Dialog tested in the app with the fictional course and `S.save` stubbed: mode switch, deselect, reorder (contents follow), grades toggle, intro saved only with Remember, Reset removes saved settings, A4, blocked state disables Save as PDF, preview scales on a narrow window.
+- Real PDFs (Edge print-to-PDF) in `docs/pdf-samples/step-b-tests/`: 14 documents; contents links verified as internal destinations. Found and fixed: Rubric heading stranded at a page foot.
+- Not tested yet: real saved work (Step E), attachments (Step C), long documents.
+
+## Phase 4B Step D: typography, contrast, footers (run 2026-11-25, fictional data, no AI calls)
+- `tests/publish-docs.test.html`: 36/36 pass (five new: no text under 7.5pt apart from decorative ornaments, captions at 8.5pt or more, uppercase tracking at most .12em, every theme sets an 8pt-or-larger footer, the four footers differ). It reads the real stylesheet, so a later edit that breaks a floor fails the test.
+- Contrast computed for all accent and grey colours against white and the soft backgrounds: minimum 4.83:1 (Institution accent on its soft tint).
+- 14 PDFs re-rendered in `docs/pdf-samples/step-d-tests/` (Letter, plus A4 for two). Page counts unchanged (academic 11, professional 7 to 8, feedback 4 to 6). Footer text confirmed inside the files (for example "◆ 4 ◆" on Institution).
+- Lesson recorded: a render made while the local server was down produced unstyled PDFs (8 pages, no footers); always check the footer text and page count after rendering.
+- Not checked by eye this session: the new PDFs (the browser pane would not open PDFs from the local server this time). Please open a few from `docs/pdf-samples/step-d-tests/`, especially Institution.
+
+## Phase 4B Step C: attachments (run 2026-11-25, fictional files built in memory, no AI calls)
+- `tests/publish-attach.test.html`: 27/27 pass. Files are made in memory (a hand-built zip, a plain 3-page PDF, a canvas PNG) and `S.files.get` is stubbed, so no storage is read or written. Covers kind detection, nothing shown unless ticked, "preparing" state, image embedding, Word headings/list/table and a damaged Word file, Excel table with row caps and honest truncation, bar and pie charts redrawn and an unsupported chart named, PDF page ranges, the size ceiling, a damaged PDF, a file missing from the device, page-count probe, originals unchanged, per-file choice in the document, the dialog (unticked by default, tick shows it, untick removes it), choices never saved with the course.
+- Other suites unchanged: publish-docs 36/36, publish-model 36/36.
+- Real PDFs in `docs/pdf-samples/step-c-tests/` (Letter and A4; Modernist, Editorial, Institution). Checked by rendering the output PDF pages with PDF.js: PDF pages one per page under their caption, Word text and table, Excel table with "Showing 30 rows; 70 more rows" note, bar and pie charts, embedded image.
+- Found and fixed: an embedded PDF page was taller than the printable area and split from its caption (now the label sits above and the picture is capped to one page); a CSS specificity clash stretched pictures.
+- Test-harness note: documents generated from a page under `/tests/` link the stylesheet at `/tests/css/`; for sample PDFs the path is corrected before rendering.
+- Not yet tested: real files from real coursework (Step E), very large PDFs (memory), password-protected PDFs beyond the error path, Word files with complex layouts.
+
+## Phase 4B Step E: edge cases, stress, links (run 2026-11-25, fictional data, no AI calls)
+- `tests/publish-edge.test.html`: 11/11 pass. First run found a real defect (a title containing `</style>` escaped the footer style block) and two flaws in the test itself; both fixed.
+- All suites: publish-model 36, publish-docs 36, publish-attach 27, publish-edge 11 (110 tests).
+- Link check on the exported PDFs (pypdf): every Professional Portfolio has one internal link per project and each named destination lands on that project's page; external links keep their URL.
+- 30-project course: Professional (Letter) and Academic (A4) build in well under 5 seconds.
+- Limited-backup helper tested with a fictional two-course backup: only the chosen course is written, the name is replaced, the other course's text is absent.
+- Not done: real coursework (waiting for you; see docs/PHASE4-REALDATA-TEST.md), browsers other than Edge/Chromium for the print-to-PDF step, very large attached PDFs.

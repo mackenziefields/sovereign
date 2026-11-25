@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Publication edge-case and stress tests</title>
+<!-- Run in a browser: http://localhost:8765/tests/publish-edge.test.html . Fictional data; S.save and S.files.get are stubbed; nothing is stored. -->
+<style>body{font:14px/1.5 system-ui;margin:20px}.pass{color:#0a6b2d}.fail{color:#b3261e;font-weight:700}pre{white-space:pre-wrap}</style></head>
+<body><h1>Publication edge-case and stress tests</h1><pre id="out">running…</pre>
+<script src="../js/config.js"></script><script src="../js/exhibits.js"></script><script src="../js/store.js"></script><script src="../js/components.js"></script><script src="../js/files.js"></script><script src="../js/dataset-import.js"></script><script src="../js/publish-model.js"></script><script src="../js/publish.js"></script><script src="../js/publish-attach.js"></script><script src="../js/publish-docs.js"></script><script src="fixtures.js"></script>
+<script>
+(async function () {
+  const before = localStorage.getItem('sovereign.v3');
+  const S = window.Sovereign, P = S.publish, results = [];
+  S.save = () => {}; S.files.get = async () => null;
+  if (!S.stageOf) S.stageOf = (a) => (a.kind === 'learn' || a.kind === 'demonstrate' ? a.kind : 'apply');
+  const t = async (name, fn) => { document.getElementById('out').textContent = 'running: ' + name; try { const r = await fn(); results.push([name, r === true || r === undefined, r === true || r === undefined ? '' : String(r)]); } catch (e) { results.push([name, false, 'threw: ' + e.message]); } };
+  const fx = (th) => S.fixtureCourse(th || 'editorial');
+  const frame = (html) => new Promise((res) => { const f = document.createElement('iframe'); f.style.cssText = 'width:900px;height:600px'; f.srcdoc = html.replace('tests/css/', 'css/'); f.onload = () => res(f); document.body.appendChild(f); });
+  const KINDS = [['publication', { mode: 'academic' }], ['publication', { mode: 'professional' }], ['feedback', {}]];
+  const build = (c, kind, o) => { const cap = S.capstoneOf(c); return P.html(kind, c, 'letter', o, kind === 'feedback' ? { assignmentId: cap.id } : {}); };
+
+  /* --- hostile or odd text never runs and never breaks the page --- */
+  const EVIL = '</style><script>window.__pwned=1<\/script><img src=x onerror="window.__pwned=2">"\\\n';
+  await t('a hostile course title cannot inject script (footer, cover, headings)', async () => {
+    window.__pwned = 0; const c = fx(); c.title = EVIL + c.title; c.code = EVIL; let all = '';
+    for (const th of ['modernist', 'editorial', 'intellectual', 'institution']) for (const [k, o] of KINDS) { c.designTheme = th; const h = build(c, k, o); all += h; const f = await frame(h); await new Promise((r) => setTimeout(r, 120)); const d = f.contentDocument; if (d.querySelectorAll('script').length || d.querySelector('img[src="x"]')) return 'script or img injected (' + th + '/' + k + ')'; f.remove(); }
+    return window.__pwned === 0 || 'script ran: ' + window.__pwned; });
+  await t('hostile text in work, notes, intro, closing and file names is shown as text only', async () => {
+    window.__pwned = 0; const c = fx(); const a = c.modules[1].assignments[0]; a.title = EVIL; a.work.final.text = EVIL + '\n\n<b>bold?</b>'; a.work.final.fileName = EVIL + '.docx'; a.work.final.fileId = 'z'; a.work.final.fileType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const h = P.html('publication', c, 'letter', { mode: 'professional', include: ['fd1'], intro: EVIL, closing: EVIL, notes: { fd1: EVIL } }); const f = await frame(h); await new Promise((r) => setTimeout(r, 200)); const d = f.contentDocument; const bad = d.querySelectorAll('script, img[src="x"]'), lit = /<b>bold\?<\/b>/.test(d.body.textContent); f.remove();
+    return (bad.length === 0 && window.__pwned === 0 && lit) || 'injected nodes ' + bad.length + ', literal text kept: ' + lit; });
+
+  /* --- missing and odd data --- */
+  await t('no learner name, no code, no dates: every document still builds', () => { S.state = S.state || {}; const keep = S.state.name; S.state.name = ''; try { const c = fx(); c.code = ''; c.modules.forEach((m) => m.assignments.forEach((a) => { if (a.work && a.work.final) a.work.final.at = ''; })); return KINDS.every(([k, o]) => { const h = build(c, k, o); return h && h.length > 2000; }) || 'a document was empty'; } finally { S.state.name = keep; } });
+  await t('a 400-character title and 5,000-character word build and print layout stays inside the page', async () => { const c = fx(); c.title = 'Long '.repeat(80); c.modules[1].assignments[0].work.final.text = 'x'.repeat(5000) + '\n\n' + 'y'.repeat(3000); const f = await frame(build(c, 'publication', { mode: 'academic' })); await new Promise((r) => setTimeout(r, 300)); const d = f.contentDocument, w = d.documentElement.clientWidth, over = [...d.querySelectorAll('.pub-body *')].filter((e) => e.getBoundingClientRect().right > w + 2).length; f.remove(); return over === 0 || over + ' elements overflow the page width'; });
+  await t('emoji, right-to-left and combining text build without error', () => { const c = fx(); c.modules[1].assignments[0].work.final.text = 'Plan 🚀 · مرحبا بالعالم · é · 日本語のテキスト'; return !!build(c, 'publication', { mode: 'professional', include: ['fd1'] }); });
+  await t('a course with no modules and no capstone gives a clear empty or minimal document, not an error', () => { const c = fx({ capstone: false }); c.modules = []; const out = P.builders.publication.build(c, Object.assign(P.builders.publication.init(c, {}), { mode: 'professional' }), {}); return !!(out.empty || out.nodes) || 'nothing returned'; });
+  await t('feedback report for work with no review says so instead of failing', () => { const c = fx(); const a = c.modules[0].assignments[0]; const out = P.builders.feedback.build(c, P.builders.feedback.init(c, { assignmentId: a.id }), { assignmentId: a.id }); return !!(out.empty || out.blocked) || 'built a report for unreviewed work'; });
+
+  /* --- long documents --- */
+  const big = (n, paras) => { const c = fx('institution'); const base = c.modules[1].assignments[1]; for (let i = 0; i < n; i++) { const a = JSON.parse(JSON.stringify(base)); a.id = 'big' + i; a.title = 'Project number ' + (i + 1) + ': ' + 'a long descriptive title '.repeat(2); a.work.final.text = Array.from({ length: paras }, (_, k) => 'Paragraph ' + (k + 1) + '. ' + 'Sentence of reasonably typical length for coursework. '.repeat(8)).join('\n\n'); c.modules[1].assignments.push(a); } return c; };
+  await t('a 30-project course builds all three document kinds in reasonable time', () => { const c = big(30, 20); const t0 = performance.now(); const ids = c.modules[1].assignments.filter((a) => a.id.startsWith('big')).map((a) => a.id); const ph = P.html('publication', c, 'letter', { mode: 'professional', include: ids }), ah = P.html('publication', c, 'a4', { mode: 'academic', include: ids }); const ms = performance.now() - t0; return (ph && ah && ph.length > 200000 && ms < 5000) || 'length ' + (ph && ph.length) + ' time ' + Math.round(ms) + 'ms'; });
+  await t('the contents lists every one of the 30 projects with a working link', () => { const c = big(30, 3); const ids = c.modules[1].assignments.filter((a) => a.id.startsWith('big')).map((a) => a.id); const out = P.builders.publication.build(c, Object.assign(P.builders.publication.init(c, {}), { mode: 'professional', include: ids }), {}); const d = document.createElement('div'); const add = (n) => { if (n == null || n === false) return; if (Array.isArray(n)) n.forEach(add); else d.appendChild(n.nodeType ? n : document.createTextNode(String(n))); }; add(out.nodes); const as = [...d.querySelectorAll('a[href^="#proj-"]')]; return (as.length === 30 && as.every((a) => d.querySelector('[id="' + a.getAttribute('href').slice(1) + '"]'))) || 'links ' + as.length; });
+
+  /* --- the data is never touched --- */
+  await t('building every kind did not change the course object it read', () => { const c = fx(); const snap = JSON.stringify(c); KINDS.forEach(([k, o]) => build(c, k, o)); return JSON.stringify(c) === snap || 'course changed'; });
+  await t('localStorage is unchanged by these tests', () => localStorage.getItem('sovereign.v3') === before);
+
+  const bad = results.filter((r) => !r[1]);
+  document.getElementById('out').innerHTML = results.map((r) => '<span class="' + (r[1] ? 'pass' : 'fail') + '">' + (r[1] ? 'PASS' : 'FAIL') + '</span> ' + r[0] + (r[2] ? '\n      ' + r[2] : '')).join('\n');
+  document.title = 'RESULT ' + (results.length - bad.length) + '/' + results.length;
+})();
+</script></body></html>
