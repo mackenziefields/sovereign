@@ -4,6 +4,7 @@
 (function (S) {
   'use strict';
   const KEY = 'sovereign.ai'; // this browser only; not part of exports or backups
+  const HERE = (document.currentScript && document.currentScript.src) || document.baseURI; // finds js/vendor/ from any page, including tests/
   const ai = (S.ai = {});
 
   class AIError extends Error { constructor(code, message) { super(message); this.code = code; } }
@@ -109,7 +110,7 @@
   ai.money = (n) => '$' + (n < 0.01 && n > 0 ? n.toFixed(4) : n.toFixed(2));
 
   function readingFrom(r) {
-    return { id: S.uid(), title: r.title, url: r.url, note: '', done: false, source: 'ai', kind: r.kind, creator: r.creator, access: r.access, sourceType: r.sourceType, derivedFrom: r.derivedFrom, derivedUrl: r.derivedUrl, relevance: r.relevance, verification: r.verification, contentCheck: r.contentCheck };
+    return { id: S.uid(), title: r.title, url: r.url, note: '', done: false, source: 'ai', kind: r.kind, creator: r.creator, access: r.access, sourceType: r.sourceType, derivedFrom: r.derivedFrom, derivedUrl: r.derivedUrl, relevance: r.relevance, verification: r.verification, contentCheck: r.contentCheck, foundational: r.foundational === true };
   }
   const placeholder = (mod, note) => ({ id: S.uid(), title: 'Source needed: ' + mod.title, url: '', note: note || 'No verifiable source was found. Add your own.', done: false, source: 'placeholder' });
 
@@ -131,7 +132,7 @@
       announcements: [{ id: S.uid(), title: 'Welcome' + (S.state.name ? ', ' + S.state.name : '') + ': ' + o.title, date: S.todayISO(), body: 'This course was drafted by AI from what you told it. Treat it as a first draft: rename, reorder, replace, or delete anything. Check every resource yourself, because links are checked by a program, not reviewed by a person.' }],
       credentials: (o.credentials || []).map((k) => ({ id: S.uid(), name: k.name, issuer: k.issuer, note: k.note, status: 'considering', requirement: k.requirement, origin: 'ai' })),
       modules: o.modules.map((m, mi) => ({
-        id: S.uid(), title: m.title, overview: m.overview, keyIdeas: m.keyIdeas, reflection: m.reflection, objectives: m.objectives, selfCheck: m.selfCheck,
+        id: S.uid(), title: m.title, overview: m.overview, keyIdeas: m.keyIdeas, reflection: '', reflectPrompt: m.reflection, objectives: m.objectives, selfCheck: m.selfCheck, // the AI's reflection prompt is a question, never the learner's answer
         duration: m.duration, origin: 'ai', edited: false, readings: [],
         assignments: m.assignments.map((a, ai_) => ({ id: S.uid(), title: a.title, description: a.description, kind: a.kind, points: a.points, realEvidence: a.realEvidence === true && a.kind !== 'learn', origin: 'ai', due: dueFor(start, brief && brief.weeks, o.modules.length, mi, ai_, m.assignments.length), locked: true })),
       })),
@@ -376,11 +377,140 @@
       }
       if (a.realEvidence) S.setEvidence(mod, a); // real-evidence tasks get only sources whose links were checked; if none, they are marked "Source needed", never given an invented scenario
       if (!a.work) { a.rubric = d.rubric; a.criteria = []; } // the grading criteria can't change once work has been submitted
+      if (d.summary) a.summary = d.summary; // v19: a short summary for the assignment list
       done++;
     });
     if (course.ai && course.ai.generated) course.ai.usage.push(usageRow(r.usage));
     S.save();
     return { done, total: list.length };
+  };
+
+  /* ---- Build 34 step D (Worker v19): quizzes written from the readings, three reflection questions, foundational texts ---- */
+  ai.STUDY_VERSION = 19;
+  const studyReadings = (mod) => mod.readings.filter((x) => x.url && x.source !== 'placeholder').slice(0, 5);
+  const studyBody = (course, mod, pdf) => ({
+    topic: course.title, level: (course.ai && course.ai.brief && course.ai.brief.level) || '',
+    module: { title: mod.title, overview: mod.overview, objectives: mod.objectives, keyIdeas: mod.keyIdeas },
+    readings: studyReadings(mod).map((x) => ({ title: x.title, creator: x.creator || '', url: x.url })), // titles and links; the Worker opens web pages itself
+    texts: pdf ? pdf.texts : [], notes: pdf ? pdf.notes : [], // text this browser read from PDF readings, and why any PDF could not be read
+    assignments: mod.assignments.map((a) => ({ title: a.title, kind: S.stageOf(a), description: S.summaryOf(a) })),
+  });
+
+  /* ---- PDF readings: the Worker downloads the file (no AI, no cost); this browser reads its text with the bundled PDF.js ---- */
+  let pdfLib = null;
+  const loadPdf = () => { if (!pdfLib) pdfLib = import(new URL('vendor/pdf.min.mjs', HERE).href).then((m) => { m.GlobalWorkerOptions.workerSrc = new URL('vendor/pdf.worker.min.mjs', HERE).href; return m; }).catch((e) => { pdfLib = null; throw e; }); return pdfLib; };
+  ai.PDF_PAGES = 60; ai.PDF_CHARS = 24000;
+  // Downloads one PDF through the Worker. A web page comes back as code "not_pdf" (the Worker then reads it as a page).
+  ai.fetchPdf = async function (url, opts) {
+    opts = opts || {};
+    const s = ai.settings();
+    if (!s.url) throw new AIError('not_configured', NO_SERVICE);
+    if (!s.code) throw new AIError('no_code', 'Enter your access code under AI settings first.');
+    let res;
+    try { res = await fetch(s.url + '/fetch-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Access-Code': s.code }, body: JSON.stringify({ url }), signal: opts.signal, cache: 'no-store' }); }
+    catch (e) { if (opts.signal && opts.signal.aborted) throw new AIError('cancelled', 'Cancelled.'); throw new AIError('network', 'Couldn’t reach the AI service to download a PDF.'); }
+    if (!res.ok) { let m = null; try { m = (await res.json()).error; } catch (e) { /* not JSON */ } throw new AIError((m && m.code) || 'http_' + res.status, (m && m.message) || 'The PDF could not be downloaded (' + res.status + ').'); }
+    return new Uint8Array(await res.arrayBuffer());
+  };
+  // A contents page: many lines ending in dot leaders and a page number.
+  const looksLikeContents = ai.looksLikeContents = (t) => (t.match(/(?:\.\s?){4,}\s*\d{1,4}\b/g) || []).length >= 4 || /^\s*(table of )?contents\b/i.test(t) && t.length < 3000;
+  // Reads the text of the first pages, drops contents pages, keeps at most ai.PDF_CHARS characters. Returns { ok, text, pages } or { ok: false, why }.
+  ai.pdfText = async function (bytes) {
+    let lib, doc;
+    try { lib = await loadPdf(); } catch (e) { return { ok: false, why: 'This browser could not load the PDF reader.' }; }
+    try { doc = await lib.getDocument({ data: bytes, isEvalSupported: false }).promise; }
+    catch (e) { return { ok: false, why: e && e.name === 'PasswordException' ? 'The PDF is password-protected.' : 'The PDF could not be opened.' }; }
+    try {
+      let text = '', used = 0;
+      for (let p = 1; p <= Math.min(doc.numPages, ai.PDF_PAGES) && text.length < ai.PDF_CHARS; p++) {
+        const page = await doc.getPage(p), tc = await page.getTextContent();
+        const t = tc.items.map((i) => (i.str || '') + (i.hasEOL ? '\n' : ' ')).join('').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+        page.cleanup();
+        if (!t || looksLikeContents(t)) continue;
+        text += (text ? '\n\n' : '') + t; used++;
+      }
+      text = text.slice(0, ai.PDF_CHARS);
+      if (text.replace(/\s+/g, '').length < 400) return { ok: false, why: 'The PDF has almost no text that can be read (it may be a scan).' };
+      return { ok: true, text, pages: used };
+    } catch (e) { return { ok: false, why: 'The PDF could not be read.' }; }
+    finally { doc.destroy(); }
+  };
+  const PDF_STOP = ['bad_code', 'locked', 'not_configured', 'no_code', 'cancelled', 'budget'];
+  // For each reading, tries the PDF route. Returns { texts: [{n, text}], notes: [{n, why}] } by reading number.
+  ai.readPdfs = async function (readings, opts) {
+    const texts = [], notes = [];
+    for (let n = 0; n < readings.length; n++) {
+      let bytes;
+      try { bytes = await ai.fetchPdf(readings[n].url, opts); }
+      catch (e) { if (PDF_STOP.includes(e.code)) throw e; if (e.code === 'not_found') break; /* an older Worker without /fetch-pdf: web pages only, as before */ if (e.code !== 'not_pdf') notes.push({ n, why: String(e.message || '').slice(0, 200) }); continue; } // not_pdf: a web page, which the Worker reads itself
+      const r = await ai.pdfText(bytes);
+      if (r.ok) texts.push({ n, text: r.text }); else notes.push({ n, why: r.why });
+    }
+    return { texts, notes };
+  };
+  // Writes (or rewrites) one module's quiz and reflection questions. A quiz already passed stays passed; reflection answers already written are kept.
+  // opts.quizOnly: rewrite only the quiz and keep the reflection questions as they are (so written answers still match their questions).
+  ai.writeStudy = async function (course, mod, opts) {
+    opts = opts || {};
+    await ai.requireVersion(ai.STUDY_VERSION, 'Quizzes and reflection questions');
+    const pdf = await ai.readPdfs(studyReadings(mod), { signal: opts.signal });
+    if (!S.state.courses.includes(course) || !course.modules.includes(mod)) throw new AIError('gone', 'That module was removed while its readings were being read.');
+    const r = await ai.call('/study', studyBody(course, mod, pdf), { signal: opts.signal });
+    if (!S.state.courses.includes(course) || !course.modules.includes(mod)) throw new AIError('gone', 'That module was removed while its quiz was being written.');
+    if (course.ai && course.ai.generated && r.usage) course.ai.usage.push(usageRow(r.usage)); // the cost was real even if the answer is rejected
+    const quiz = r.quiz ? S.makeQuiz({ ...r.quiz, skipped: r.skipped || [], passed: !!(mod.quiz && mod.quiz.passed), attempts: 0, best: 0, last: null }) : null;
+    if (quiz) mod.quiz = quiz;
+    const refl = r.reflections && !(opts.quizOnly && mod.reflections) ? S.makeReflections(r.reflections.map((x) => ({ ...x, answer: ((mod.reflections || []).find((o) => o.stage === x.stage) || {}).answer || '' }))) : [];
+    if (refl.length === 3) mod.reflections = refl;
+    S.save();
+    return { quiz: !!quiz, reflections: refl.length === 3 || !!(opts.quizOnly && mod.reflections), basis: quiz ? quiz.basis : '', note: quiz ? quiz.note : (r.reason || ''), skipped: r.skipped || [] };
+  };
+  // Finds and checks the official page of up to three foundational texts and puts them first in the module. A text with no checked page is kept as "link needed".
+  ai.findFoundational = async function (course, mod, texts, opts) {
+    await ai.requireVersion(ai.STUDY_VERSION, 'Finding foundational texts');
+    const r = await ai.call('/foundational', { topic: course.title, texts: texts.slice(0, 3).map((x) => ({ title: x.title, creator: x.creator || '', why: x.why || '', search: x.search || '' })) }, opts || {});
+    if (!S.state.courses.includes(course) || !course.modules.includes(mod)) throw new AIError('gone', 'That module was removed while its texts were being found.');
+    if (course.ai && course.ai.generated && r.usage) course.ai.usage.push(usageRow(r.usage));
+    const have = new Set(mod.readings.filter((x) => x.source !== 'placeholder').flatMap((x) => [x.url, 'c:' + x.title.toLowerCase()]).filter(Boolean));
+    const front = [];
+    (r.resources || []).forEach((x) => {
+      if ((x.url && have.has(x.url)) || have.has('c:' + String(x.title).toLowerCase())) return;
+      front.push(S.makeReading({ ...readingFrom(x), foundational: true })); have.add('c:' + String(x.title).toLowerCase());
+    });
+    if (front.length) mod.readings = front.concat(mod.readings.filter((x) => x.source !== 'placeholder'));
+    S.save();
+    return { added: front.length, linked: front.filter((x) => x.url).length, linkNeeded: (r.resources || []).filter((x) => !x.url).length };
+  };
+  // Which foundational texts go to which module (1 to 3). Every text the learner typed is always included, whatever the AI listed.
+  ai.canonFor = function (list, typed, nMods) {
+    const out = Array.from({ length: Math.max(0, nMods) }, () => []), last = Math.min(3, nMods);
+    const items = (Array.isArray(list) ? list : []).map((x) => ({ ...x, typed: false }));
+    String(typed || '').split(/[;\n]+|,(?![^()]*\))/).map((t) => t.trim()).filter((t) => t.length >= 3).slice(0, 8).forEach((t) => {
+      const low = t.toLowerCase(), hit = items.find((x) => x.title.toLowerCase().includes(low) || low.includes(x.title.toLowerCase()));
+      if (hit) hit.typed = true; else items.push({ title: t.slice(0, 300), creator: '', module: 1, why: 'You listed this as a text you need.', search: t.slice(0, 160), typed: true });
+    });
+    items.sort((p, q) => (q.typed ? 1 : 0) - (p.typed ? 1 : 0)); // the learner's own texts are placed first
+    items.forEach((x) => { for (let m = Math.min(Math.max(1, x.module || 1), last); m <= last; m++) if (out[m - 1].length < 3) { out[m - 1].push(x); return; } });
+    return out;
+  };
+  // Existing courses: write the quiz and reflection questions for every module that does not have them. Cost is shown before this runs.
+  ai.studyTargets = (course) => course.modules.filter((m) => !m.quiz || !m.reflections);
+  ai.STUDY_COST = [0.02, 0.12]; // per module, measured 26 Nov 2026: $0.02 from key ideas, $0.10–0.11 with three readings including PDFs
+  ai.studyEstimate = (course) => { const n = ai.studyTargets(course).length; return { n, low: n * ai.STUDY_COST[0], high: n * ai.STUDY_COST[1] }; };
+  // A quiz written from the key ideas can be rewritten from the readings once they can be read (for example PDFs, from build 34 step D part 2).
+  // Not offered again when the last try already showed that fewer than two of the same readings can be read (it would cost money and change nothing).
+  ai.canRewriteQuiz = (mod) => { if (!mod.quiz || mod.quiz.basis === 'readings') return false; const out = new Set((mod.quiz.skipped || []).map((x) => x.title)); return studyReadings(mod).filter((x) => !out.has(x.title)).length >= 2; };
+  const STUDY_STOP = ['budget', 'global_limit', 'ip_limit', 'hour_limit', 'day_limit', 'bad_code', 'locked', 'not_configured', 'no_code', 'cancelled', 'upstream_auth', 'bad_model', 'outdated'];
+  ai.addStudy = async function (course, o) {
+    o = o || {};
+    const list = ai.studyTargets(course);
+    let done = 0; const failed = [];
+    for (let i = 0; i < list.length; i++) {
+      if (o.onStep) o.onStep('Module ' + (course.modules.indexOf(list[i]) + 1) + ' of ' + course.modules.length + ': ' + list[i].title);
+      try { const r = await ai.writeStudy(course, list[i], { signal: o.signal }); if (r.quiz && r.reflections) done++; else failed.push(list[i].title + ': ' + (r.note || 'incomplete')); }
+      catch (e) { if (STUDY_STOP.includes(e.code)) { e.done = done; throw e; } failed.push(list[i].title + ': ' + e.message); }
+    }
+    return { done, failed, total: list.length };
   };
 
   /* ---- Evidence packets (Phase 2A) ---- */
@@ -507,16 +637,21 @@
     S.state.courses.push(course); S.state.setup = true; S.save();
     run.courseId = course.id;
     const queries = out.outline.modules.map((m) => m.searchQueries || []);
+    const canon = ai.canonFor(out.outline.foundational, brief.texts, course.modules.length); // v19: foundational texts, modules 1 to 3
     set({ steps: [{ label: 'Course outline saved', state: 'done' }].concat(course.modules.map((m, i) => ({ label: 'Materials and assignments: ' + m.title, state: i === 0 ? 'active' : 'todo' })), [{ label: 'Course capstone', state: 'todo' }]) });
 
     const STOP = ['budget', 'global_limit', 'ip_limit', 'hour_limit', 'day_limit', 'bad_code', 'locked', 'not_configured', 'no_code', 'cancelled', 'upstream_auth', 'bad_model'];
-    let problem = '', problemCode = '', missing = 0, detailsMissing = 0, packetsMissing = 0;
+    let problem = '', problemCode = '', missing = 0, detailsMissing = 0, packetsMissing = 0, studyMissing = 0, canonMissing = 0;
     for (let i = 0; i < course.modules.length; i++) {
       run.steps[i + 1].state = 'active'; set({});
       try {
         let r = await ai.findMaterials(course, course.modules[i], { queries: queries[i], signal: run.ctl.signal });
         if (r.missing) r = await ai.findMaterials(course, course.modules[i], { queries: queries[i], signal: run.ctl.signal }); // one automatic second try
         if (r.missing) r = await ai.findMaterials(course, course.modules[i], { queries: [course.title + ' ' + course.modules[i].title + ' introduction university', course.modules[i].title + ' open access reading'], signal: run.ctl.signal }); // third and last try, with different search words
+        if (canon[i] && canon[i].length) { // foundational texts first, so the quiz and assignments can use them
+          try { const fr = await ai.findFoundational(course, course.modules[i], canon[i], { signal: run.ctl.signal }); canonMissing += fr.linkNeeded; if (fr.added && r.missing) r = { ...r, missing: false }; }
+          catch (e) { if (STOP.includes(e.code)) throw e; canonMissing += canon[i].length; }
+        }
         run.steps[i + 1].state = r.missing ? 'warn' : 'done'; if (r.missing) missing++;
         for (let tryN = 0; tryN < 2; tryN++) { // one automatic second try if the first answer was incomplete
           try { const d = await ai.writeDetails(course, course.modules[i], course.modules[i].assignments.filter((a) => !a.parts.length), { signal: run.ctl.signal }); if (d.done >= d.total) break; if (tryN) detailsMissing++; }
@@ -527,6 +662,10 @@
           const pk = await ai.buildPackets(course, course.modules[i], { signal: run.ctl.signal, onStep: (t) => { run.steps[i + 1].label = t; set({}); } });
           packetsMissing += pk.missing; if (pk.missing && run.steps[i + 1].state === 'done') run.steps[i + 1].state = 'warn';
         } catch (e) { if (e.packetsMissing) packetsMissing += e.packetsMissing; throw e; }
+        finally { run.steps[i + 1].label = label; }
+        run.steps[i + 1].label = 'Quiz and reflection questions: ' + course.modules[i].title; set({});
+        try { const st = await ai.writeStudy(course, course.modules[i], { signal: run.ctl.signal }); if (!st.quiz || !st.reflections) studyMissing++; }
+        catch (e) { if (STOP.includes(e.code)) throw e; studyMissing++; }
         finally { run.steps[i + 1].label = label; }
       } catch (e) {
         run.steps[i + 1].state = 'fail'; problem = e.message; problemCode = e.code || '';
@@ -545,10 +684,10 @@
     }
     set({});
     const failed = run.steps.slice(1, capIdx).filter((s) => s.state === 'fail' || s.state === 'skipped').length;
-    course.ai.status = failed || detailsMissing || packetsMissing || capProblem ? 'partial' : 'complete'; // missing assignment pages count as incomplete, so the person is told rather than shown "ready"
+    course.ai.status = failed || detailsMissing || packetsMissing || studyMissing || capProblem ? 'partial' : 'complete'; // missing assignment pages count as incomplete, so the person is told rather than shown "ready"
     course.ai.note = failed
       ? failed + ' of ' + course.modules.length + ' modules still need learning materials (' + problem + ') Open a module and choose “Find materials with AI” to try again, or add your own.'
-      : [missing ? missing + ' module' + (missing === 1 ? '' : 's') + ' had no verifiable source; they are marked “Source needed”.' : '', detailsMissing ? detailsMissing + ' module' + (detailsMissing === 1 ? '' : 's') + ' still need their assignment details: open the assignment and choose “Write full assignment with AI”.' : '', packetsMissing ? packetsMissing + ' assignment' + (packetsMissing === 1 ? '' : 's') + ' still need their exhibits (the case files, documents and data the work is built on): open the assignment, choose Materials, then “Build the exhibits with AI”.' : '', capProblem ? 'The course capstone is not finished (' + capProblem.replace(/[. ]+$/, '') + '). Open the Modules page and choose “Finish the capstone”.' : ''].filter(Boolean).join(' ');
+      : [missing ? missing + ' module' + (missing === 1 ? '' : 's') + ' had no verifiable source; they are marked “Source needed”.' : '', detailsMissing ? detailsMissing + ' module' + (detailsMissing === 1 ? '' : 's') + ' still need their assignment details: open the assignment and choose “Write full assignment with AI”.' : '', packetsMissing ? packetsMissing + ' assignment' + (packetsMissing === 1 ? '' : 's') + ' still need their exhibits (the case files, documents and data the work is built on): open the assignment, choose Materials, then “Build the exhibits with AI”.' : '', studyMissing ? studyMissing + ' module' + (studyMissing === 1 ? '' : 's') + ' still need a quiz or reflection questions: open the Modules page and choose “Add quiz and reflections”.' : '', canonMissing ? canonMissing + ' foundational text' + (canonMissing === 1 ? '' : 's') + ' had no official page that could be checked; ' + (canonMissing === 1 ? 'it is' : 'they are') + ' marked “Foundational, link needed”.' : '', capProblem ? 'The course capstone is not finished (' + capProblem.replace(/[. ]+$/, '') + '). Open the Modules page and choose “Finish the capstone”.' : ''].filter(Boolean).join(' ');
     S.save();
     set({ phase: 'done', courseId: course.id, problem: course.ai.status === 'partial' ? course.ai.note : '' });
     return course;

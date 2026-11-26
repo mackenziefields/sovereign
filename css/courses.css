@@ -134,10 +134,42 @@ input[type="number"]:focus-visible, input[type="date"]:focus-visible { outline: 
 .segs { list-style: none; margin: 0; padding: 0; display: flex; gap: 3px; }
 .seg { flex: 1 1 0; min-width: 6px; height: 10px; border: 1px solid var(--ink); background: transparent; }
 .seg.complete { background: var(--ink); }
-.seg.progress { background: repeating-linear-gradient(135deg, var(--ink) 0 2px, transparent 2px 5px); }
+.seg.progress, .seg.ready { background: repeating-linear-gradient(135deg, var(--ink) 0 2px, transparent 2px 5px); }
 .prog-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .8rem 1.5rem; margin: 0; }
 .prog-facts dt { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .prog-facts dd { margin: .15rem 0 0; }
 .prog-cap { display: flex; flex-wrap: wrap; gap: .4rem 1rem; align-items: baseline; padding: .6rem .8rem; border: 1px solid var(--ink); }
 .prog-body .lib a { grid-template-columns: 7rem 1fr auto; min-height: 44px; padding: .45rem 0; }
 @media (max-width: 640px) { .prog-card > summary { grid-template-columns: 1fr auto; } .prog-card > summary .code { grid-column: 1 / -1; } .prog-body { padding-left: 0; } }
+
+/* Build 34 step C: learning-path locks and self-completing modules */
+.check-spacer { display: inline-flex; width: 44px; height: 44px; margin: -10px 0 -10px -10px; flex: none; align-items: center; justify-content: center; color: var(--muted, #666); }
+.check-spacer::before { content: ""; width: 22px; height: 22px; border: 1.5px dashed currentColor; border-radius: 50%; opacity: .6; }
+.lock-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .45rem; margin: .5rem 0; padding: .7rem .85rem; background: var(--card); border: 1px solid var(--rule); border-left: 3px solid var(--ink); }
+.lock-note .ico { align-self: center; }
+.lock-note a { font-weight: 600; white-space: nowrap; }
+.lock-note.compact { display: inline-flex; padding: 0; margin: .25rem 0 0; background: none; border: 0; font-size: .85rem; color: var(--muted, #555); }
+.complete-row p { margin: 0; }
+.complete-row .missing { margin: .6rem 0 0; padding-left: 1.2rem; }
+.complete-row .missing li { margin: .25rem 0; }
+.complete-row.is-complete { border-top-color: var(--cobalt, #2f4fd0); }
+.reflect form .field textarea { width: 100%; }
+
+/* Build 34 step D: Learn quiz, three reflections, add-quiz section */
+.quiz .quiz-qs { list-style: none; padding-left: 0; margin: .5rem 0 1rem; } /* numbers are written into each question: a fieldset legend does not line up with a list marker */
+.quiz .quiz-qs > li { margin: 0 0 1.1rem; }
+.quiz fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.quiz .quiz-q { font-weight: 600; margin: 0 0 .4rem; padding: 0; }
+.quiz .quiz-opt { display: flex; gap: .55rem; align-items: flex-start; padding: .45rem .55rem; border: 1px solid var(--rule); margin: 0 0 .35rem; cursor: pointer; min-height: 44px; box-sizing: border-box; }
+.quiz .quiz-opt input { margin-top: .2rem; flex: none; }
+.quiz .quiz-opt:has(input:checked) { border-color: var(--ink); }
+.quiz .quiz-score { padding: .6rem .8rem; border-left: 3px solid var(--rule); }
+.quiz .quiz-score.is-pass { border-left-color: #073e35; }
+.quiz .quiz-score.is-fail { border-left-color: var(--danger); }
+.quiz .is-wrong > .quiz-q { color: var(--danger); }
+.reflect .reflect-item { margin: 0 0 1.2rem; }
+.reflect .reflect-item h4 { margin: 0; font-size: 1rem; line-height: 1.4; }
+.reflect .reflect-item textarea { width: 100%; }
+.add-study { margin: 1.25rem 0; }
+.quiz .quiz-skipped { margin: .25rem 0 .75rem; }
+.quiz .quiz-skipped ul { margin: .4rem 0 0; padding-left: 1.2rem; }

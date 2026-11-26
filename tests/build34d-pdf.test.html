@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Build 34 step D part 2 (PDF readings) tests</title>
+<!-- Run in a browser from a local server: /tests/build34d-pdf.test.html . Mock Worker (canned AI, no network, no cost) and a sample PDF from docs/pdf-samples. Nothing is stored. -->
+<style>body{font:14px/1.5 system-ui;margin:20px}.pass{color:#0a6b2d}.fail{color:#b3261e;font-weight:700}pre{white-space:pre-wrap}</style></head>
+<body><h1>Build 34 step D part 2: PDF readings</h1><pre id="out">running…</pre><div id="mount" hidden></div><div id="toast" hidden></div>
+<script src="../js/config.js"></script><script src="../js/exhibits.js"></script><script src="../js/store.js"></script><script src="../js/components.js"></script><script src="../js/exhibits-view.js"></script><script src="../js/files.js"></script><script src="../js/dataset-import.js"></script><script src="../js/mydata.js"></script><script src="../js/capstone-ui.js"></script><script src="../js/publish-model.js"></script><script src="../js/publish.js"></script><script src="../js/publish-attach.js"></script><script src="../js/publish-docs.js"></script><script src="../js/ai-client.js"></script><script src="../js/views-ai.js"></script><script src="../js/views-work.js"></script><script src="../js/review-studio.js"></script><script src="../js/views-course.js"></script><script src="../js/studio.js"></script><script src="../js/syllabus.js"></script><script src="../js/workbench.js"></script><script src="../js/academic.js"></script><script src="../js/views-dash.js"></script><script src="fixtures.js"></script>
+<script src="../worker/mock/harness.js"></script>
+<script>
+(async function () {
+  const before = localStorage.getItem('sovereign.v3'), beforeAI = localStorage.getItem('sovereign.ai');
+  const S = window.Sovereign, results = [], CUR = [];
+  S.state = S.state || {}; S.state.courses = CUR;
+  S.save = () => { S.syncComplete(CUR); }; S.render = () => {};
+  if (!S.href) S.href = (c, k, id) => '#/course/' + c.id + (k ? '/' + k : '') + (id ? '/' + id : '');
+  let CODE = 'mock-code';
+  S.ai.settings = () => ({ url: 'https://mock-worker.invalid', code: CODE });
+  const realHealth = S.ai.health; S.ai.health = async () => ({ ok: true, version: 19 });
+  const W = '../worker/worker.js';
+  let H = await SovereignMock.install({ workerUrl: W });
+  const t = async (name, fn) => { try { const r = await fn(); results.push([name, r === true || r === undefined, r === true || r === undefined ? '' : String(r)]); } catch (e) { results.push([name, false, 'threw: ' + (e.code ? e.code + ' ' : '') + e.message]); } };
+  const code = async (p) => { try { await p; return 'no error'; } catch (e) { return e.code; } };
+  const mount = (n) => { const d = document.getElementById('mount'); d.textContent = ''; d.append(...[].concat(n).filter(Boolean)); return d; };
+  const toastText = () => document.getElementById('toast').textContent;
+  const R = (host, title, creator, path) => ({ id: 'r-' + host + (path || ''), title, creator: creator || '', url: 'https://' + host + (path || '/x'), source: 'ai', kind: 'document' });
+  const SYL = R('pdf1.mock-uni.edu', 'Independent Journalism Course Syllabus', 'Sample', '/syllabus.pdf');
+  const course = (readings) => {
+    const c = S.normalize({ app: 'sovereign', courses: [{ id: 'pd', title: 'PDF Test', ai: { generated: true, status: 'complete', brief: { topic: 'Journalism' }, usage: [] }, modules: [
+      { id: 'p1', title: 'Foundations', origin: 'ai', keyIdeas: 'Accuracy before speed. Name sources.', assignments: [{ id: 'l1', title: 'Read', kind: 'learn', points: 10 }, { id: 'a1', title: 'Apply', kind: 'apply', points: 10 }], readings }] }] }).courses[0];
+    CUR.length = 0; CUR.push(c); return c;
+  };
+  const iCounter = () => { const k = [...H.store.keys()].find((x) => /^i:/.test(x)); return k ? JSON.parse(H.store.get(k)) : {}; };
+
+  /* ---------- /fetch-pdf (real Worker code, mock web) ---------- */
+  let bytes;
+  await t('a real PDF is downloaded and passed on unchanged', async () => { bytes = await S.ai.fetchPdf('https://pdf1.mock-uni.edu/syllabus.pdf'); const head = String.fromCharCode(...bytes.slice(0, 5)); return (head === '%PDF-' && bytes.length > 100000) || head + ' ' + bytes.length; });
+  await t('a PDF sent as "application/octet-stream" is accepted (it starts with %PDF-)', async () => (await S.ai.fetchPdf('https://octet.mock-uni.edu/file')).length > 100000);
+  await t('a web page is refused as "not a PDF" (the Worker reads it as a page instead)', async () => (await code(S.ai.fetchPdf('https://read1.mock-uni.edu/x'))) === 'not_pdf');
+  await t('a file labelled PDF that is not one is refused', async () => (await code(S.ai.fetchPdf('https://fakepdf.mock-uni.edu/x.pdf'))) === 'not_pdf');
+  await t('a PDF over 10 MB is refused', async () => (await code(S.ai.fetchPdf('https://huge.mock-uni.edu/big.pdf'))) === 'too_large');
+  await t('a private address is refused', async () => (await code(S.ai.fetchPdf('https://sneaky.mock-site.org/file.pdf'))) === 'not_public');
+  await t('a redirect to a private address is refused', async () => (await code(S.ai.fetchPdf('https://hop.mock-uni.edu/file.pdf'))) === 'not_public');
+  await t('a missing file says so', async () => (await code(S.ai.fetchPdf('https://gone.mock-site.org/old.pdf'))) === 'file_missing');
+  await t('a wrong access code is refused', async () => { CODE = 'wrong'; try { return (await code(S.ai.fetchPdf('https://pdf1.mock-uni.edu/syllabus.pdf'))) === 'bad_code'; } finally { CODE = 'mock-code'; } });
+  await t('PDF downloads have their own counter and never use up AI requests', async () => { const a = iCounter(); await S.ai.fetchPdf('https://pdf1.mock-uni.edu/syllabus.pdf'); const b = iCounter(); return (b.pdf === (a.pdf || 0) + 1 && (b.req || 0) === (a.req || 0)) || JSON.stringify([a, b]); });
+  await t('the daily PDF limit is enforced', async () => { H.restore(); H = await SovereignMock.install({ workerUrl: W, env: { LIMIT_PDF_PER_IP_DAY: '1' } }); await S.ai.fetchPdf('https://pdf1.mock-uni.edu/syllabus.pdf'); const r = await code(S.ai.fetchPdf('https://pdf1.mock-uni.edu/syllabus.pdf')); H.restore(); H = await SovereignMock.install({ workerUrl: W }); return r === 'pdf_limit' || r; });
+
+  /* ---------- reading the text with PDF.js ---------- */
+  let pt;
+  await t('the bundled PDF.js reads the text of the sample PDF', async () => { pt = await S.ai.pdfText(bytes.slice()); return (pt.ok && /independent\s+journalism/i.test(pt.text) && /learning outcomes/i.test(pt.text) && pt.pages >= 1) || JSON.stringify(pt).slice(0, 200); });
+  await t('the text is capped', async () => { const keep = S.ai.PDF_CHARS; S.ai.PDF_CHARS = 1000; try { const r = await S.ai.pdfText(bytes.slice()); return (r.ok && r.text.length <= 1000) || r.text.length; } finally { S.ai.PDF_CHARS = keep; } });
+  await t('a PDF with no text (a scan) is not used, with a reason', async () => { const b = new TextEncoder().encode('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n'); const r = await S.ai.pdfText(b); return (!r.ok && /scan/.test(r.why)) || JSON.stringify(r); });
+  await t('a broken file is not used, with a reason', async () => { const r = await S.ai.pdfText(new TextEncoder().encode('%PDF-1.4 broken')); return (!r.ok && /could not be (opened|read)|almost no text/.test(r.why)) || JSON.stringify(r); });
+  await t('contents pages are recognised and dropped', () => S.ai.looksLikeContents('Contents\nIntroduction ........ 1\nScope ........ 4\nRisk ........ 9\nReporting ........ 14\nAnnex ........ 20') && !S.ai.looksLikeContents('Lawyers must identify the client and the beneficial owner before acting. '.repeat(10)));
+
+  /* ---------- the quiz, written from a PDF ---------- */
+  let c = course([SYL, R('read1.mock-uni.edu', 'Customer Discovery Basics', 'C. Teacher')]), m = c.modules[0], r;
+  await t('a PDF reading plus a web page: the quiz is written from the readings', async () => { r = await S.ai.writeStudy(c, m); return (m.quiz && m.quiz.basis === 'readings' && /1 read from PDF in your browser/.test(m.quiz.note)) || JSON.stringify(r); });
+  await t('the PDF text reached the quiz prompt, marked untrusted', () => { const p = globalThis.__studyPrompts.slice(-1)[0]; return /learning outcomes/i.test(p) && /untrusted/.test(p) && /Talk to at least five customers/.test(p); });
+  await t('the tighter quiz rules are in the prompt', () => { const p = globalThis.__studyPrompts.slice(-1)[0]; return /Wrong options must be believable/.test(p) && /As of 2023/.test(p) && /Never ask two questions about the same idea/.test(p) && /never about the cover/.test(p) && /at least one question from each numbered reading/.test(p); });
+  await t('a PDF that is not the reading, a scan and a missing file are listed as not used, with reasons', async () => {
+    c = course([SYL, R('read1.mock-uni.edu', 'Customer Discovery Basics', 'C. Teacher'), R('pdf1.mock-uni.edu', 'Tax Procedure Handbook', '', '/tax.pdf'), R('scan.mock-uni.edu', 'Scanned Report', '', '/scan.pdf'), R('gone.mock-site.org', 'Old Guide', '', '/old.pdf')]); m = c.modules[0];
+    await S.ai.writeStudy(c, m); const sk = m.quiz.skipped, why = (t) => (sk.find((x) => x.title === t) || {}).why || '';
+    return (m.quiz.basis === 'readings' && sk.length === 3 && /PDF that opened does not seem/.test(why('Tax Procedure Handbook')) && /scan/.test(why('Scanned Report')) && /404/.test(why('Old Guide'))) || JSON.stringify(sk);
+  });
+  await t('readings not used are shown under the quiz', () => { const d = mount(S.studio.page(c, m, 'learn')); return (/3 readings not used/.test(d.textContent) && /Scanned Report/.test(d.textContent)) || d.textContent.slice(0, 300); });
+  await t('the list of readings not used survives save and load', () => S.normalize(JSON.parse(JSON.stringify({ app: 'sovereign', courses: [c] }))).courses[0].modules[0].quiz.skipped.length === 3);
+  await t('an older Worker without PDF downloads: web pages only, as before, no errors', async () => { const keep = S.ai.fetchPdf; S.ai.fetchPdf = async () => { throw new S.ai.Error('not_found', 'Not found.'); }; try { const x = await S.ai.readPdfs([SYL, SYL]); return (x.texts.length === 0 && x.notes.length === 0) || JSON.stringify(x); } finally { S.ai.fetchPdf = keep; } });
+  await t('a large request (five full readings) is accepted by the Worker', async () => { const big = 'Independent Journalism Course Syllabus. ' + 'Accuracy before speed and named sources matter. '.repeat(500); const x = await S.ai.call('/study', { topic: 'J', module: { title: 'M', keyIdeas: 'k' }, readings: [0, 1, 2, 3, 4].map((i) => ({ title: 'Independent Journalism Course Syllabus', url: 'https://pdf1.mock-uni.edu/' + i + '.pdf' })), texts: [0, 1, 2, 3, 4].map((n) => ({ n, text: big.slice(0, 24000) })), assignments: [] }); return (x.quiz && x.quiz.basis === 'readings') || JSON.stringify(x).slice(0, 200); });
+  await t('the Worker gives each reading a share, about 60,000 characters in all', () => { const p = globalThis.__studyPrompts.slice(-1)[0]; const n = (p.match(/<reading n=/g) || []).length; return (n === 5 && p.length < 75000) || n + ' readings, ' + p.length + ' chars'; });
+
+  /* ---------- Rewrite quiz from readings ---------- */
+  const keyIdeasCourse = () => { const x = course([SYL, R('read1.mock-uni.edu', 'Customer Discovery Basics', 'C. Teacher')]); const mm = x.modules[0]; mm.quiz = S.makeQuiz({ basis: 'key-ideas', note: 'From key ideas.', passed: true, attempts: 2, best: 3, questions: [1, 2, 3].map((i) => ({ q: 'Old ' + i, options: ['a', 'b', 'c', 'd'], answer: 0, explain: 'x', source: 'Key ideas' })) }); mm.reflections = S.makeReflections([{ stage: 'learn', q: 'Old L?', answer: 'My answer.' }, { stage: 'apply', q: 'Old A?' }, { stage: 'demonstrate', q: 'Old D?' }]); return x; };
+  await t('a key-ideas quiz with readings offers "Rewrite quiz from readings"', () => { const x = keyIdeasCourse(); const d = mount(S.studio.page(x, x.modules[0], 'learn')); return !!([...d.querySelectorAll('button')].find((b) => /Rewrite quiz from readings/.test(b.textContent))) || 'missing'; });
+  await t('a quiz already written from the readings does not offer it', () => { const d = mount(S.studio.page(c, c.modules[0], 'learn')); return ![...d.querySelectorAll('button')].some((b) => /Rewrite quiz/.test(b.textContent)) || 'shown'; });
+  await t('cancelling the cost question sends nothing', async () => { const x = keyIdeasCourse(), n = H.calls.worker.length; const d = mount(S.studio.page(x, x.modules[0], 'learn')); let asked = ''; window.confirm = (q) => { asked = q; return false; }; [...d.querySelectorAll('button')].find((b) => /Rewrite quiz/.test(b.textContent)).click(); await new Promise((res) => setTimeout(res, 50)); return (H.calls.worker.length === n && /Estimated cost: \$0\.02–\$0\.12/.test(asked) && x.modules[0].quiz.basis === 'key-ideas') || asked; });
+  await t('not offered again when the last try showed fewer than two readings can be read', () => { const x = keyIdeasCourse(), mm = x.modules[0]; mm.quiz.skipped = [{ title: 'Customer Discovery Basics', why: 'needs JavaScript' }]; return S.ai.canRewriteQuiz(mm) === false; });
+  await t('offered again once a new reading is added', () => { const x = keyIdeasCourse(), mm = x.modules[0]; mm.quiz.skipped = [{ title: 'Customer Discovery Basics', why: 'needs JavaScript' }]; mm.readings.push(S.makeReading({ title: 'New Reading', url: 'https://read2.mock-uni.edu/x' })); return S.ai.canRewriteQuiz(mm) === true; });
+  await t('rewriting: quiz now from the readings, still passed, reflections and answers unchanged', async () => { const x = keyIdeasCourse(), mm = x.modules[0]; const res = await S.ai.writeStudy(x, mm, { quizOnly: true }); return (mm.quiz.basis === 'readings' && mm.quiz.passed && !/Old/.test(mm.quiz.questions[0].q) && mm.reflections[0].q === 'Old L?' && mm.reflections[0].answer === 'My answer.' && res.reflections) || JSON.stringify(mm.reflections); });
+
+  H.restore(); S.ai.health = realHealth;
+  await t('saved app data and AI settings were not touched', () => localStorage.getItem('sovereign.v3') === before && localStorage.getItem('sovereign.ai') === beforeAI);
+  const pass = results.filter((x) => x[1]).length;
+  document.title = 'RESULT ' + pass + '/' + results.length;
+  document.getElementById('out').innerHTML = results.map(([n, ok, why]) => '<span class="' + (ok ? 'pass' : 'fail') + '">' + (ok ? 'PASS' : 'FAIL') + '</span> ' + n.replace(/</g, '&lt;') + (why ? ' — ' + why.replace(/</g, '&lt;') : '')).join('\n') + '\n\n' + pass + ' of ' + results.length + ' passed';
+})();
+</script></body></html>

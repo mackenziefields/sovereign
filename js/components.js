@@ -85,11 +85,51 @@
         S.progressBar(o.pct, o.title + ' progress')));
   };
 
-  // Learn (circle), Apply (square), Demonstrate (triangle): a shape and a word, never colour alone.
+  // Stage marks (build 34): moon = Learn, star = Apply, sun = Demonstrate, comet = Wrap-up. A line icon and a word, never colour or icon alone.
   S.KINDS = [['learn', 'Learn'], ['apply', 'Apply'], ['demonstrate', 'Demonstrate']];
-  S.kindMark = (kind) => {
-    const k = S.KINDS.find((x) => x[0] === kind);
-    return k ? h('span', { class: 'kmark kmark-' + k[0] }, k[1]) : null;
+  const MARKS = { learn: 'Learn', apply: 'Apply', demonstrate: 'Demonstrate', wrap: 'Wrap-up' };
+  const STAGE_ICONS = { // fixed strings written here, never user content
+    learn: '<path d="M19.5 14.5A8 8 0 1 1 9.5 4.5a6.3 6.3 0 0 0 10 10z"/>',
+    apply: '<path d="m12 3.5 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
+    demonstrate: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5V5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
+    wrap: '<circle cx="7" cy="17" r="3" fill="currentColor"/><path d="M9.3 14.7 20 4M10.4 17.7l9.1-7.2M6.3 13.6 13.5 4.5"/>',
+  };
+  S.stageIcon = (kind, cls, size) => {
+    const i = document.createElement('span');
+    i.className = cls || 'kmark-ico'; i.setAttribute('aria-hidden', 'true');
+    i.innerHTML = '<svg viewBox="0 0 24 24" width="' + (size || 14) + '" height="' + (size || 14) + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (STAGE_ICONS[kind] || '') + '</svg>';
+    return i;
+  };
+  S.kindMark = (kind) => (MARKS[kind] ? h('span', { class: 'kmark kmark-' + kind }, S.stageIcon(kind), MARKS[kind]) : null);
+
+  // Key ideas as a list (build 34). Lines starting "- ", "* " or "• " become bullets; plain text is split into sentences.
+  // Display only: the saved text is never changed.
+  const ABBR = /(?:\b(?:e\.g|i\.e|etc|vs?|cf|al|No|Nos|Mr|Mrs|Ms|Dr|St|Inc|Co|Corp|Ltd|Jr|Sr|Art|Sec|para|U\.S|U\.K|U\.N|E\.U)\.|\b[A-Z]\.)$/;
+  S.sentences = (t) => {
+    const parts = String(t || '').replace(/\s+/g, ' ').trim().split(/(?<=[.!?][”"’')\]]?)\s+(?=[“"‘'(\[]?[A-Z0-9])/);
+    const out = [];
+    parts.forEach((p) => { if (out.length && ABBR.test(out[out.length - 1])) out[out.length - 1] += ' ' + p; else if (p) out.push(p); });
+    return out;
+  };
+  S.ideaItems = (t) => {
+    const lines = String(t || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const isB = (l) => /^[-*•]\s+/.test(l);
+    if (lines.some(isB)) return { intro: lines.filter((l) => !isB(l)), items: lines.filter(isB).map((l) => l.replace(/^[-*•]\s+/, '')) };
+    return { intro: [], items: lines.flatMap(S.sentences) };
+  };
+  S.ideasList = (t) => {
+    const r = S.ideaItems(t);
+    if (r.items.length < 2 && !r.intro.length) return h('p', { class: 'pre' }, t);
+    return h('div', { class: 'ideas' }, r.intro.map((l) => h('p', {}, l)), h('ul', { class: 'ideas-list' }, r.items.map((l) => h('li', {}, l))));
+  };
+  // A short summary for lists (build 34): the AI summary if there is one, else the brief's first sentence (or two if the first is very short), cut cleanly.
+  S.summaryOf = (a) => {
+    if (a && a.summary && String(a.summary).trim()) return String(a.summary).trim();
+    const s = S.sentences(String((a && a.description) || '').replace(/^\W*(fictional|hypothetical|fictitious)\b[^\n]*\n+/i, ''));
+    if (!s.length) return '';
+    let out = s[0].length < 60 && s[1] ? s[0] + ' ' + s[1] : s[0];
+    if (out.length > 240) { const cut = out.slice(0, 240); out = cut.slice(0, Math.max(cut.lastIndexOf(' '), 160)).replace(/[,;:\s]+$/, '') + '…'; }
+    return out;
   };
 
   // Small line icons for navigation (16px, drawn with the text colour). Fixed strings written here, never user content.
@@ -103,6 +143,7 @@
     modules: '<path d="m12 4 8.5 4.5L12 13 3.5 8.5z"/><path d="m3.5 12.5 8.5 4.5 8.5-4.5"/><path d="m3.5 16.5 8.5 4.5 8.5-4.5"/>',
     assignments: '<path d="M5 20.5l1-4.5L16.5 5.5a2 2 0 0 1 3 3L9 19z"/><path d="m14.5 7.5 3 3"/>',
     grades: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
+    lock: '<rect x="5" y="10.5" width="14" height="10" rx="1.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
     portfolio: '<rect x="3.5" y="7.5" width="17" height="12" rx="1.5"/><path d="M9 7.5V5h6v2.5"/><path d="M3.5 13h17"/>',
   };
   S.icon = (name) => {

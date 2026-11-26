@@ -59,12 +59,10 @@ section { margin-top: 3.5rem; }
 
 /* ---------- Learn / Apply / Demonstrate: a shape, a word, a color. Never color alone. ---------- */
 .kmark { display: inline-flex; align-items: center; gap: .5rem; font-size: .68rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--ink); white-space: nowrap; }
-.kmark::before { content: ""; width: .72rem; height: .72rem; flex: none; border: 2px solid currentColor; }
-.kmark-learn::before { border-radius: 50%; }                                            /* circle: taking in */
-.kmark-apply { color: var(--cobalt); }                                                  /* square: exercising judgment */
-.kmark-demonstrate { color: var(--accent); }                                            /* triangle: producing the work */
-.kmark-demonstrate::before { border: 0; background: currentColor; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-.eyebrow .kmark::before { margin: 0; }
+.kmark-ico { display: inline-flex; flex: none; }
+.kmark-ico svg { display: block; }
+.kmark-apply { color: var(--cobalt); }
+.kmark-demonstrate { color: var(--accent); }
 .eyebrow:has(.kmark)::before { display: none; }
 
 /* ---------- Dashboard ---------- */
@@ -168,6 +166,11 @@ section { margin-top: 3.5rem; }
 .msec h3, .mod-sec h3, .minor { font-size: .68rem; letter-spacing: .18em; font-weight: 700; }
 .msec .pre, .msec > p { max-width: var(--measure); }
 .msec > .pre { font-size: 1.05rem; line-height: 1.65; }
+.ideas { max-width: var(--measure); font-size: 1.05rem; line-height: 1.6; }
+.ideas > p { margin: 0 0 .5rem; }
+.ideas-list { margin: 0; padding-left: 1.25rem; }
+.ideas-list li { margin: 0 0 .45rem; padding-left: .2rem; }
+.ideas-list li::marker { color: var(--accent); }
 .item-title { font-weight: 600; }
 .pager a { font-family: var(--serif); font-size: 1.05rem; }
 .complete-row { border-top-width: 2px; border-top-color: var(--ink); }
@@ -231,11 +234,8 @@ section { margin-top: 3.5rem; }
 /* ---------- first run and AI course creation ---------- */
 .trio > div { border-top-width: 2px; padding-top: .8rem; }
 .trio > div > b { display: flex; align-items: center; gap: .55rem; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; }
-.trio > div > b::before { content: ""; width: .72rem; height: .72rem; border: 2px solid currentColor; }
-.trio > div:nth-child(1) > b::before { border-radius: 50%; }
 .trio > div:nth-child(2) > b { color: var(--cobalt); }
 .trio > div:nth-child(3) > b { color: var(--accent); }
-.trio > div:nth-child(3) > b::before { border: 0; background: currentColor; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .trio > div:nth-child(2) { border-top-color: var(--cobalt); }
 .trio > div:nth-child(3) { border-top-color: var(--accent); }
 .narrow > h1 { font-size: clamp(2.4rem, 9vw, 4.5rem); font-weight: 700; letter-spacing: -.055em; line-height: .96; }

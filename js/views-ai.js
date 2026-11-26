@@ -36,7 +36,8 @@
     if (r.source !== 'ai') return null;
     const v = r.verification || {}, vt = !r.url ? ['Citation only: no link found', 'warn'] : (VERIFY_TEXT[v.status] || VERIFY_TEXT['not-checked']);
     const cc = r.contentCheck && r.url ? CONTENT_TEXT[r.contentCheck.status] : null;
-    const tags = [
+    // Build 34: the card shows only "Why it fits" and the AI-suggested tag. Every check stays saved and sits behind "Source details" (closed by default) for auditing a link.
+    const checks = [
       h('span', { class: 'badge ' + vt[1], title: v.detail || '' }, vt[0]),
       cc ? h('span', { class: 'badge ' + cc[1], title: cc[2] + (r.contentCheck.detail ? ' ' + r.contentCheck.detail : '') }, cc[0]) : null,
       v.status === 'reachable' && v.titleMatch === true ? h('span', { class: 'badge', title: 'The page’s title resembles the expected title. This does not confirm the content.' }, 'Title matches') : null,
@@ -44,16 +45,23 @@
       r.sourceType && r.sourceType !== 'web' ? h('span', { class: 'badge ok', title: 'Type of website, from its address' }, S.label(S.SOURCE_TYPES, r.sourceType)) : null,
       r.kind ? h('span', { class: 'badge' }, S.label(S.READING_KINDS, r.kind)) : null,
       r.access && r.access !== 'unknown' ? h('span', { class: 'badge' }, r.access === 'free' ? 'Free' : 'Paid') : null,
-      h('span', { class: 'badge soft' }, 'AI-suggested'),
     ].filter(Boolean);
-    return h('div', { class: 'ai-meta' }, tags,
+    const key = 'src:' + (r.id || r.url || r.title);
+    const det = h('details', { class: 'src-details', open: !!(S.ui && S.ui.open && S.ui.open.has(key)) },
+      h('summary', {}, 'Source details'),
+      h('div', { class: 'src-tags' }, checks),
       r.creator ? h('div', { class: 'small muted ai-line' }, 'By ' + r.creator) : null,
       r.derivedFrom ? h('div', { class: 'small ai-line' }, 'Derived from: ', r.derivedUrl ? h('a', { href: r.derivedUrl, target: '_blank', rel: 'noopener noreferrer' }, r.derivedFrom) : r.derivedFrom, '. Taken from that course’s reading list by AI.') : null,
-      r.relevance ? h('div', { class: 'small ai-line' }, h('b', {}, 'Why it fits (AI’s opinion): '), r.relevance) : null,
       v.pageTitle ? h('div', { class: 'small muted ai-line' }, 'Page title: ' + v.pageTitle) : null,
       v.detail ? h('div', { class: 'small muted ai-line' }, v.detail) : null,
       cc && r.contentCheck.detail ? h('div', { class: 'small ai-line' }, h('b', {}, 'Content check: '), r.contentCheck.detail, ' (' + r.contentCheck.checkedAt.slice(0, 10) + ')') : null,
       v.checkedAt && r.url ? h('div', { class: 'small muted ai-line' }, 'Checked by a program on ' + v.checkedAt.slice(0, 10) + '. A working link does not guarantee it covers this topic well; please look it over.') : null);
+    det.addEventListener('toggle', () => { if (!S.ui || !S.ui.open) return; if (det.open) S.ui.open.add(key); else S.ui.open.delete(key); });
+    return h('div', { class: 'ai-meta' },
+      h('div', { class: 'src-tags' }, h('span', { class: 'badge soft' }, 'AI-suggested'),
+        r.foundational ? h('span', { class: 'badge' + (r.url ? ' ok' : ' warn'), title: 'A primary text of the field, named when the course was designed' }, r.url ? 'Foundational' : 'Foundational, link needed') : null),
+      r.relevance ? h('div', { class: 'small ai-line' }, h('b', {}, 'Why it fits: '), r.relevance) : null,
+      det);
   };
 
   S.syllabusLabels = function (y) {
@@ -124,7 +132,7 @@
     if (f.has('name')) { const nm = String(f.get('name') || '').trim().slice(0, 60); if (nm) { S.state.name = nm; S.save(); } } // stays in this browser; not part of the request
     return {
       topic: String(f.get('topic') || '').trim(), level: f.get('level') || 'beginner', goal: f.get('goal') || 'understand',
-      goalText: String(f.get('goalText') || '').trim(), hours: n('hours', 4), weeks: n('weeks', 6), extra: String(f.get('extra') || '').trim(), startDate: S.validDate(String(f.get('startDate') || '')) || S.todayISO(),
+      goalText: String(f.get('goalText') || '').trim(), hours: n('hours', 4), weeks: n('weeks', 6), extra: String(f.get('extra') || '').trim(), texts: String(f.get('texts') || '').trim().slice(0, 600), startDate: S.validDate(String(f.get('startDate') || '')) || S.todayISO(),
     };
   }
 
@@ -176,6 +184,9 @@
       h('label', { class: 'field' }, h('span', {}, 'Start date'), h('input', { type: 'date', name: 'startDate', value: b.startDate || S.todayISO() }), h('small', {}, 'Assignment due dates are set from this date and the number of weeks, and then stay fixed.')),
       h('label', { class: 'field' }, h('span', {}, 'Anything else I should know? (optional)'),
         h('textarea', { name: 'extra', rows: 3, maxlength: '600', placeholder: 'e.g. I want to start a small online shop. I learn best by doing.' }, b.extra || '')),
+      h('label', { class: 'field' }, h('span', {}, 'Texts you know you need (optional)'),
+        h('textarea', { name: 'texts', rows: 2, maxlength: '600', placeholder: 'e.g. DOJ Justice Manual; FATF Recommendations' }, b.texts || ''),
+        h('small', {}, 'Separate them with semicolons or new lines. They are always included, searched for first and labelled Foundational.')),
       S.state.name ? null : h('label', { class: 'field' }, h('span', {}, 'What should we call you? (optional)'), h('input', { type: 'text', name: 'name', maxlength: '60', autocomplete: 'given-name' }), h('small', {}, 'Used only to greet you. Stays in this browser and is never sent to the AI.')),
       h('p', { class: 'small muted' }, 'Only what you type on this page is sent to the AI service. Nothing else from your device is uploaded, and no documents are used.'),
       h('div', { class: 'btn-row' },

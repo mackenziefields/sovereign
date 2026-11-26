@@ -27,9 +27,9 @@
     return g;
   }
 
-  function statusText(a) {
+  function statusText(a, c) {
     const w = a.work;
-    return !w ? (a.done ? 'Marked completed' : 'Not submitted') : w.phase === 'reviewed' ? 'Feedback ready' : w.final.feedback ? 'Final grade: ' + a.score + ' / ' + a.points + ' pts' : 'Attached as evidence';
+    return !w ? (a.done ? 'Marked completed' : c && S.lockOf(c, a) ? 'Locked: not open for submission yet' : 'Not submitted') : w.phase === 'reviewed' ? 'Feedback ready' : w.final.feedback ? 'Final grade: ' + a.score + ' / ' + a.points + ' pts' : 'Attached as evidence';
   }
 
   /* ----- left pane ----- */
@@ -126,10 +126,10 @@
   function submitTab(c, m, a, p) {
     const out = [];
     const draft = !a.work && S.hasDraft(a.id);
-    out.push(h('div', { class: 'wb-status' }, h('span', { class: 'wb-status-k' }, 'Status'), h('b', {}, statusText(a)),
+    out.push(h('div', { class: 'wb-status' }, h('span', { class: 'wb-status-k' }, 'Status'), h('b', {}, statusText(a, c)),
       draft ? h('span', { class: 'small muted' }, 'Your typed draft is saved on this device.') : null));
     out.push(p.submit);
-    if (!(a.points > 0) && !a.work) out.push(h('div', { class: 'wb-manual' }, h('label', { class: 'checkline' },
+    if (!(a.points > 0) && !a.work && !(!a.done && S.lockOf(c, a))) out.push(h('div', { class: 'wb-manual' }, h('label', { class: 'checkline' },
       h('span', { class: 'check' }, h('input', { type: 'checkbox', checked: a.done, onchange: (e) => { a.done = e.target.checked; commit(); toast(a.done ? 'Marked completed.' : 'Marked not completed.'); } }), h('span', { class: 'box', 'aria-hidden': 'true' })),
       h('span', {}, 'Mark this assignment completed')), h('button', { class: 'linkbtn', type: 'button', onclick: () => { ui.edit = a.id; S.render(false); } }, 'Add points to turn on AI feedback')));
     if (a.work && a.work.final) out.push(S.portfolioToggle(a));
@@ -202,7 +202,7 @@
             h('h2', { class: 'wb-title' }, a.title)),
           h('div', { class: 'wb-tools' }, isCap ? null : vc.editBtn(a.id, 'Edit assignment'))),
         h('div', { class: 'ameta wb-meta' },
-          ...[['Due', a.due ? S.fmtDate(a.due) + (a.locked ? ' (course timeline)' : '') : 'No due date'], ['Points', a.points != null ? String(a.points) : 'Not graded'], ['Estimated time', a.estimate], ['Submitting', vc.FORMAT_SHORT[a.format] || 'Text or a file'], ['Status', statusText(a)]]
+          ...[['Due', a.due ? S.fmtDate(a.due) + (a.locked ? ' (course timeline)' : '') : 'No due date'], ['Points', a.points != null ? String(a.points) : 'Not graded'], ['Estimated time', a.estimate], ['Submitting', vc.FORMAT_SHORT[a.format] || 'Text or a file'], ['Status', statusText(a, c)]]
             .map(([k, v]) => v ? h('div', { class: 'ameta-i' }, h('span', { class: 'ameta-k' }, k), h('span', {}, v)) : null)),
         notice,
         segmented(c, a, focus, flags),

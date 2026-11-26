@@ -494,3 +494,78 @@ A hand-made review cited `U1-2` (column Neighborhood) and `U1-99`, with `feedbac
 - `tests/progress.test.html`: 24 of 24 pass. Covers no modules, all complete, mid-course, module states, assignment counts, every capstone state (not started, submitted, feedback ready, final and graded, incomplete), grade basis (combined, provisional, none), a 30-module course, the course object unchanged, and rendering with no NaN/undefined and no stored data touched.
 - Seen in the running app (three fictional courses: with a graded capstone, with none, with an ungraded capstone): rows, bars, capstone box, expand to module list; at phone width (375px) no sideways scrolling.
 - Not done: real coursework; browsers other than Chromium.
+
+## Build 34 step E: IJT 101 reviews re-run on the current reviewer (test Worker, 26 Nov 2026, approved, $0.209)
+- Course from `test-data/sovereign-backup-2026-11-26.json`, loaded in memory only (nothing saved). File: `Five Common Data Mistakes Revised Assignment.pdf`. Expectations from `docs/REVIEW-AUDIT.md`.
+- E1, graded review against its own Learn assignment ($0.111, 26 s): 8/8.
+  - The Mistake 1 arithmetic is checked and called correct (mean $2,000 vs median $1,200; 5 vs 20 per 100; $1,000 to $1,200 is about 4.2% real). The old feedback's "Fix the Mistake 1 arithmetic" is gone.
+  - Mistake 4 numbers called correct; the one point raised is clarity (the starting-year half has no example), with an example labelled illustrative.
+  - What the readings say is marked "could not verify" (the reading texts were not available).
+  - Also notes the work is far longer than the requested 500 words but costs no points (no criterion covers length), and a clipped chart title.
+  - Open question: "Draws on both named readings" scored met although the readings could not be checked. Acceptable (the criterion is about using them), but worth watching.
+- E2, Office Hours practice review against "Analyze the Fictional Riverton Eviction Dataset" ($0.098, 14 s):
+  - Says first that the file is a different assignment, lists the missing spreadsheet and memo as "missing", and marks all four criteria "not assessed".
+  - Every row and name it cites exists in Exhibit A: rows 2 and 3 (name variants), row 5 (export note "appears to duplicate row 4"), row 6 ($2,400, possible typo), row 8 (blank rent), Pruitt Family Rentals. It correctly says there is no case number.
+  - The old feedback's invented "Row 14: 'Oakvale Props LLC'" and "case number, unit" do not appear.
+- Not run: E6 (repeat consistency), to stay within the approved $0.10–0.30.
+
+## Build 34 step D part 2: capped real-AI run (test Worker, 26 Nov 2026, approved, $0.225)
+- Test Worker redeployed with `/fetch-pdf` (still v19). It downloaded the 2.2 MB FATF legal-professionals guidance PDF (no AI cost).
+- "Rewrite quiz from readings" on the 3 modules of the AML test course:
+  - Module 1, $0.108: written from 3 readings (2 PDFs read in the browser), 4 questions.
+  - Module 2, $0.095: written from 3 readings (all PDFs), 4 questions.
+  - Module 3, $0.022: still from the key ideas. Of its two readings, the HUDOC PDF was read, but the Law Society page needs JavaScript (shown under the quiz with that reason), and a quiz needs two readable readings.
+- Checked by hand against the PDF text:
+  - "failing to implement them is grounds for expulsion" (NYLS article): matches.
+  - legal professional privilege and "tranche two" (Macquarie submission): matches.
+  - third parties "cannot be relied upon to perform ongoing client due diligence", and senior-management approval for high-risk clients (Singapore checklist): matches.
+  - FATF's three risk categories and that litigation is not a specified activity: correct.
+- Wrong options are now believable (other plausible mechanisms, risk categories or duties), and every question names its source.
+- Found: a question gave Australian lawyers' "position" from a June 2023 submission as if current. Fixed in the prompt: dated law must carry its date ("As of 2023, ..."). Not re-run with the real AI.
+- Found: the cost per module with PDFs is $0.10–0.11 (about 25,000 input tokens), above the $0.03–0.09 estimate. The estimate shown in the app is now $0.02–0.12.
+- Found: "Rewrite" stayed offered for module 3, where it would cost money and change nothing. It is now hidden until a reading is added or changed.
+- build34d-pdf 32/32, build34d 47/47; regression build34a 14/14, build34b 24/24, build34c 29/29, progress 24/24, publish-model 36/36, publish-docs 36/36.
+
+## Build 34 step D part 2: PDF readings (fictional data, mock Worker, $0)
+- `tests/build34d-pdf.test.html`: 30 of 30 pass.
+  - `/fetch-pdf` (real Worker code): a real PDF passed on unchanged; octet-stream PDF accepted; web page, fake PDF, over 10 MB, private address, redirect to a private address, missing file and wrong access code refused; its own counter, not the AI requests; daily PDF limit enforced.
+  - PDF.js: sample text read; text capped; a scan with no text and a broken file not used, with reasons; contents pages recognised.
+  - Quiz: a PDF plus a web page gives a readings quiz that says one was read from PDF; the PDF text reached the prompt marked untrusted; the tighter rules are in the prompt; a PDF that is not the reading, a scan and a missing file are listed as not used, with reasons, shown under the quiz and saved; an older Worker without `/fetch-pdf` still works; a 5-reading request is accepted and capped near 60,000 characters.
+  - Rewrite: offered only for key-ideas quizzes with readings; cancelling the cost question sends nothing; rewriting keeps the pass, the reflection questions and the answers.
+- build34d 47/47 (estimate text updated to $0.06–$0.18 for two modules). Regression: build34a 14/14, build34b 24/24, build34c 29/29, progress 24/24, publish-model 36/36, publish-docs 36/36.
+- Seen in the app (test port): the AML test course's key-ideas quiz shows "Rewrite quiz from readings". Not clicked; no AI called.
+- Note for reading PDFs: PDF.js hands the file to its own background thread, so the same bytes cannot be read twice (each download is read once, so the app is unaffected).
+- Not tested yet: real PDFs from the open web (needs the capped test-Worker run), other browsers.
+
+## Build 34 step D: capped real-AI run (test Worker v19, localhost:8779, approved, about $1.12 of a $1.50 cap)
+- Production `sovereign-ai` was briefly deployed with v19 by mistake and rolled back to v18 before the run (/health showed 18). v19 is compatible with the live app, so nothing broke meanwhile.
+- New course "Anti-money laundering compliance for lawyers" (3 modules, typed text "FATF Recommendations"): outline, materials, foundational texts, assignment pages, exhibits and a quiz plus reflections for each module, $1.09 in total. I cancelled the capstone on purpose so the budget would cover the next run; the course is marked partial and says why. Quiz and reflections cost about $0.02 per module, less than the $0.03–0.07 estimate.
+- Foundational texts: the typed FATF Recommendations was found on fatf-gafi.org and checked (module 1); the FATF risk-based guidance for legal professionals (official PDF) was added in module 2. No Wikipedia, no invented links, none needing a link.
+- Quizzes: all three were written from the **key ideas**, not the readings, and said so. The content check ($0.004) shows why: 6 of the 8 readings are PDFs, which the Worker cannot read; one page needs JavaScript; one is a landing page. Checked by hand: every answer is correct and matches the module (for example FATF sets standards and national law binds; lawyers are covered only for specified activities; privilege limits reporting; tipping off). Several wrong options are too easy. Two questions in module 1 overlap.
+- Reflections: three per module, specific to the module's own assignments (for example the property purchase mapped to placement, layering and integration), one per stage. Assignment summaries read well.
+- "Add quiz and reflections" on the older fictional journalism course: the cost was shown and confirmed first. Module 1 got a key-ideas quiz (4 questions, correct) and 3 reflections. Module 2 (no key ideas, no readings) was refused with no AI cost and named in the message.
+- Found and fixed after the run: an older module's written reflection was hidden once three questions were added (still saved); it now shows read-only as "Your earlier reflection". The "Not added" message had a doubled full stop and now says what to add. build34d now 47/47; build34c 29/29.
+- Open: quizzes are written from the readings only when readings are web pages. See the ROADMAP note on reading PDFs.
+
+## Build 34 step D (fictional data, mock Worker, browser pane, $0)
+- `tests/build34d.test.html`: 46 of 46 pass. Real Worker v19 code with canned AI: quiz from readable readings only (a page without the reading's title words and a dead link skipped with reasons); invalid questions dropped in code; each question names its reading; right answer survives shuffling; reading text sent marked untrusted; key-ideas fallback says so; refused with neither; too few valid questions saves no quiz; v18 Worker gives a clear "newer AI service" error; three reflection questions; cost recorded; rewriting keeps a pass and written answers. Foundational: official page checked and put first; an unsearched URL and Wikipedia become "link needed"; a page for a different text is refused; no duplicates; saved; badges shown; editing the link removes the label. Typed texts always included, first, no duplicates; modules 1 to 3 only, 3 each. Saved fields: quiz validation, reflection-question migration (once, never for edited modules), summaries, brief texts. Screens: quiz with radios instead of the self-check; unanswered refused; failing try saved; Apply locked until passed; pass through the form opens Apply; pass never undone; attempts saved; three reflection boxes; module completes only with all three; older modules show one box with the AI's question; build form box; Modules page button with cost, cancel sends nothing, adds to each module and names one that cannot get a quiz, disappears when nothing is left. A whole mock course build: foundational texts in module 1 (one linked, the typed one "link needed"), three reflections per module, the questions moved out of the answer field. Storage untouched.
+- Regression: build34a 14/14, build34b 24/24, build34c 29/29, progress 24/24, publish-model 36/36, publish-docs 36/36.
+- Seen in the running app (fictional course, phone width): quiz numbers line up with questions (fixed: they lined up with the first option); 2 of 3 passed shows "Passed. Apply is open." (fixed: it said Apply would open later when study tasks were already done); explanations and sources shown; three reflection boxes with stage tags. No console errors from the app.
+- Not tested: real AI output quality (needs the capped test-Worker run in docs/BUILD34D-TEST-WORKER.md), publish-edge and publish-attach (stall with the pane hidden; no publication code changed), other browsers.
+
+## Build 34 step C (fictional data, browser pane, $0)
+- `tests/build34c.test.html`: 29 of 29 pass (what counts as submitted; Learn open; Apply locked until Learn is submitted, with link, then open; Demonstrate locked until Apply; quiz gate for step D; no quiz means nothing to pass; next module locked until the previous is complete, linking to the first missing item or the Wrap-up; opening on completion; capstone locked until every module is complete; submitted work never locked; no completion without the reflection or with an assignment open; complete never cleared; three reflections; save and load hooks; locked and open assignment pages; submitted work in a locked module keeps feedback and resubmit; locked capstone; lock line instead of the box in lists and Case Lab cards; done items can be unticked; Wrap-up has a reflection box and no checkbox; saving the reflection completes the module; empty reflection refused; Next up asks for the reflection; storage untouched).
+- Regression: build34a 14/14, build34b 24/24, progress 24/24, publish-model 36/36, publish-docs 36/36.
+- Seen in the running app (fictional course, phone width): a module 2 assignment showed "Locked: not open for submission yet" and "Finish Module 1 →"; writing the module 1 reflection showed "Module complete", saved it, and opened the module 2 assignment. No console errors.
+- Not re-run: publish-edge and publish-attach (they stall with the browser pane hidden; step C changed no publication code). Not checked: real courses (the locks will apply to them on first open), other browsers.
+
+## Build 34 step B (fictional data, browser pane, $0)
+- `tests/build34b.test.html`: 24 of 24 pass (card shows only Why it fits and AI-suggested; Source details closed by default and holding every check; saved checks unchanged; open state remembered; placeholder and plain readings; card keeps number, title link, author line and To read; bullets from "- " lines; sentence split that respects abbreviations and quotes; Learn room list with saved text unchanged; one sentence stays a paragraph; four distinct stage icons with words; stage rail icons; Wrap-up comet; first-sentence summary, short-first-sentence case, AI summary preferred, long-sentence cut, fiction label skipped, Assignments list shows the summary with the brief unchanged, no brief no note; storage untouched).
+- Regression: build34a 14/14, progress 24/24, publish-model 36/36, publish-docs 36/36.
+- Seen in the running app (fictional course, phone width): stage rail with moon, star, sun and comet; calmer Reading Room card and opened Source details; Key ideas as bullets; no console errors.
+- Not re-run: publish-edge and publish-attach (both stall with the browser pane hidden; step B changed no publication code). Not checked: other browsers; real courses.
+
+## Build 34 step A (fictional data, browser pane, $0)
+- `tests/build34a.test.html`: 14 of 14 pass (service-worker cache filter and name; capstone row in the Graded record, count, ungraded and no-capstone cases; capstone weight input, recalculation at 30%, refusal above 50, weight 0; "ready" module state and Dashboard wording; storage untouched).
+- Regression: progress 24/24, publish-model 36/36, publish-docs 36/36, publish-edge 11/11.
+- Not re-run: publish-attach (it stalled with the browser pane hidden; step A changed no attachment code). Not checked: the new controls on a phone.

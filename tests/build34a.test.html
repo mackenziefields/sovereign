@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Build 34 step A tests</title>
+<!-- Run in a browser from a local server: /tests/build34a.test.html . Fictional data; S.save is stubbed; nothing is stored. -->
+<style>body{font:14px/1.5 system-ui;margin:20px}.pass{color:#0a6b2d}.fail{color:#b3261e;font-weight:700}pre{white-space:pre-wrap}</style></head>
+<body><h1>Build 34 step A tests</h1><pre id="out">running…</pre><div id="mount" hidden></div><div id="toast" hidden></div>
+<script src="../js/config.js"></script><script src="../js/exhibits.js"></script><script src="../js/store.js"></script><script src="../js/components.js"></script><script src="../js/studio.js"></script><script src="../js/academic.js"></script><script src="../js/views-dash.js"></script><script src="fixtures.js"></script>
+<script>
+(async function () {
+  const before = localStorage.getItem('sovereign.v3');
+  const S = window.Sovereign, results = [];
+  S.save = () => {}; S.render = () => {};
+  if (!S.href) S.href = (c, k, id) => '#/' + c.id + (k ? '/' + k : '') + (id ? '/' + id : '');
+  if (!S.vc) S.vc = { num: (v) => (v === '' ? null : Number(v)) };
+  if (!S.finalFeedbackOnly) S.finalFeedbackOnly = () => null;
+  const t = async (name, fn) => { try { const r = await fn(); results.push([name, r === true || r === undefined, r === true || r === undefined ? '' : String(r)]); } catch (e) { results.push([name, false, 'threw: ' + e.message]); } };
+  const fx = (o) => S.fixtureCourse('editorial', o);
+  const mount = (n) => { const d = document.getElementById('mount'); d.textContent = ''; d.appendChild(n); return d; };
+
+  /* A1: service worker only clears its own caches */
+  await t('sw.js deletes only sovereign-v3-* caches, never another app\'s', async () => { const s = await (await fetch('../sw.js', { cache: 'reload' })).text(); return (/k\.startsWith\('sovereign-v3-'\) && k !== CACHE/.test(s) && !/keys\.filter\(\(k\) => k !== CACHE\)/.test(s)) || 'filter not found'; });
+  await t('sw.js cache name matches the build number', async () => { const s = await (await fetch('../sw.js', { cache: 'reload' })).text(); return s.includes("'sovereign-v3-" + S.BUILD + "'") || 'mismatch'; });
+
+  /* A2: capstone in the Portfolio graded record */
+  await t('graded capstone appears last in the Graded record, labelled Capstone', () => { const c = fx(); const d = mount(S.academic.portfolio(c)); const tb = [...d.querySelectorAll('table.ac-record tbody tr')]; const last = tb[tb.length - 1]; return (last && last.classList.contains('gr-cap') && /Capstone/.test(last.textContent) && last.textContent.includes(c.capstone.assignments[0].title)) || 'rows ' + tb.length; });
+  await t('the Graded record count includes the capstone', () => { const c = fx(); const d = mount(S.academic.portfolio(c)); const n = d.querySelectorAll('table.ac-record tbody tr').length; const mods = c.modules.flatMap((m) => m.assignments).filter((a) => a.points > 0 && a.score != null).length; return n === mods + 1 || n + ' vs ' + (mods + 1); });
+  await t('an ungraded capstone is not in the Graded record', () => { const c = fx(); const a = c.capstone.assignments[0]; a.score = null; a.work = null; const d = mount(S.academic.portfolio(c)); return !d.querySelector('tr.gr-cap'); });
+  await t('a course without a capstone has no capstone row', () => { const d = mount(S.academic.portfolio(fx({ capstone: false }))); return !d.querySelector('tr.gr-cap'); });
+
+  /* A3: editable capstone weight */
+  const grades = (c) => mount(S.academic.grades(c));
+  await t('Grades shows a capstone weight input set to the saved weight', () => { const c = fx(); const i = grades(c).querySelector('.gr-weight input'); return (i && i.value === '20' && i.min === '0' && i.max === '50') || 'input ' + (i && i.value); });
+  await t('changing the weight to 30 recalculates the course grade', () => { const c = fx(); const d = grades(c); const i = d.querySelector('.gr-weight input'); i.value = '30'; i.dispatchEvent(new Event('change')); const g = S.courseGrade(c); const exp = Math.round((0.7 * g.module.pct + 0.3 * g.capstone.pct) * 10) / 10; return (c.capstone.weight === 30 && g.weight === 30 && g.pct === exp) || 'weight ' + c.capstone.weight + ' pct ' + g.pct + ' exp ' + exp; });
+  await t('a weight above 50 is refused and nothing changes', () => { const c = fx(); const d = grades(c); const i = d.querySelector('.gr-weight input'); i.value = '80'; i.dispatchEvent(new Event('change')); return c.capstone.weight === 20 || 'saved ' + c.capstone.weight; });
+  await t('weight 0: the grade is the module average and the input stays available', () => { const c = fx(); c.capstone.weight = 0; const d = grades(c); const g = S.courseGrade(c); return (d.querySelector('.gr-weight input') && g.pct === S.grade(c).pct && /not counted/i.test(d.textContent)) || 'pct ' + g.pct; });
+  await t('no capstone: no weight input', () => !grades(fx({ capstone: false })).querySelector('.gr-weight'));
+
+  /* A4: Dashboard "ready to finish" */
+  await t('a module with every item done but not complete is "ready", not "progress"', () => { const c = fx({ capstone: false }); const m = c.modules[0]; m.complete = false; m.readings.forEach((r) => { r.done = true; }); m.assignments.forEach((a) => { a.done = true; }); return S.progressOf(c).mods[0].state === 'ready'; });
+  await t('the Dashboard shows "Ready to finish" and never "In progress" at 100%', () => { const c = fx({ capstone: false }); c.modules.forEach((m) => { m.complete = false; m.readings.forEach((r) => { r.done = true; }); m.assignments.forEach((a) => { a.done = true; }); }); const keep = S.state; S.state = Object.assign({}, keep, { courses: [c], name: '' }); try { const d = mount(S.views.dashboard()); const segs = [...d.querySelectorAll('.seg')]; return (segs.every((x) => x.classList.contains('ready')) && /Ready to finish/.test(d.innerHTML) && /All done/.test(d.textContent)) || 'segs ' + segs.map((x) => x.className).join(','); } finally { S.state = keep; } });
+
+  await t('localStorage is unchanged by these tests', () => localStorage.getItem('sovereign.v3') === before);
+  const bad = results.filter((r) => !r[1]);
+  document.getElementById('out').innerHTML = results.map((r) => '<span class="' + (r[1] ? 'pass' : 'fail') + '">' + (r[1] ? 'PASS' : 'FAIL') + '</span> ' + r[0] + (r[2] ? '\n      ' + r[2] : '')).join('\n');
+  document.title = 'RESULT ' + (results.length - bad.length) + '/' + results.length;
+})();
+</script></body></html>

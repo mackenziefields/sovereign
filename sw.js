@@ -1,7 +1,7 @@
 /* sovereign. — service worker: caches the app files so it opens offline.
    Your curriculum data lives in localStorage, not here.
    When you change any app file, bump CACHE so installed copies pick up the update. */
-const CACHE = 'sovereign-v3-33';
+const CACHE = 'sovereign-v3-34';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/styles.css', 'css/courses.css', 'css/ai.css', 'css/design.css', 'css/themes.css', 'css/studio.css', 'css/workbench.css', 'css/nav.css', 'css/academic.css', 'css/refresh.css', 'css/review.css', 'css/exhibits.css', 'css/nav-overlay.css', 'css/publish.css',
   'js/config.js', 'js/exhibits.js', 'js/store.js', 'js/components.js', 'js/exhibits-view.js', 'js/ai-client.js', 'js/files.js', 'js/dataset-import.js', 'js/mydata.js', 'js/capstone-ui.js', 'js/publish-model.js', 'js/publish.js', 'js/publish-attach.js', 'js/publish-docs.js', 'js/views-work.js', 'js/review-studio.js', 'js/views-ai.js', 'js/views-course.js', 'js/studio.js', 'js/syllabus.js', 'js/workbench.js', 'js/academic.js', 'js/views-dash.js', 'js/app.js',
@@ -18,7 +18,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('sovereign-v3-') && k !== CACHE).map((k) => caches.delete(k)))) // only this app's old caches: other apps on this address (the AI-off copy) keep theirs
       .then(() => self.clients.claim()));
 });
 

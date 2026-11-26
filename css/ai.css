@@ -46,3 +46,14 @@
 .steps-list { padding-left: 1.3rem; display: grid; gap: .4rem; }
 .apage .work-panel > summary { font-size: .95rem; }
 @media (max-width: 480px) { .ameta-i { flex-direction: column; gap: 0; } .ameta-k { flex: none; } }
+
+/* Build 34: calmer Reading Room cards. Checks sit behind a closed "Source details" toggle. */
+.ai-meta .src-tags { display: flex; flex-wrap: wrap; gap: .3rem .4rem; }
+.ai-meta .src-details { flex-basis: 100%; margin-top: .15rem; }
+.src-details > summary { cursor: pointer; font-size: .78rem; color: var(--muted, #666); min-height: 32px; display: inline-flex; align-items: center; }
+.src-details[open] > summary { margin-bottom: .3rem; }
+.src-details .ai-line { margin: .2rem 0 0; }
+.src-details > summary { list-style: none; text-decoration: underline; text-underline-offset: 2px; }
+.src-details > summary::-webkit-details-marker { display: none; }
+.src-details > summary::before { content: "▸"; margin-right: .35rem; text-decoration: none; display: inline-block; }
+.src-details[open] > summary::before { content: "▾"; }

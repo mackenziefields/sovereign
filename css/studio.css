@@ -29,12 +29,9 @@
 .rs:focus-visible { outline: 3px solid var(--cobalt); outline-offset: -3px; }
 .rs[aria-current="page"] { color: var(--ink); border-bottom-color: var(--st-c, var(--ink)); background: var(--card); }
 .rs-learn { --st-c: var(--st-learn); } .rs-apply { --st-c: var(--st-apply); } .rs-demonstrate { --st-c: var(--st-demonstrate); } .rs-wrap { --st-c: var(--muted); }
-.rs-mark { width: .8rem; height: .8rem; flex: none; margin-top: .3rem; border: 2px solid var(--st-c); }
-.rs-learn .rs-mark { border-radius: 50%; }
-.rs-demonstrate .rs-mark { border: 0; background: var(--st-c); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-.rs-wrap .rs-mark { border-radius: 0; transform: rotate(45deg); width: .65rem; height: .65rem; margin-top: .4rem; }
-.rs.is-full .rs-mark { background: var(--st-c); }
-.rs.is-full.rs-demonstrate .rs-mark { background: var(--st-c); }
+.rs-mark { flex: none; margin-top: .1rem; color: var(--st-c); display: inline-flex; } /* build 34: moon, star, sun, comet line icons */
+.rs-mark svg { display: block; }
+.rs.is-full .rs-mark svg { fill: currentColor; fill-opacity: .25; }
 .rs-text { display: grid; gap: .1rem; min-width: 0; }
 .rs-name { font-weight: 700; font-size: .95rem; color: var(--ink); }
 .rs-room { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; }
@@ -139,8 +136,7 @@
 .studio[data-theme="modernist"] .room-title { font-family: "Inter Tight", "Helvetica Neue", Arial, sans-serif; font-weight: 800; letter-spacing: -.04em; }
 .studio[data-theme="modernist"] .rs[aria-current="page"] { background: var(--ink); color: var(--card); border-bottom-color: var(--ink); }
 .studio[data-theme="modernist"] .rs[aria-current="page"] .rs-name, .studio[data-theme="modernist"] .rs[aria-current="page"] .rs-count { color: var(--card); }
-.studio[data-theme="modernist"] .rs[aria-current="page"] .rs-mark { border-color: var(--card); }
-.studio[data-theme="modernist"] .rs[aria-current="page"].rs-demonstrate .rs-mark { background: var(--card); }
+.studio[data-theme="modernist"] .rs[aria-current="page"] .rs-mark { color: var(--card); }
 .studio[data-theme="modernist"] .rcard, .studio[data-theme="modernist"] .case { border-width: 2px; border-color: var(--ink); }
 .studio[data-theme="modernist"] .case { border-left-width: 12px; border-left-color: var(--st-apply); }
 .studio[data-theme="modernist"] .case-title, .studio[data-theme="modernist"] .pj-title, .studio[data-theme="modernist"] .rc-title { font-family: "Inter Tight", "Helvetica Neue", Arial, sans-serif; font-weight: 700; letter-spacing: -.02em; }
@@ -196,8 +192,7 @@
 .studio[data-theme="institution"] .rs-room { font-family: "Cormorant Garamond", Garamond, Georgia, serif; font-style: italic; text-transform: none; letter-spacing: 0; font-size: .95rem; }
 .studio[data-theme="institution"] .rs[aria-current="page"] { background: #073e35; border-bottom-color: #9fb6cb; }
 .studio[data-theme="institution"] .rs[aria-current="page"] .rs-name, .studio[data-theme="institution"] .rs[aria-current="page"] .rs-count, .studio[data-theme="institution"] .rs[aria-current="page"] .rs-room { color: #f5f6f7; }
-.studio[data-theme="institution"] .rs[aria-current="page"] .rs-mark { border-color: #f5f6f7; }
-.studio[data-theme="institution"] .rs[aria-current="page"].rs-demonstrate .rs-mark { background: #f5f6f7; }
+.studio[data-theme="institution"] .rs[aria-current="page"] .rs-mark { color: #f5f6f7; }
 .studio[data-theme="institution"] .rcard, .studio[data-theme="institution"] .case, .studio[data-theme="institution"] .project { border: 1px solid #073e35; outline: 1px solid #9fb6cb; outline-offset: -5px; }
 .studio[data-theme="institution"] .rc-plate { background: #073e35; }
 .studio[data-theme="institution"] .rc-no, .studio[data-theme="institution"] .case-no b { font-family: "Cinzel", Georgia, serif; }

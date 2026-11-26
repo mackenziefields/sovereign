@@ -17,9 +17,9 @@
       h('h1', {}, 'Learn it. Apply it. Prove it.'),
       h('p', { class: 'lede' }, 'Sovereign turns books, articles, and courses into practical skills and tangible work you can point to. Run your own courses, practice what you learn, and finish each with something real.'),
       h('div', { class: 'trio' },
-        h('div', {}, h('b', {}, 'Learn'), h('p', {}, 'Gather readings, videos, and links into modules.')),
-        h('div', {}, h('b', {}, 'Apply'), h('p', {}, 'Complete practical assignments that make you use it.')),
-        h('div', {}, h('b', {}, 'Demonstrate'), h('p', {}, 'Document a final project as proof of what you can do.'))),
+        h('div', {}, h('b', {}, S.stageIcon('learn'), 'Learn'), h('p', {}, 'Gather readings, videos, and links into modules.')),
+        h('div', {}, h('b', {}, S.stageIcon('apply'), 'Apply'), h('p', {}, 'Complete practical assignments that make you use it.')),
+        h('div', {}, h('b', {}, S.stageIcon('demonstrate'), 'Demonstrate'), h('p', {}, 'Document a final project as proof of what you can do.'))),
       ui.dataMsg ? banner(ui.dataMsg.text, ui.dataMsg.type) : null,
       h('div', { class: 'choices' },
         h('div', { class: 'choice' },
@@ -51,10 +51,11 @@
     if (!list.length) return h('p', { class: 'empty' }, S.allAssignments().length ? 'All caught up. Every assignment is done.' : 'No assignments yet. Add them inside a module.');
     return h('div', {},
       h('ul', { class: 'items todo' }, shown.map(({ c, m, a }) => h('li', { class: 'item' },
-        checkbox(a.done, 'Mark completed: ' + a.title, (v) => { a.done = v; commit(); }),
+        S.lockOf(c, a) ? h('span', { class: 'check-spacer', 'aria-hidden': 'true' }) : S.doneBox(c, a, 'Mark completed: ' + a.title),
         h('div', { class: 'item-body' },
           h('div', { class: 'item-title' }, h('a', { href: S.href(c, 'assignments', a.id) }, a.title)),
-          h('div', { class: 'item-meta' }, h('span', { class: 'code' }, c.code), dueLabel(a)))))),
+          h('div', { class: 'item-meta' }, h('span', { class: 'code' }, c.code), dueLabel(a)),
+          S.lockNote(S.lockOf(c, a), true))))),
       list.length > shown.length ? h('p', { class: 'small muted' }, '+ ' + (list.length - shown.length) + ' more. See each course’s Assignments page.') : null);
   }
 
@@ -97,7 +98,7 @@
   }
 
   /* ---------- learning progress (replaces the module library) ---------- */
-  const STATE_LABEL = { complete: 'Complete', progress: 'In progress', todo: 'Not started' };
+  const STATE_LABEL = { complete: 'Complete', ready: 'Ready to finish', progress: 'In progress', todo: 'Not started' };
   const WORK_LABEL = { todo: 'Not started', submitted: 'Submitted', feedback: 'Feedback ready', done: 'Complete', incomplete: 'Not finished' };
   const pctText = (g) => (g.pct == null ? 'Not graded yet' : g.pct + '% ' + S.letter(g.pct));
   function gradeNote(g) {
@@ -131,7 +132,7 @@
             : WORK_LABEL[cap.key] + (cap.graded ? ' · ' + cap.score + ' / ' + cap.points + ' (' + cap.pct + '%)' : '') + (cap.weight ? ' · counts ' + cap.weight + '%' : '')),
           cap.a ? h('a', { href: S.href(c, 'assignments', cap.a.id) }, cap.key === 'todo' ? 'Start the capstone' : 'Open the capstone') : null) : null,
         p.modsTotal ? h('ul', { class: 'lib' }, p.mods.map((x) => h('li', {}, h('a', { href: S.href(c, 'modules', x.m.id) },
-          h('span', { class: 'code' }, STATE_LABEL[x.state]), h('span', {}, h('b', {}, x.m.title)), h('span', { class: 'mod-pct' }, x.m.complete ? 'Complete' : x.st.pct + '%'))))) : null));
+          h('span', { class: 'code' }, STATE_LABEL[x.state]), h('span', {}, h('b', {}, x.m.title)), h('span', { class: 'mod-pct' }, x.m.complete ? 'Complete' : x.state === 'ready' ? 'All done' : x.st.pct + '%'))))) : null));
     return h('li', {}, d);
   }
   function progressSection() {

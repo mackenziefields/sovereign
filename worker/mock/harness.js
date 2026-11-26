@@ -42,6 +42,7 @@
       selfCheck: ['In your own words, what is the main idea of "' + title + '"?', 'What would you do differently now?'],
       reflection: 'What changed in how you think about starting a business after this module?',
     })),
+    foundational: [{ title: 'Mock Justice Manual', creator: 'Mock Agency', module: 1, why: 'The rules the field works from.', search: 'Mock Justice Manual official' }],
     finalProject: { title: 'One-page business plan and first customer test', description: 'Produce a one-page plan for a small business idea and report the result of one real customer test.', criteria: ['Names a specific customer and problem', 'Shows evidence from at least five conversations', 'Includes a simple cost and price estimate', 'States the next three actions'] },
   });
 
@@ -66,12 +67,24 @@
     'pdf.mock-site.org': { status: 200, title: '', ctype: 'application/pdf', body: '%PDF-1.4 binary' },
     'login.mock-site.org': { status: 403, title: '' },
     'jsonly.mock-site.org': { status: 200, title: 'App', body: 'Loading...' },
+    // Build 34 step D (v19) reading pages for the quiz, and an official page for a foundational text
+    'read1.mock-uni.edu': { status: 200, title: 'Customer Discovery Basics', body: 'Customer Discovery Basics by C. Teacher. ' + 'Talk to at least five customers before you build anything, and ask about their last attempt to solve the problem. '.repeat(8) },
+    'read2.mock-uni.edu': { status: 200, title: 'Pricing a First Product', body: 'Pricing a First Product by P. Seller. ' + 'Start from what the customer pays today for the problem, not from your costs. '.repeat(10) },
+    'read3.mock-uni.edu': { status: 200, title: 'Cooking pasta', body: 'Boil the water and add salt to it before the pasta goes in. '.repeat(12) },
+    'law.mock-agency.gov': { status: 200, title: 'Mock Justice Manual | Mock Agency', body: 'Mock Justice Manual. ' + 'Official guidance for prosecutors. '.repeat(20) },
+    // Build 34 step D part 2: PDF readings fetched through /fetch-pdf (real sample PDF from docs/pdf-samples, a text-less "scan", a fake, an oversized one)
+    'pdf1.mock-uni.edu': { status: 200, file: 'docs/pdf-samples/sample-institution.pdf', ctype: 'application/pdf' },
+    'octet.mock-uni.edu': { status: 200, file: 'docs/pdf-samples/sample-institution.pdf', ctype: 'application/octet-stream' },
+    'scan.mock-uni.edu': { status: 200, ctype: 'application/pdf', body: '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n' },
+    'fakepdf.mock-uni.edu': { status: 200, ctype: 'application/pdf', body: 'MZ this is not a pdf at all '.repeat(40) },
+    'huge.mock-uni.edu': { status: 200, ctype: 'application/pdf', huge: 11 * 1024 * 1024 },
+    'hop.mock-uni.edu': { redirect: 'https://sneaky.mock-site.org/file.pdf' },
   };
 
   function install(o) {
     o = o || {};
     return (async () => {
-      const code = await (await realFetch('worker/worker.js')).text();
+      const code = await (await realFetch(o.workerUrl || 'worker/worker.js')).text(); // o.workerUrl lets a page in tests/ load it
       const internals = new Function(code.replace('export default {', 'const __worker = {') +
         '\nreturn { worker: __worker, checkUrlShape, isPrivateIPv4, isPrivateIPv6, verifyUrl, sanitizeOutline, titleSimilar, parseJson, costOf, sourceType, urlKey, DEFAULTS, safeEqual, hostIsPublic, processReview, readReviewContext, buildExhibits, exhLimits };')();
       const store = new Map();
@@ -86,6 +99,30 @@
         const b = JSON.parse(req.body);
         calls.anthropic.push(b);
         if (o.upstreamStatus) return new Response(JSON.stringify({ error: { message: 'mock failure' } }), { status: o.upstreamStatus });
+        if (b.tools && /Foundational texts to find/.test(b.messages[0].content)) { // /foundational (v19, canned): text 0 found on the official page; text 1 given a URL that never appeared in a search (must become "link needed")
+          return json({ content: [{ type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } },
+            { type: 'web_search_tool_result', tool_use_id: 's1', content: [{ type: 'web_search_result', url: 'https://law.mock-agency.gov/manual', title: 'Mock Justice Manual | Mock Agency' }, { type: 'web_search_result', url: 'https://en.wikipedia.org/wiki/Mock_Manual', title: 'Mock Manual - Wikipedia' }] },
+            { type: 'text', text: JSON.stringify({ picks: [...b.messages[0].content.matchAll(/^(\d+)\. ([^(|\n]+)/gm)].map((mt) => { const n = Number(mt[1]), ti = mt[2].trim();
+              if (/Mock Justice Manual/.test(ti)) return { n, title: 'Mock Justice Manual', url: 'https://law.mock-agency.gov/manual', creator: 'Mock Agency' };
+              if (/Wiki/.test(ti)) return { n, title: ti, url: 'https://en.wikipedia.org/wiki/Mock_Manual', creator: 'crowd' };
+              if (/Mislabelled/.test(ti)) return { n, title: 'Mock Justice Manual', url: 'https://law.mock-agency.gov/manual', creator: 'Mock Agency' }; // the right page for a DIFFERENT text
+              return { n, title: ti, url: 'https://invented.example-fake.com/rules', creator: 'Nobody' }; }) }) }],
+            stop_reason: 'end_turn', usage: { input_tokens: 2500, output_tokens: 300, server_tool_use: { web_search_requests: 2 } } });
+        }
+        if (!b.tools && /Write a multiple-choice quiz/.test(b.messages[0].content)) { // /study (v19, canned). o.study: 'good' (default), 'thin' (too few valid questions)
+          (globalThis.__studyPrompts = globalThis.__studyPrompts || []).push(b.messages[0].content);
+          const kid = /set "reading" to -1/.test(b.messages[0].content), R = (n) => (kid ? -1 : n);
+          const qs = [
+            { q: 'How many customers should you talk to first?', options: ['At least five', 'One', 'None', 'Fifty thousand'], answer: 0, explain: 'The reading says at least five.', reading: R(0) },
+            { q: 'Where does pricing start?', options: ['Your costs', 'What the customer pays today', 'A competitor', 'A guess'], answer: 1, explain: 'Start from what the customer already pays.', reading: R(1) },
+            { q: 'What should you ask about?', options: ['Their hobbies', 'Their budget only', 'Their last attempt to solve the problem', 'Their age'], answer: 2, explain: 'Ask about their last attempt.', reading: R(0) },
+            { q: 'BAD: three options', options: ['a', 'b', 'c'], answer: 0, explain: 'x', reading: R(0) },
+            { q: 'BAD: duplicate options', options: ['a', 'A', 'b', 'c'], answer: 0, explain: 'x', reading: R(1) },
+            { q: 'BAD: reading out of range', options: ['a', 'b', 'c', 'd'], answer: 0, explain: 'x', reading: kid ? 99 : 7 },
+          ];
+          const pick = o.study === 'thin' ? qs.slice(2) : qs;
+          return json({ content: [{ type: 'text', text: JSON.stringify({ questions: pick, reflections: { learn: 'What surprised you in the readings?', apply: 'How did you use the pricing idea in the exercise?', demonstrate: 'What does your plan show a reader about you?' } }) }], stop_reason: 'end_turn', usage: { input_tokens: 5000, output_tokens: 900 } });
+        }
         if (b.tools) { // resources
           const q = b.messages[0].content;
           const results = [
@@ -256,6 +293,8 @@
         const p = PAGES[x.hostname]; if (!p) return new Response('', { status: 404 });
         if (p.hang) return new Promise((_, rej) => { (init && init.signal) && init.signal.addEventListener('abort', () => rej(new Error('aborted'))); });
         if (p.redirect) return new Response(null, { status: 302, headers: { location: p.redirect } });
+        if (p.file) return realFetch(new URL(p.file, o.root || new URL('../', document.baseURI)).href).then((r) => r.arrayBuffer()).then((b) => new Response(b, { status: p.status, headers: { 'content-type': p.ctype } }));
+        if (p.huge) { const b = new Uint8Array(p.huge); b.set([37, 80, 68, 70, 45]); return new Response(b, { status: p.status, headers: { 'content-type': p.ctype } }); }
         if (p.ctype) return new Response(p.body || '', { status: p.status, headers: { 'content-type': p.ctype } });
         return new Response('<html><head><title>' + (p.title || '') + '</title></head><body>' + (p.body || 'x'.repeat(500)) + '</body></html>', { status: p.status, headers: { 'content-type': 'text/html' } });
       };
@@ -273,7 +312,7 @@
         if (/^https:\/\/[^/]*\.(org|gov|com|edu)\//.test(url) && !url.includes(location.host)) return page(url, init);
         return realFetch(input, init);
       };
-      return { env, calls, store, internals, settle: () => Promise.all(pending), restore: () => { window.fetch = realFetch; } };
+      return { env, calls, store, internals, settle: () => Promise.all(pending), restore: () => { window.fetch = realFetch; } }; // o.root: the project folder's URL (default: one level above the page, for tests/)
     })();
   }
   window.SovereignMock = { install };

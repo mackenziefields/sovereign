@@ -106,7 +106,7 @@
     const vc = X(), g = S.grade(c), n = numbers(c);
     const all = c.modules.flatMap((m) => m.assignments);
     const waiting = all.filter((a) => statusOf(a).key === 'wait');
-    const cg = S.courseGrade(c), cap = cg.hasCapstone && cg.weight > 0;
+    const cg = S.courseGrade(c), cap = cg.hasCapstone && cg.weight > 0, hasCap = cg.hasCapstone, capW = hasCap ? c.capstone.weight : 0;
     const rows = [];
     c.modules.forEach((m, i) => {
       if (!m.assignments.length) return;
@@ -123,9 +123,9 @@
           h('td', { 'data-label': 'Result', class: 'pct' }, pct != null ? h('span', {}, h('b', {}, pct + '%'), ' ' + S.letter(pct)) : '—')));
       });
     });
-    if (cap) { // the capstone's own group, below the modules (it is not part of any module)
+    if (hasCap) { // the capstone's own group, below the modules (it is not part of any module)
       const a = S.capstoneOf(c), pct = S.pctOf(a), st = statusOf(a);
-      rows.push(h('tr', { class: 'grp' }, h('th', { colspan: 5, scope: 'colgroup' }, h('span', {}, 'Course capstone'), h('span', { class: 'grp-pct' }, cg.weight + '% of the course grade'))));
+      rows.push(h('tr', { class: 'grp' }, h('th', { colspan: 5, scope: 'colgroup' }, h('span', {}, 'Course capstone'), h('span', { class: 'grp-pct' }, capW > 0 ? capW + '% of the course grade' : 'Not counted in the course grade'))));
       rows.push(h('tr', {},
         h('td', { 'data-label': 'Assignment', class: 'gr-name' }, h('a', { href: S.href(c, 'assignments', a.id + (st.key === 'wait' ? '/feedback' : '')) }, a.title), ' ', h('span', { class: 'gr-chip' }, 'Capstone')),
         h('td', { 'data-label': 'Status', class: 'gr-status' }, h('span', { class: 'gr-chip gr-' + st.key }, st.label), st.note ? h('small', { class: 'muted' }, st.note) : null),
@@ -133,8 +133,15 @@
         h('td', { 'data-label': 'Result', class: 'pct' }, pct != null ? h('span', {}, h('b', {}, pct + '%'), ' ' + S.letter(pct)) : '—')));
     }
     const gp = g ? g.pct : null;
-    const calc = !cap ? null : h('section', { class: 'gr-calc', 'aria-label': 'How your course grade is calculated' },
-      h('h3', { class: 'ac-h' }, 'How your course grade is calculated'),
+    // The capstone's share of the course grade: 0 to 50%. Changing it recalculates the grade everywhere (Grades, Dashboard, PDFs).
+    const weightIn = !hasCap ? null : h('label', { class: 'gr-weight no-print' }, h('span', {}, 'Capstone weight'),
+      h('input', { type: 'number', min: '0', max: '50', step: '1', inputmode: 'numeric', value: String(capW), 'aria-describedby': 'gr-weight-help',
+        onchange: (e) => { const v = Number(e.target.value); if (!Number.isFinite(v) || v < 0 || v > 50) { toast('Choose a weight from 0 to 50%.'); e.target.value = String(capW); return; } c.capstone.weight = Math.round(v); commit(); } }), h('span', {}, '%'),
+      h('small', { id: 'gr-weight-help', class: 'muted' }, 'Share of the course grade from the capstone (0 to 50%). The rest comes from the module assignments. 0 means the capstone is not counted.'));
+    const calc = !hasCap ? null : !cap ? h('section', { class: 'gr-calc', 'aria-label': 'How your course grade is calculated' },
+      h('h3', { class: 'ac-h' }, 'How your course grade is calculated'), weightIn,
+      h('p', { class: 'small muted' }, 'The capstone is set to 0%, so your course grade is your module average.')) : h('section', { class: 'gr-calc', 'aria-label': 'How your course grade is calculated' },
+      h('h3', { class: 'ac-h' }, 'How your course grade is calculated'), weightIn,
       h('div', { class: 'table-wrap' }, h('table', { class: 'grades ac-table' },
         h('caption', { class: 'sr-only' }, 'Module average, capstone grade and the combined course grade'),
         h('thead', {}, h('tr', {}, ['Part', 'Weight', 'Result', 'Points'].map((x) => h('th', { scope: 'col' }, x)))),
@@ -197,6 +204,7 @@
       if (a.points > 0 && a.score != null) graded.push({ m, a });
       if (a.portfolio && a.work && a.work.final) pieces.push({ m, a });
     }));
+    { const ca = S.capstoneOf(c); if (ca && ca.points > 0 && ca.score != null) graded.push({ m: c.capstone, a: ca, cap: true }); } // the capstone is listed last, after the modules
     const finalProj = (c.work.status === 'completed' || c.work.description || c.work.reflection) ? c.work : null;
     const earned = c.credentials.filter((k) => k.status === 'earned'), open = c.credentials.filter((k) => k.status !== 'earned' && k.status !== 'not-applicable');
     const credRow = (k) => h('li', { class: 'item' }, h('div', { class: 'item-body' },
@@ -252,9 +260,9 @@
       sec('Graded record', plural(graded.length, 'assignment'),
         graded.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'grades ac-table ac-record' },
           h('thead', {}, h('tr', {}, ['Assignment', 'Stage', 'Score', 'Result'].map((x) => h('th', { scope: 'col' }, x)))),
-          h('tbody', {}, graded.map(({ m, a }) => { const p = S.pctOf(a), ai = !!(a.work && a.work.final && a.work.final.feedback); return h('tr', {},
+          h('tbody', {}, graded.map(({ m, a, cap }) => { const p = S.pctOf(a), ai = !!(a.work && a.work.final && a.work.final.feedback); return h('tr', cap ? { class: 'gr-cap' } : {},
             h('td', { 'data-label': 'Assignment' }, h('a', { href: S.href(c, 'assignments', a.id) }, a.title), ai ? h('small', { class: 'muted' }, ' · AI-reviewed') : null, a.work && a.work.final && a.work.final.late ? h('small', { class: 'muted' }, ' · late') : null),
-            h('td', { 'data-label': 'Stage' }, S.kindMark(S.stageOf(a))), h('td', { 'data-label': 'Score' }, a.score + ' / ' + a.points),
+            h('td', { 'data-label': 'Stage' }, cap ? h('span', { class: 'gr-chip' }, 'Capstone') : S.kindMark(S.stageOf(a))), h('td', { 'data-label': 'Score' }, a.score + ' / ' + a.points),
             h('td', { 'data-label': 'Result', class: 'pct' }, h('b', {}, p + '%'), ' ' + S.letter(p))); })))) : h('p', { class: 'empty' }, 'Assignments you have scored will appear here.')),
       sec('Certificates, licenses, and credentials', earned.length + ' earned',
         earned.length ? h('ul', { class: 'items' }, earned.map(credRow)) : h('p', { class: 'empty' }, 'Credentials you mark as earned will appear here.'),

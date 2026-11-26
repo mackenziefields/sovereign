@@ -330,9 +330,10 @@
     const canReview = a.points > 0;
     const form = (round) => inputForm(c, m, a, { key: a.id, dataScope: a.kind === 'demonstrate' && !a.realEvidence ? 'assignment' : '', label: round === 1 ? 'Get AI feedback' : 'Submit for final review', fileOnly, attach: round === 1, onSend: () => submit(c, m, a, round), prior: round === 2 });
     let submitPart, feedbackPart, state;
+    const lock = !w && !a.done ? S.lockOf(c, a) : null; // build 34: submitting follows the learning path; reading never does
     if (!w) {
       state = 'none';
-      submitPart = !canReview ? h('p', { class: 'small muted' }, 'This assignment has no points yet, so AI feedback is off. Add points (Edit) to turn on submissions, or mark it completed yourself.')
+      submitPart = lock ? [S.lockNote(lock), h('p', { class: 'small muted' }, 'You can read the brief' + (canReview ? ' and use office hours' : '') + ' now. Submitting opens when the work before it is done.')] : !canReview ? h('p', { class: 'small muted' }, 'This assignment has no points yet, so AI feedback is off. Add points (Edit) to turn on submissions, or mark it completed yourself.')
         : [
           h('p', { class: 'small muted' }, 'Submit once to get detailed feedback (without a grade). You then have ' + S.REVIEW_HOURS + ' hours to resubmit for your final grade. If you don’t, the first review becomes your grade.'),
           a.due ? h('p', { class: 'small muted' }, 'Due ' + S.fmtDate(a.due) + '. Late work is accepted and marked late.') : null,

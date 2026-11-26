@@ -273,11 +273,37 @@
       h('div', { class: 'item-actions' }, editBtn(k.id), removeBtn('credential', c.credentials, k))));
   }
 
+  // Build 34 step D: courses made before quizzes existed. Shows the estimated cost before anything runs; keeps answers already written.
+  let studyRun = null;
+  function addStudySection(c) {
+    if (!S.ai || !S.ai.studyTargets || !c.modules.length) return null;
+    const n = S.ai.studyTargets(c).length;
+    if (!n && !(studyRun && studyRun.id === c.id)) return null;
+    const est = S.ai.studyEstimate(c), money = (v) => '$' + v.toFixed(2), working = studyRun && studyRun.id === c.id && studyRun.busy;
+    return h('section', { class: 'msec add-study' },
+      h('div', { class: 'sec-head' }, h('h3', {}, 'Quizzes and reflection questions')),
+      working ? h('p', { class: 'small', role: 'status' }, 'Writing… ' + (studyRun.step || ''))
+        : studyRun && studyRun.id === c.id && studyRun.msg ? h('p', { class: 'small', role: 'status' }, studyRun.msg) : null,
+      n ? h('p', { class: 'small muted' }, plural(n, 'module') + (n === 1 ? ' has' : ' have') + ' no Learn quiz or reflection questions yet. The AI reads each module’s readings, including PDFs (or its key ideas when fewer than two can be read), and writes a 3 to 5 question quiz and three reflection questions. Estimated cost ' + money(est.low) + '–' + money(est.high) + ', counted against your daily AI budget. Once added, Apply opens only after the quiz is passed, and the module completes only when all three reflections are written.') : null,
+      n ? h('button', { class: 'btn ghost', type: 'button', disabled: !!working, onclick: async () => {
+        if (!S.ai.ready()) { toast('Add the AI service address and access code first (Data & Backup → AI).'); return; }
+        if (!confirm('Add a quiz and three reflection questions to ' + plural(n, 'module') + ' in “' + c.title + '”?\n\nEstimated cost: ' + money(est.low) + '–' + money(est.high) + '.\nReadings, assignments and anything you have written are not changed.')) return;
+        const ctl = new AbortController();
+        studyRun = { id: c.id, busy: true, step: '', msg: '', ctl }; S.render(false);
+        try {
+          const r = await S.ai.addStudy(c, { signal: ctl.signal, onStep: (t) => { studyRun.step = t; S.render(false); } });
+          studyRun.msg = 'Added to ' + r.done + ' of ' + plural(r.total, 'module') + '.' + (r.failed.length ? ' Not added: ' + r.failed.map((x) => x.replace(/[. ]+$/, '')).join('; ') + '.' + (r.failed.some((x) => /key ideas/.test(x)) ? ' Add key ideas or readable readings to that module, then try again.' : ' You can try again.') : '');
+        } catch (e) { studyRun.msg = (e.done ? 'Added to ' + plural(e.done, 'module') + ', then stopped: ' : '') + e.message; }
+        studyRun.busy = false; toast(studyRun.msg); S.render(false);
+      } }, working ? 'Writing…' : 'Add quiz and reflections') : null);
+  }
+
   function pageModules(c) {
     return h('div', {},
       pageHead('Modules'),
       moduleTiles(c, true),
       S.capstoneUi ? S.capstoneUi.section(c) : null,
+      addStudySection(c),
       h('details', { class: 'add', open: !c.modules.length }, h('summary', {}, 'New module'),
         h('form', { onsubmit: (e) => {
           e.preventDefault();
@@ -346,11 +372,12 @@
       a.points != null ? h('span', { class: 'due' }, a.score != null ? a.score + ' / ' + a.points + ' pts' + (pct != null ? ' · ' + pct + '%' : '') : a.points + ' pts') : null,
     ].filter(Boolean);
     return h('li', { class: 'item' + (a.done ? ' is-done' : '') },
-      checkbox(a.done, 'Mark completed: ' + a.title, (v) => { a.done = v; commit(); }),
+      S.lockOf(c, a) ? h('span', { class: 'check-spacer', 'aria-hidden': 'true' }) : S.doneBox(c, a, 'Mark completed: ' + a.title),
       h('div', { class: 'item-body' },
         h('div', { class: 'item-title' }, h('a', { href: href(c, 'assignments', a.id) }, a.title)),
         meta.length ? h('div', { class: 'item-meta' }, meta) : null,
-        a.description ? h('div', { class: 'item-note' }, a.description) : null,
+        S.summaryOf(a) ? h('div', { class: 'item-note' }, S.summaryOf(a)) : null,
+        S.lockNote(S.lockOf(c, a), true), // build 34: a short summary; the full brief is on the assignment's page
         a.work && a.work.final && a.work.final.feedback && a.work.final.late ? h('div', { class: 'item-meta' }, h('span', { class: 'badge warn' }, 'Late')) : null,
         o.actions ? h('div', { class: 'item-actions' }, editBtn(a.id), o.reorder ? moveBtns(m.assignments, a) : null, removeBtn('assignment', m.assignments, a)) : null));
   }
@@ -425,7 +452,7 @@
       ui.edit === k
         ? h('form', { onsubmit: (e) => { e.preventDefault(); m[key] = new FormData(e.target).get('text').trim(); m.edited = true; ui.edit = null; commit(); } },
             field(title, 'text', { value: m[key], multiline: true, rows: 6, hint }), h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), cancelBtn()))
-        : (m[key] ? h('p', { class: 'pre' }, m[key]) : empty(hint)));
+        : (m[key] ? (key === 'keyIdeas' ? S.ideasList(m[key]) : h('p', { class: 'pre' }, m[key])) : empty(hint)));
   }
 
   function extraSection(m, x) {
@@ -504,7 +531,7 @@
         const urlChanged = u !== r.url;
         r.title = f.get('title').trim(); r.url = u; r.note = f.get('note').trim();
         // Once a person changes the link (or fills in a placeholder), the AI's check and opinion no longer describe it.
-        if (r.source && (urlChanged || r.source === 'placeholder')) { ['source', 'kind', 'creator', 'access', 'sourceType', 'derivedFrom', 'derivedUrl', 'relevance', 'verification', 'contentCheck'].forEach((k) => delete r[k]); }
+        if (r.source && (urlChanged || r.source === 'placeholder')) { ['source', 'kind', 'creator', 'access', 'sourceType', 'derivedFrom', 'derivedUrl', 'relevance', 'verification', 'contentCheck', 'foundational', 'linkNeeded'].forEach((k) => delete r[k]); }
         ui.edit = null; commit();
       } },
         field('Title', 'title', { value: r.title, required: true }), field('Link (optional)', 'url', { value: r.url, placeholder: 'https://' }),

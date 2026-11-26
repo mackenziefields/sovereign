@@ -154,3 +154,9 @@
 .pf-head[data-theme] .btn.ghost { color: var(--t-fg); border-color: var(--t-fg); background: transparent; }
 .pf-head[data-theme] .btn.ghost:hover { background: var(--t-fg); color: var(--t-bg); }
 .pf-head[data-theme] .btn.ghost:focus-visible { outline: 3px solid var(--t-fg); outline-offset: 3px; }
+
+/* Build 34: capstone weight on the Grades page */
+.gr-weight { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin: .4rem 0 1rem; }
+.gr-weight > span:first-child { font-weight: 600; }
+.gr-weight input { width: 5rem; min-height: 44px; font: inherit; padding: .35rem .5rem; border: 1px solid var(--ink); background: var(--paper, #fff); color: var(--ink); }
+.gr-weight small { flex-basis: 100%; }

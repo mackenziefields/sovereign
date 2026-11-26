@@ -2,6 +2,55 @@
 
 Reconstructed from the repository history (`git log`). Dates are all 2026-11-24 for the build session unless noted. "Tested" is described in `TESTING.md`.
 
+## Build 34 · Step E: IJT 101 reviews re-tested (no code change)
+- The two saved IJT 101 reviews were re-run on the current reviewer with the real AI ($0.209). The wrong "fix the arithmetic" finding and the invented spreadsheet row from the old feedback no longer appear; a wrong-assignment upload is reported as missing work, not graded. Details in TESTING.
+
+## Build 34 · Step D part 2: quizzes from PDF readings (unreleased; test Worker only)
+- Quizzes can now be written from PDF readings. The Worker downloads the PDF (new `/fetch-pdf`: no AI, no cost) under the same safety rules as reading a page: public sites only, each redirect re-checked, blocked sites refused, a time limit, 10 MB at most. It passes the file on only if it really is a PDF (starts with `%PDF-`), so it is not a general proxy. The app reads the text with the PDF.js already bundled for the Review Studio (first 60 pages, contents pages dropped, up to 24,000 characters) and sends only the text with the quiz request. The PDF is never saved.
+- The Worker still checks that the text carries the reading's title words, and treats it as untrusted. Reading text per module is capped at about 60,000 characters in all (was 6,000 per reading).
+- PDF downloads have their own daily limit (`LIMIT_PDF_PER_IP_DAY`, 150), so they never use up the AI request limits.
+- Tighter quiz instructions: believable wrong options, no two questions on the same point, at least one question per reading, nothing about cover pages or publication details.
+- Under each quiz, "N readings not used" lists each one and why (needs JavaScript, a scan with no text, not this reading, over 10 MB…).
+- New "Rewrite quiz from readings" button on a quiz written from the key ideas. It shows the cost ($0.03–0.09) and asks first. A passed quiz stays passed, and the reflection questions and answers are not changed.
+- Estimated cost per module for a quiz is now $0.03–0.09 (more reading text). An older Worker without `/fetch-pdf` still works, with web pages only.
+- After the capped real run (PDF quizzes worked; $0.10–0.11 per module with PDFs): the estimate shown is now $0.02–0.12 per module; quizzes put a date on law described as of a date ("As of 2023, ..."); "Rewrite quiz from readings" is no longer offered when the last try showed the readings cannot be read, until a reading is added.
+- New `tests/build34d-pdf.test.html` (32 tests). The mock harness serves `docs/pdf-samples/sample-institution.pdf`.
+
+## Build 34 · Step D: quizzes, three reflections, foundational texts (unreleased; Worker v19 not deployed)
+- **Learn quiz.** Each module can have a 3 to 5 question multiple-choice quiz written from its Reading Room readings. The Worker opens each reading's page itself (same safety rules as the link check) and quizzes only pages that open and carry the reading's title words; with fewer than two, the quiz is written from the key ideas and says so. Every question is checked in code (four different options, one right answer, an explanation, a real reading) and names the reading it came from. The right answer's position is shuffled.
+- Pass mark 2 of 3, 3 of 4 or 3 of 5; unlimited tries; attempts, best score and last answers are saved; a pass is never undone. Results show the right answer and explanation for each question. Apply opens only after the quiz is passed. The old "Check your understanding" list shows only for modules without a quiz.
+- **Three reflections.** One question each for Learn, Apply and Demonstrate, each with its own box and "Save reflection". The module completes when all three are written. Modules without them keep one box, now labelled with the AI's original question.
+- Fix: AI-built courses stored the AI's reflection question in the answer field, so step C counted it as written. On first open, for AI modules never edited, the question moves to its own field and the answer starts empty. Modules you edited are left as they are.
+- **Foundational texts.** The course outline names 2 to 5 primary texts of the field (the official exam outline when an exam is named) for modules 1 to 3. The Worker searches for each one's official page and checks it, including that the page's title matches the text asked for; each is marked "Foundational" or "Foundational, link needed" (no link rather than a guessed one). New optional build-form box "Texts you know you need": those texts are always included, first.
+- **Assignment summaries**: new assignment pages get a short summary for lists.
+- **Existing courses**: the Modules page offers "Add quiz and reflections", showing the estimated cost (about $0.03–0.07 per module) and asking before anything runs. Readings, assignments and anything you wrote are unchanged. A module that cannot get a quiz is named.
+- Worker v19: new `/study` and `/foundational`; outline adds `foundational`; brief adds `texts`; assignment pages add `summary`. Needs deploying; until then the new buttons say a newer AI service is needed and everything else works.
+- After the capped real-AI run: an older module's written reflection now stays visible (read-only, "Your earlier reflection") once the three questions are added; the "Not added" message says what a module needs before it can get a quiz.
+- New `tests/build34d.test.html` (47 tests, mock Worker). The mock harness takes `workerUrl` so pages in tests/ can load it.
+
+## Build 34 · Step C: learning-path locks (unreleased)
+- Everything stays visible; only submitting is locked. Inside a module, Apply opens once every Learn assignment is submitted (and, from step D, the Learn quiz is passed); Demonstrate opens once the Apply work is submitted. A module's submissions open once the module before it is complete. The capstone opens once every module is complete.
+- "Submitted" means sent for review, saved as final, attached, or marked completed. Anything already submitted is never locked or undone, and resubmitting inside the 72 hours is unaffected. Office hours stay open.
+- A locked assignment shows "Locked", the reason and a link to the first thing missing (for example "Finish Module 1 →"), in place of the submit form. Lists and room cards show the same short lock line instead of a "mark completed" box; Status reads "Locked: not open for submission yet". Un-ticking a done item is always allowed.
+- Modules complete themselves once every assignment is submitted and the reflection is written (three reflections from step D). The "Mark this module complete" box is removed; the Wrap-up shows "Module complete" or what is left, with links. A module marked complete before this stays complete; complete is never cleared.
+- The reflection is now a text box you can write in straight away, with "Save reflection".
+- Existing courses: a module with everything submitted but no reflection is not complete, so the next module's unsubmitted work is locked until that reflection is written.
+- New `tests/build34c.test.html` (29 tests).
+
+## Build 34 · Step B: calmer screens (unreleased)
+- Reading Room cards show the number, title link, author and website, "Why it fits" and To read, with one tag: AI-suggested. The link and content checks, "By", "Page title" and "Checked by a program…" are still saved and sit behind a "Source details" toggle, closed by default (it stays open across re-renders once opened).
+- Key ideas show as a bulleted list: lines starting "- ", "* " or "• " become bullets; plain text is split into sentences (not at "e.g.", "U.S." or initials). Display only: the saved text is unchanged.
+- New stage icons, drawn in the app as line icons and always shown with the word: moon = Learn, star = Apply, sun = Demonstrate, comet = Wrap-up. Used in stage marks, the module stage rail, the Wrap-up room and the welcome page (replacing the circle, square, triangle and diamond).
+- The Assignments list (and the study-task lists in each room) shows a short summary instead of the full brief: an AI summary when one exists (step D), otherwise the brief's first sentence (or two, if the first is very short), cut at a word under 240 characters. The fiction label is skipped. The full brief stays on the assignment's own page.
+- New `tests/build34b.test.html` (24 tests).
+
+## Build 34 · Step A: safety and known gaps (unreleased)
+- The service worker now deletes only this app's own old caches (`sovereign-v3-*`). Before, a release would also have wiped the AI-off copy's offline cache, because both apps live on mackenziefields.github.io.
+- Portfolio: a graded capstone is listed last in the "Graded record" table, labelled Capstone.
+- Grades: the capstone's share of the course grade can be changed (0 to 50%, default 20%). The grade recalculates everywhere. 0 means the capstone is not counted; values over 50 are refused.
+- Dashboard: a module with every item done but not yet complete shows "Ready to finish" and "All done" instead of "In progress 100%".
+- New `tests/build34a.test.html` (14 tests). Proposal for the rest of build 34: `docs/BUILD34-PROPOSAL.md`.
+
 ## Build 33 · Phase 5: Dashboard Learning Progress
 - The Dashboard's "Module library" is replaced by "Learning progress": one row per course with a labelled module bar (complete / in progress / not started, by fill pattern and text, not colour alone), the current module with a link, assignment counts (complete, feedback ready, submitted, not started), and the course grade.
 - The course capstone shows as its own box: not started, submitted, feedback ready, complete with score, or "not finished". The grade shows "provisional" until the capstone is graded and never counts it as zero; "Not graded yet" instead of 0.

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Build 34 step C tests</title>
+<!-- Run in a browser from a local server: /tests/build34c.test.html . Fictional data; S.save is stubbed; nothing is stored. -->
+<style>body{font:14px/1.5 system-ui;margin:20px}.pass{color:#0a6b2d}.fail{color:#b3261e;font-weight:700}pre{white-space:pre-wrap}</style></head>
+<body><h1>Build 34 step C tests</h1><pre id="out">running…</pre><div id="mount" hidden></div><div id="toast" hidden></div>
+<script src="../js/config.js"></script><script src="../js/exhibits.js"></script><script src="../js/store.js"></script><script src="../js/components.js"></script><script src="../js/exhibits-view.js"></script><script src="../js/files.js"></script><script src="../js/dataset-import.js"></script><script src="../js/mydata.js"></script><script src="../js/capstone-ui.js"></script><script src="../js/publish-model.js"></script><script src="../js/publish.js"></script><script src="../js/publish-attach.js"></script><script src="../js/publish-docs.js"></script><script src="../js/ai-client.js"></script><script src="../js/views-ai.js"></script><script src="../js/views-work.js"></script><script src="../js/review-studio.js"></script><script src="../js/views-course.js"></script><script src="../js/studio.js"></script><script src="../js/syllabus.js"></script><script src="../js/workbench.js"></script><script src="../js/academic.js"></script><script src="../js/views-dash.js"></script><script src="fixtures.js"></script>
+<script>
+(async function () {
+  const before = localStorage.getItem('sovereign.v3');
+  const S = window.Sovereign, results = [];
+  let CUR = [];
+  S.save = () => { S.syncComplete(CUR); }; S.render = () => {}; // the real save also runs syncComplete before writing
+  if (!S.href) S.href = (c, k, id) => '#/course/' + c.id + (k ? '/' + k : '') + (id ? '/' + id : '');
+  const t = async (name, fn) => { try { const r = await fn(); results.push([name, r === true || r === undefined, r === true || r === undefined ? '' : String(r)]); } catch (e) { results.push([name, false, 'threw: ' + e.message]); } };
+  const mount = (n) => { const d = document.getElementById('mount'); d.textContent = ''; d.append(...[].concat(n).filter(Boolean)); return d; };
+  const A = (id, kind) => ({ id, title: 'Task ' + id, kind, points: 10, description: 'Do ' + id + '.' });
+  const course = () => {
+    const c = S.normalize({ app: 'sovereign', courses: [{ id: 'lk', title: 'Lock Test', code: 'LK 1', modules: [
+      { id: 'm1', title: 'One', assignments: [A('l1', 'learn'), A('a1', 'apply'), A('d1', 'demonstrate')] },
+      { id: 'm2', title: 'Two', assignments: [A('l2', 'learn'), A('a2', 'apply'), A('d2', 'demonstrate')] }] }] }).courses[0];
+    c.capstone = S.makeCapstone({ title: 'Cap', status: 'ready', weight: 20, assignments: [{ id: 'cap', title: 'Cap', points: 100, kind: 'demonstrate', capstone: true, description: 'Final.' }] });
+    CUR = [c]; return c;
+  };
+  const get = (c, id) => c.modules.flatMap((m) => m.assignments).concat(c.capstone ? c.capstone.assignments : []).find((a) => a.id === id);
+  const submit = (a) => { a.work = { phase: 'final', deadline: '', first: null, final: { text: 'x', at: new Date().toISOString(), feedback: null } }; a.done = true; };
+  const finishModule = (c, i) => { c.modules[i].assignments.forEach(submit); c.modules[i].reflection = 'I learned things.'; S.syncComplete([c]); };
+
+  /* rules inside a module */
+  await t('submitted means sent, saved as final, attached or marked completed', () => S.isSubmitted({ done: true }) && S.isSubmitted({ work: { phase: 'reviewed' } }) && !S.isSubmitted({}));
+  await t('Learn assignments in the first module are open', () => S.lockOf(course(), get(CUR[0], 'l1')) === null);
+  await t('Apply is locked until every Learn assignment is submitted, and links to it', () => { const c = course(), l = S.lockOf(c, get(c, 'a1')); return (l && /Learn assignment/.test(l.why) && l.href.endsWith('/assignments/l1')) || JSON.stringify(l); });
+  await t('Apply opens once Learn is submitted', () => { const c = course(); submit(get(c, 'l1')); return S.lockOf(c, get(c, 'a1')) === null; });
+  await t('Demonstrate is locked until Apply is submitted, then opens', () => { const c = course(); submit(get(c, 'l1')); const l = S.lockOf(c, get(c, 'd1')); submit(get(c, 'a1')); return (l && /Apply/.test(l.why) && l.href.endsWith('/assignments/a1') && S.lockOf(c, get(c, 'd1')) === null) || JSON.stringify(l); });
+  await t('a module quiz (step D) must be passed before Apply opens', () => { const c = course(), m = c.modules[0]; submit(get(c, 'l1')); m.quiz = { questions: [1, 2, 3], passed: false }; const l = S.lockOf(c, get(c, 'a1')); m.quiz.passed = true; return (l && /quiz/i.test(l.why) && l.href.endsWith('/m1/learn') && S.lockOf(c, get(c, 'a1')) === null) || JSON.stringify(l); });
+  await t('no quiz yet counts as nothing to pass', () => S.quizPassed({}) && S.quizPassed({ quiz: { questions: [] } }));
+
+  /* between modules, capstone */
+  await t('module 2 is locked until module 1 is complete, linking to what is missing', () => { const c = course(), l = S.lockOf(c, get(c, 'l2')); return (l && /Module 1/.test(l.why) && l.label === 'Finish Module 1' && l.href.endsWith('/assignments/l1')) || JSON.stringify(l); });
+  await t('with only the reflection missing, the link goes to the Wrap-up', () => { const c = course(); c.modules[0].assignments.forEach(submit); S.syncComplete([c]); const l = S.lockOf(c, get(c, 'l2')); return (l && l.href.endsWith('/modules/m1/wrap')) || JSON.stringify(l); });
+  await t('module 2 opens when module 1 completes itself', () => { const c = course(); finishModule(c, 0); return c.modules[0].complete === true && S.lockOf(c, get(c, 'l2')) === null; });
+  await t('the capstone is locked until every module is complete, then opens', () => { const c = course(); finishModule(c, 0); const l = S.lockOf(c, get(c, 'cap')); finishModule(c, 1); return (l && /capstone/i.test(l.why) && l.label === 'Finish Module 2' && S.lockOf(c, get(c, 'cap')) === null) || JSON.stringify(l); });
+  await t('anything already submitted is never locked', () => { const c = course(); const a = get(c, 'd2'); a.work = { phase: 'reviewed', first: { feedback: null }, final: null }; const cap = get(c, 'cap'); cap.done = true; return S.lockOf(c, a) === null && S.lockOf(c, cap) === null; });
+
+  /* self-completing modules */
+  await t('a module is not complete without its reflection', () => { const c = course(); c.modules[0].assignments.forEach(submit); S.syncComplete([c]); return c.modules[0].complete === false; });
+  await t('a module is not complete with an assignment unsubmitted', () => { const c = course(), m = c.modules[0]; m.reflection = 'x'; submit(get(c, 'l1')); submit(get(c, 'a1')); S.syncComplete([c]); return m.complete === false; });
+  await t('complete is never cleared: a module marked complete earlier stays complete', () => { const c = course(); c.modules[1].complete = true; S.syncComplete([c]); return c.modules[1].complete === true && S.lockOf(c, get(c, 'cap')) && /Module 1/.test(S.lockOf(c, get(c, 'cap')).why); });
+  await t('three reflections (step D) must all be answered', () => { const m = { reflections: [{ answer: 'a' }, { answer: '' }, { answer: 'c' }] }; const before = S.reflectionsDone(m); m.reflections[1].answer = 'b'; return !before && S.reflectionsDone(m); });
+  await t('saving calls syncComplete, and loading saves only when something changed', async () => { const s = await (await fetch('../js/store.js', { cache: 'reload' })).text(); return (/S\.save = function \(\) \{\s*if \(S\.syncComplete\) S\.syncComplete\(\);/.test(s) && /if \(old \|\| \(S\.syncComplete && S\.syncComplete\(\)\)\) S\.save\(\);/.test(s)) || 'hooks not found'; });
+
+  /* screens */
+  await t('a locked assignment page shows the reason and link instead of the submit form', () => { const c = course(), a = get(c, 'a1'); const d = mount(S.workParts(c, c.modules[0], a).submit); return (!!d.querySelector('.lock-note a[href$="/assignments/l1"]') && !d.querySelector('textarea, input[type=file], .submit-box') && /Locked/.test(d.textContent)) || d.textContent; });
+  await t('an open assignment page still shows the submit form', () => { const c = course(), a = get(c, 'l1'); const d = mount(S.workParts(c, c.modules[0], a).submit); return !!d.querySelector('.submit-box') && !d.querySelector('.lock-note'); });
+  await t('a submitted assignment in a locked module still shows its feedback and resubmit form', () => { const c = course(), a = get(c, 'a2'); a.work = { phase: 'reviewed', deadline: new Date(Date.now() + 3600e3).toISOString(), first: { text: 'x', at: new Date().toISOString(), feedback: { summary: 'ok', strengths: [], improvements: [], nextSteps: [], criteria: [], at: new Date().toISOString() } }, final: null }; const p = S.workParts(c, c.modules[1], a); const d = mount(p.submit); return (p.state === 'reviewed' && !d.querySelector('.lock-note')) || p.state; });
+  await t('a locked capstone page in the Workbench says why', () => { const c = course(), a = get(c, 'cap'); const d = mount(S.workParts(c, c.capstone, a).submit); return (/every module is complete/.test(d.textContent) && !!d.querySelector('.lock-note a')) || d.textContent; });
+  await t('the Assignments list shows a lock, not a "mark completed" box, for locked work', () => { const c = course(), d = mount(S.vc.assignmentItem(c, c.modules[0], get(c, 'a1'), {})); return (!d.querySelector('input[type=checkbox]') && !!d.querySelector('.lock-note.compact a')) || d.innerHTML.slice(0, 200); });
+  await t('a done assignment keeps its box so it can be unticked', () => { const c = course(), a = get(c, 'l1'); a.done = true; const d = mount(S.doneBox(c, a, 'x')); return !!d.querySelector('input[type=checkbox]:checked'); });
+  await t('Case Lab cards show the lock instead of "Mark done"', () => { const c = course(); const d = mount(S.studio.page(c, c.modules[0], 'apply')); const card = d.querySelector('.case'); return (card && card.querySelector('.lock-note') && !card.querySelector('input[type=checkbox]') && !/Mark done/.test(card.textContent)) || (card ? card.textContent : 'no card'); });
+  await t('Wrap-up: no "Mark this module complete" box; a reflection text box instead', () => { const c = course(); const d = mount(S.studio.page(c, c.modules[0], 'wrap')); return (!/Mark this module complete/.test(d.textContent) && d.querySelector('.reflect textarea') && /Not complete yet/.test(d.textContent) && !!d.querySelector('.complete-row .missing a[href$="/assignments/l1"]')) || d.textContent.slice(0, 300); });
+  await t('saving the reflection completes the module when everything else is submitted', () => { const c = course(), m = c.modules[0]; m.assignments.forEach(submit); const d = mount(S.studio.page(c, m, 'wrap')); const f = d.querySelector('.reflect form'); f.querySelector('textarea').value = 'What I learned.'; f.dispatchEvent(new Event('submit', { cancelable: true })); const after = mount(S.studio.page(c, m, 'wrap')); return (m.reflection === 'What I learned.' && m.complete === true && /Module complete/.test(after.textContent) && /Module complete/.test(document.getElementById('toast').textContent)) || 'complete ' + m.complete + ' toast ' + document.getElementById('toast').textContent; });
+  await t('an empty reflection is refused', () => { const c = course(), m = c.modules[0]; const d = mount(S.studio.page(c, m, 'wrap')); const f = d.querySelector('.reflect form'); f.querySelector('textarea').value = '   '; f.dispatchEvent(new Event('submit', { cancelable: true })); return m.reflection === ''; });
+  await t('Next up asks for the reflection when everything is submitted', () => { const c = course(), m = c.modules[0]; m.assignments.forEach(submit); const n = S.nextActivity(c, m); return (n && n.stage === 'wrap' && /reflection/.test(n.title)) || JSON.stringify(n); });
+
+  await t('localStorage is unchanged by these tests', () => localStorage.getItem('sovereign.v3') === before);
+  const bad = results.filter((r) => !r[1]);
+  document.getElementById('out').innerHTML = results.map((r) => '<span class="' + (r[1] ? 'pass' : 'fail') + '">' + (r[1] ? 'PASS' : 'FAIL') + '</span> ' + r[0] + (r[2] ? '\n      ' + r[2] : '')).join('\n');
+  document.title = 'RESULT ' + (results.length - bad.length) + '/' + results.length;
+})();
+</script></body></html>

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Build 34 step B tests</title>
+<!-- Run in a browser from a local server: /tests/build34b.test.html . Fictional data; S.save is stubbed; nothing is stored. -->
+<style>body{font:14px/1.5 system-ui;margin:20px}.pass{color:#0a6b2d}.fail{color:#b3261e;font-weight:700}pre{white-space:pre-wrap}</style></head>
+<body><h1>Build 34 step B tests</h1><pre id="out">running…</pre><div id="mount" hidden></div><div id="toast" hidden></div>
+<script src="../js/config.js"></script><script src="../js/exhibits.js"></script><script src="../js/store.js"></script><script src="../js/components.js"></script><script src="../js/exhibits-view.js"></script><script src="../js/files.js"></script><script src="../js/dataset-import.js"></script><script src="../js/mydata.js"></script><script src="../js/capstone-ui.js"></script><script src="../js/publish-model.js"></script><script src="../js/publish.js"></script><script src="../js/publish-attach.js"></script><script src="../js/publish-docs.js"></script><script src="../js/ai-client.js"></script><script src="../js/views-ai.js"></script><script src="../js/views-work.js"></script><script src="../js/review-studio.js"></script><script src="../js/views-course.js"></script><script src="../js/studio.js"></script><script src="../js/syllabus.js"></script><script src="../js/academic.js"></script><script src="../js/views-dash.js"></script><script src="fixtures.js"></script>
+<script>
+(async function () {
+  const before = localStorage.getItem('sovereign.v3');
+  const S = window.Sovereign, results = [];
+  S.save = () => {}; S.render = () => {};
+  if (!S.href) S.href = (c, k, id) => '#/' + c.id + (k ? '/' + k : '') + (id ? '/' + id : '');
+  const t = async (name, fn) => { try { const r = await fn(); results.push([name, r === true || r === undefined, r === true || r === undefined ? '' : String(r)]); } catch (e) { results.push([name, false, 'threw: ' + e.message]); } };
+  const fx = (o) => S.fixtureCourse('editorial', o);
+  const mount = (n) => { const d = document.getElementById('mount'); d.textContent = ''; d.appendChild(n); return d; };
+  const aiReading = () => ({ id: 'rx', title: 'FATF Recommendations', url: 'https://www.fatf-gafi.org/recommendations', source: 'ai', creator: 'FATF', kind: 'document', access: 'free', sourceType: 'gov', relevance: 'The global standard the exam is built on.',
+    verification: { status: 'reachable', titleMatch: true, pageTitle: 'The FATF Recommendations', detail: 'HTTP 200', checkedAt: '2026-11-20T10:00:00Z' },
+    contentCheck: { status: 'matched', detail: 'The page is the standard itself.', checkedAt: '2026-11-20T10:05:00Z' } });
+
+  /* B1: calmer Reading Room cards */
+  await t('an AI reading shows only "Why it fits" and the AI-suggested tag outside Source details', () => {
+    const d = mount(S.readingLabels(aiReading())); const det = d.querySelector('details.src-details');
+    const outside = [...d.firstChild.children].filter((x) => x !== det).map((x) => x.textContent).join(' | ');
+    return (/AI-suggested/.test(outside) && /Why it fits/.test(outside) && !/By FATF|Page title|Checked by a program|Link responded|Title matches|Content matched|Free/.test(outside)) || outside; });
+  await t('Source details is closed by default and holds every check', () => {
+    const d = mount(S.readingLabels(aiReading())); const det = d.querySelector('details.src-details');
+    return (det && !det.open && /Source details/.test(det.querySelector('summary').textContent) && ['By FATF', 'Page title: The FATF Recommendations', 'Checked by a program on 2026-11-20', 'Link responded', 'Title matches', 'Content matched', 'Content check:', 'Free'].every((s) => det.textContent.includes(s))) || (det ? det.textContent : 'none'); });
+  await t('no saved check is changed by rendering', () => { const r = aiReading(), j = JSON.stringify(r); S.readingLabels(r); return JSON.stringify(r) === j; });
+  await t('opening Source details is remembered across a re-render', () => { const r = aiReading(); let det = mount(S.readingLabels(r)).querySelector('details'); det.open = true; det.dispatchEvent(new Event('toggle')); const again = mount(S.readingLabels(r)).querySelector('details').open; S.ui.open.delete('src:rx'); return again; });
+  await t('a placeholder still says "Source needed"; a plain reading has no labels', () => (/Source needed/.test(mount(S.readingLabels({ source: 'placeholder' })).textContent) && S.readingLabels({ title: 'x' }) === null));
+  await t('the Reading Room card keeps number, title link, author line and To read', () => {
+    const c = fx(), m = c.modules[0]; m.readings = [Object.assign(aiReading(), { done: false })];
+    const d = mount(S.studio.page(c, m, 'learn')); const card = d.querySelector('.rcard');
+    return (card && card.querySelector('.rc-no').textContent === '01' && card.querySelector('.rc-title a').href.includes('fatf-gafi') && /FATF · fatf-gafi\.org/.test(card.querySelector('.rc-by').textContent) && /To read/.test(card.textContent) && card.querySelector('details.src-details') && !card.querySelector('details.src-details').open) || (card ? card.textContent : 'no card'); });
+
+  /* B2: Key ideas as bullets */
+  await t('lines starting "- " become bullets; other lines stay as text above', () => { const r = S.ideaItems('Three ideas:\n- One\n- Two\n* Three'); return (r.intro.join() === 'Three ideas:' && r.items.join('|') === 'One|Two|Three') || JSON.stringify(r); });
+  await t('plain text is split into sentences, not at abbreviations', () => { const r = S.ideaItems('Porter’s five forces shape rivalry. The U.S. Treasury issues guidance, e.g. FinCEN advisories. Diversification spreads risk!'); return (r.items.length === 3 && r.items[1] === 'The U.S. Treasury issues guidance, e.g. FinCEN advisories.') || JSON.stringify(r.items); });
+  await t('quoted sentences end cleanly', () => { const r = S.ideaItems('Beauvoir: "one is not born, but rather becomes, a woman." Friedan named a problem.'); return r.items.length === 2 || JSON.stringify(r.items); });
+  await t('the Learn room shows key ideas as a list and the saved text is unchanged', () => {
+    const c = fx(), m = c.modules[0]; m.keyIdeas = 'Accuracy comes first. Sources must be named. Corrections are published.'; const keep = m.keyIdeas;
+    const d = mount(S.studio.page(c, m, 'learn')); const lis = d.querySelectorAll('.ideas-list li');
+    return (lis.length === 3 && m.keyIdeas === keep) || 'items ' + lis.length; });
+  await t('a single sentence stays a paragraph', () => { const n = S.ideasList('Only one idea here.'); return n.tagName === 'P'; });
+
+  /* B3: stage icons */
+  await t('each stage has its icon and its word', () => {
+    const want = { learn: 'Learn', apply: 'Apply', demonstrate: 'Demonstrate', wrap: 'Wrap-up' };
+    return Object.keys(want).every((k) => { const n = S.kindMark(k); return n.textContent === want[k] && n.querySelector('svg path, svg circle') && n.querySelector('[aria-hidden="true"] svg'); }) || 'missing'; });
+  await t('the four icons are different drawings', () => new Set(['learn', 'apply', 'demonstrate', 'wrap'].map((k) => S.stageIcon(k).innerHTML)).size === 4);
+  await t('unknown stages give no mark', () => S.kindMark('other') === null && S.kindMark('') === null);
+  await t('the module stage rail shows the four icons', () => { const c = fx(), m = c.modules[0]; const d = mount(S.studio.page(c, m, 'learn')); return d.querySelectorAll('.rail-stages .rs-mark svg').length === 4 || 'icons ' + d.querySelectorAll('.rail-stages .rs-mark svg').length; });
+  await t('the Wrap-up room eyebrow shows the comet with its word', () => { const c = fx(), m = c.modules[0]; const d = mount(S.studio.page(c, m, 'wrap')); const e = d.querySelector('.room-head .eyebrow'); return (e && e.querySelector('.kmark-wrap svg') && /Wrap-up/.test(e.textContent)) || (e ? e.innerHTML : 'none'); });
+
+  /* B4: short summaries on the Assignments page */
+  const brief = 'Draft a two-page memo for a compliance officer on the bank’s three riskiest customer types. Use the FATF guidance from the Reading Room and cite each source. Then propose one monitoring rule per type, with its threshold and why.';
+  await t('the summary is the brief’s first sentence', () => S.summaryOf({ description: brief }) === 'Draft a two-page memo for a compliance officer on the bank’s three riskiest customer types.' || S.summaryOf({ description: brief }));
+  await t('a very short first sentence takes the second too', () => S.summaryOf({ description: 'Read closely. Then annotate three passages for diction. Finally write.' }) === 'Read closely. Then annotate three passages for diction.');
+  await t('an AI summary is used when there is one', () => S.summaryOf({ summary: 'Short AI summary.', description: brief }) === 'Short AI summary.');
+  await t('a very long sentence is cut at a word, with an ellipsis', () => { const s = S.summaryOf({ description: 'word '.repeat(80).trim() + '.' }); return (s.length <= 241 && s.endsWith('…') && !/ …$/.test(s) && !/wor…$/.test(s)) || s; });
+  await t('the fiction label is not used as the summary', () => S.summaryOf({ description: S.labelFiction(brief) }).startsWith('Draft a two-page memo') || S.summaryOf({ description: S.labelFiction(brief) }));
+  await t('the Assignments list shows the summary, not the full brief, and the brief is saved unchanged', () => {
+    const c = fx(), a = c.modules[0].assignments[1]; a.description = brief;
+    const d = mount(S.vc.assignmentItem(c, c.modules[0], a, { actions: true })); const note = d.querySelector('.item-note').textContent;
+    return (note === 'Draft a two-page memo for a compliance officer on the bank’s three riskiest customer types.' && a.description === brief) || note; });
+  await t('an assignment with no brief shows no note', () => { const c = fx(), a = c.modules[0].assignments[0]; a.description = ''; return !mount(S.vc.assignmentItem(c, c.modules[0], a, {})).querySelector('.item-note'); });
+
+  await t('localStorage is unchanged by these tests', () => localStorage.getItem('sovereign.v3') === before);
+  const bad = results.filter((r) => !r[1]);
+  document.getElementById('out').innerHTML = results.map((r) => '<span class="' + (r[1] ? 'pass' : 'fail') + '">' + (r[1] ? 'PASS' : 'FAIL') + '</span> ' + r[0] + (r[2] ? '\n      ' + r[2] : '')).join('\n');
+  document.title = 'RESULT ' + (results.length - bad.length) + '/' + results.length;
+})();
+</script></body></html>

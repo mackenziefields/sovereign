@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Build 34 step D tests</title>
+<!-- Run in a browser from a local server: /tests/build34d.test.html . Fictional data and the MOCK Worker harness (canned AI, no network, no cost). S.save is stubbed; nothing is stored. -->
+<style>body{font:14px/1.5 system-ui;margin:20px}.pass{color:#0a6b2d}.fail{color:#b3261e;font-weight:700}pre{white-space:pre-wrap}</style></head>
+<body><h1>Build 34 step D tests</h1><pre id="out">running…</pre><div id="mount" hidden></div><div id="toast" hidden></div>
+<script src="../js/config.js"></script><script src="../js/exhibits.js"></script><script src="../js/store.js"></script><script src="../js/components.js"></script><script src="../js/exhibits-view.js"></script><script src="../js/files.js"></script><script src="../js/dataset-import.js"></script><script src="../js/mydata.js"></script><script src="../js/capstone-ui.js"></script><script src="../js/publish-model.js"></script><script src="../js/publish.js"></script><script src="../js/publish-attach.js"></script><script src="../js/publish-docs.js"></script><script src="../js/ai-client.js"></script><script src="../js/views-ai.js"></script><script src="../js/views-work.js"></script><script src="../js/review-studio.js"></script><script src="../js/views-course.js"></script><script src="../js/studio.js"></script><script src="../js/syllabus.js"></script><script src="../js/workbench.js"></script><script src="../js/academic.js"></script><script src="../js/views-dash.js"></script><script src="fixtures.js"></script>
+<script src="../worker/mock/harness.js"></script>
+<script>
+(async function () {
+  const before = localStorage.getItem('sovereign.v3'), beforeAI = localStorage.getItem('sovereign.ai');
+  const S = window.Sovereign, results = [];
+  let CUR = [];
+  S.state = S.state || {}; S.state.courses = CUR;
+  S.save = () => { S.syncComplete(CUR); }; S.render = () => {};
+  if (!S.href) S.href = (c, k, id) => '#/course/' + c.id + (k ? '/' + k : '') + (id ? '/' + id : '');
+  S.ai.settings = () => ({ url: 'https://mock-worker.invalid', code: 'mock-code' }); // never touches the saved settings
+  const realHealth = S.ai.health;
+  const H = await SovereignMock.install({ workerUrl: '../worker/worker.js' });
+  const t = async (name, fn) => { try { const r = await fn(); results.push([name, r === true || r === undefined, r === true || r === undefined ? '' : String(r)]); } catch (e) { results.push([name, false, 'threw: ' + (e.code ? e.code + ' ' : '') + e.message]); } };
+  const mount = (n) => { const d = document.getElementById('mount'); d.textContent = ''; d.append(...[].concat(n).filter(Boolean)); return d; };
+  const toastText = () => document.getElementById('toast').textContent;
+  const A = (id, kind) => ({ id, title: 'Task ' + id, kind, points: 10, description: 'Do ' + id + '.' });
+  const R = (host, title, creator) => ({ id: 'r-' + host, title, creator, url: 'https://' + host + '/x', source: 'ai', kind: 'article' });
+  const course = (o) => {
+    o = o || {};
+    const c = S.normalize({ app: 'sovereign', courses: [{ id: 'qz', title: 'Quiz Test', code: 'QZ 1', ai: { generated: true, status: 'complete', brief: { topic: 'Starting a business', level: 'beginner' }, usage: [] }, modules: [
+      { id: 'm1', title: 'Customers', origin: 'ai', keyIdeas: o.noIdeas ? '' : 'Talk to five customers. Price from what they pay today.', reflection: o.legacy || '', assignments: [A('l1', 'learn'), A('a1', 'apply'), A('d1', 'demonstrate')],
+        readings: o.readings || [R('read1.mock-uni.edu', 'Customer Discovery Basics', 'C. Teacher'), R('read2.mock-uni.edu', 'Pricing a First Product', 'P. Seller'), R('read3.mock-uni.edu', 'Market Sizing Guide', 'M. Size'), R('gone.mock-site.org', 'Old Guide', '')] },
+      { id: 'm2', title: 'Pricing', assignments: [A('l2', 'learn'), A('a2', 'apply')] }] }] }).courses[0];
+    CUR.length = 0; CUR.push(c); return c;
+  };
+  const get = (c, id) => c.modules.flatMap((m) => m.assignments).find((a) => a.id === id);
+  const submit = (a) => { a.done = true; };
+  const correct = (m) => m.quiz.questions.map((q) => q.answer);
+  const wrong = (m) => m.quiz.questions.map((q) => (q.answer + 1) % 4);
+  S.ai.health = async () => ({ ok: true, version: 19 });
+
+  /* ---------- Worker /study through the real Worker code (mock AI) ---------- */
+  let c = course(), m = c.modules[0], r;
+  await t('quiz is written from the readings that opened and match their titles', async () => { r = await S.ai.writeStudy(c, m); return (r.quiz && m.quiz && m.quiz.basis === 'readings' && /2 of this module/.test(m.quiz.note)) || JSON.stringify(r); });
+  await t('invalid questions are dropped in code (3 options, duplicate options, made-up reading)', () => (m.quiz.questions.length === 3 && m.quiz.questions.every((q) => q.options.length === 4 && q.answer >= 0 && q.answer < 4 && q.explain)) || m.quiz.questions.length);
+  await t('each question names the reading it came from', () => m.quiz.questions.every((q) => ['Customer Discovery Basics', 'Pricing a First Product'].includes(q.source)) || m.quiz.questions.map((q) => q.source).join('|'));
+  await t('the correct answer survives shuffling', () => { const q = m.quiz.questions.find((x) => /How many customers/.test(x.q)); return q.options[q.answer] === 'At least five'; });
+  await t('a page that is not the reading, and a dead link, are skipped with reasons', () => (r.skipped.length === 2 && r.skipped.some((x) => x.title === 'Market Sizing Guide' && /not seem to contain/.test(x.why)) && r.skipped.some((x) => x.title === 'Old Guide' && /404/.test(x.why))) || JSON.stringify(r.skipped));
+  await t('the prompt carries the reading text, marked untrusted', () => { const p = globalThis.__studyPrompts.slice(-1)[0]; return /untrusted data/.test(p) && /Talk to at least five customers/.test(p) && !/Boil the water/.test(p); });
+  await t('three reflection questions, one per stage', () => (m.reflections && m.reflections.map((x) => x.stage).join() === 'learn,apply,demonstrate' && m.reflections.every((x) => x.q && x.answer === '')) || JSON.stringify(m.reflections));
+  await t('the cost is recorded in the course usage', () => c.ai.usage.some((u) => u.step === 'study') || JSON.stringify(c.ai.usage));
+  await t('rewriting keeps a passed quiz passed and keeps written reflections', async () => { m.quiz.passed = true; m.reflections[0].answer = 'Mine.'; await S.ai.writeStudy(c, m); return (m.quiz.passed === true && m.reflections[0].answer === 'Mine.' && m.quiz.attempts === 0) || JSON.stringify(m.quiz); });
+  await t('fewer than two readable readings: written from the key ideas, and says so', async () => { c = course({ readings: [R('read1.mock-uni.edu', 'Customer Discovery Basics', 'C. Teacher'), R('read3.mock-uni.edu', 'Market Sizing Guide', '')] }); m = c.modules[0]; await S.ai.writeStudy(c, m); const p = globalThis.__studyPrompts.slice(-1)[0]; return (m.quiz.basis === 'key-ideas' && /Fewer than two/.test(m.quiz.note) && m.quiz.questions.every((q) => q.source === 'Key ideas') && /set "reading" to -1/.test(p) && !/Talk to at least five customers before/.test(p)) || JSON.stringify(m.quiz); });
+  await t('no key ideas and no readable readings: refused, nothing changed', async () => { c = course({ noIdeas: true, readings: [] }); m = c.modules[0]; try { await S.ai.writeStudy(c, m); return 'no error'; } catch (e) { return (e.code === 'bad_input' && !m.quiz) || e.code; } });
+  await t('too few valid questions: no quiz saved, reported as incomplete', async () => { H.restore(); const H2 = await SovereignMock.install({ study: 'thin', workerUrl: '../worker/worker.js' }); c = course(); m = c.modules[0]; const x = await S.ai.writeStudy(c, m); H2.restore(); Object.assign(H, await SovereignMock.install({ workerUrl: '../worker/worker.js' })); return (!x.quiz && !m.quiz && x.reflections) || JSON.stringify(x); });
+  await t('an older Worker (v18) gets a clear "needs a newer AI service" error', async () => { S.ai.health = async () => ({ ok: true, version: 18 }); c = course(); try { await S.ai.writeStudy(c, c.modules[0]); return 'no error'; } catch (e) { return e.code === 'outdated' || e.code; } finally { S.ai.health = async () => ({ ok: true, version: 19 }); } });
+
+  /* ---------- /foundational ---------- */
+  await t('a foundational text found on its official page is checked and put first', async () => { c = course(); m = c.modules[0]; r = await S.ai.findFoundational(c, m, [{ title: 'Mock Justice Manual', creator: 'Mock Agency', why: 'Core rules.' }, { title: 'Invented Rules' }, { title: 'Wiki copy' }]); const f = m.readings[0]; return (f.foundational === true && f.url === 'https://law.mock-agency.gov/manual' && f.verification && f.verification.status !== 'broken' && r.linked === 1) || JSON.stringify(f); });
+  await t('a URL that never appeared in a search, or Wikipedia, becomes "link needed" (no link)', () => { const ln = m.readings.filter((x) => x.linkNeeded); return (ln.length === 2 && ln.every((x) => !x.url && x.foundational) && r.linkNeeded === 2 && !m.readings.some((x) => /wikipedia|invented/.test(x.url))) || JSON.stringify(m.readings.slice(0, 3)); });
+  await t('running it again adds no duplicates', async () => { const n = m.readings.length; await S.ai.findFoundational(c, m, [{ title: 'Mock Justice Manual' }]); return m.readings.length === n || m.readings.length; });
+  await t('foundational and link-needed survive save and load', () => { const back = S.normalize(JSON.parse(JSON.stringify({ app: 'sovereign', courses: [c] }))).courses[0].modules[0].readings; return back[0].foundational === true && back.filter((x) => x.linkNeeded).length === 2; });
+  await t('the reading card shows "Foundational" and "Foundational, link needed"', () => { const d = mount([S.readingLabels(m.readings[0]), S.readingLabels(m.readings.find((x) => x.linkNeeded))]); return (/Foundational(?!,)/.test(d.textContent) && /Foundational, link needed/.test(d.textContent)) || d.textContent; });
+  await t('editing a foundational reading’s link removes the label', () => { const src = document.createElement('div'); return /'foundational', 'linkNeeded'/.test(S.vc.readingItem.toString()) || 'not cleared'; });
+
+  /* ---------- canonFor ---------- */
+  await t('texts the learner typed are always included, first, without duplicating the AI’s list', () => { const out = S.ai.canonFor([{ title: 'FATF Recommendations', module: 2 }, { title: 'Mock Justice Manual', module: 1 }], 'DOJ Justice Manual; fatf recommendations', 6); const all = out.flat(); return (all.length === 3 && out[0][0].title === 'DOJ Justice Manual' && out[0][0].typed && all.filter((x) => /fatf/i.test(x.title)).length === 1) || JSON.stringify(out); });
+  await t('only modules 1 to 3, at most 3 per module, overflow moves to the next', () => { const list = Array.from({ length: 8 }, (_, i) => ({ title: 'Text ' + i, module: 1 })); const out = S.ai.canonFor(list, '', 6); return (out[0].length === 3 && out[1].length === 3 && out[2].length === 2 && out.slice(3).every((x) => !x.length)) || out.map((x) => x.length).join(); });
+  await t('a two-module course never gets a module 3 entry', () => { const out = S.ai.canonFor([{ title: 'Xenon Rules', module: 3 }], 'Your Text', 2); return (out.length === 2 && out[1].some((x) => x.title === 'Xenon Rules') && out[0][0].title === 'Your Text') || JSON.stringify(out); });
+
+  /* ---------- saved fields ---------- */
+  await t('a quiz needs 3 valid questions; bad ones are dropped on load', () => !S.makeQuiz({ questions: [{ q: 'a', options: ['1', '2', '3', '4'], answer: 0 }] }) && S.makeQuiz({ questions: [1, 2, 3].map((i) => ({ q: 'q' + i, options: ['1', '2', '3', '4'], answer: 1 })).concat([{ q: 'bad', options: ['1'], answer: 0 }]) }).questions.length === 3);
+  await t('old AI courses: the AI’s reflection prompt moves to reflectPrompt, the answer starts empty', () => { const x = course({ legacy: 'What changed in how you think?' }).modules[0]; return (x.reflectPrompt === 'What changed in how you think?' && x.reflection === '') || JSON.stringify([x.reflectPrompt, x.reflection]); });
+  await t('a module the learner edited keeps its reflection text as written', () => { const x = S.normalize({ app: 'sovereign', courses: [{ id: 'e', title: 'E', modules: [{ id: 'e1', title: 'E1', origin: 'ai', edited: true, reflection: 'My own words.' }] }] }).courses[0].modules[0]; return x.reflection === 'My own words.' || x.reflection; });
+  await t('the migration runs once: a saved answer is never moved again', () => { const x = S.normalize({ app: 'sovereign', courses: [{ id: 'e', title: 'E', modules: [{ id: 'e1', title: 'E1', origin: 'ai', reflectPrompt: 'Q?', reflection: 'Answer.' }] }] }).courses[0].modules[0]; return x.reflection === 'Answer.' && x.reflectPrompt === 'Q?'; });
+  await t('assignment summaries and the "texts" brief field are kept', () => { const x = S.normalize({ app: 'sovereign', courses: [{ id: 's', title: 'S', ai: { generated: true, brief: { topic: 't', texts: 'DOJ Justice Manual' } }, modules: [{ id: 's1', title: 'S1', assignments: [{ id: 'z', title: 'Z', summary: 'Short summary.' }] }] }] }).courses[0]; return x.modules[0].assignments[0].summary === 'Short summary.' && x.ai.brief.texts === 'DOJ Justice Manual'; });
+
+  /* ---------- the quiz on the Learn page ---------- */
+  c = course(); m = c.modules[0]; await S.ai.writeStudy(c, m);
+  await t('Learn page shows the quiz with radio choices instead of the self-check', () => { const d = mount(S.studio.page(c, m, 'learn')); return (/Learn quiz/.test(d.textContent) && d.querySelectorAll('.quiz input[type=radio]').length === 12 && !/Check your understanding/.test(d.textContent) && /Pass mark 2 of 3/.test(d.textContent)) || d.textContent.slice(0, 300); });
+  await t('checking with a question unanswered is refused and not counted', () => { const d = mount(S.studio.page(c, m, 'learn')); d.querySelector('.quiz form').dispatchEvent(new Event('submit', { cancelable: true })); return (m.quiz.attempts === 0 && /Answer every question/.test(toastText())) || toastText(); });
+  await t('a failing attempt is saved, not passed, and shows explanations and Try again', () => { const x = S.checkQuiz(m, wrong(m)); const d = mount(S.studio.page(c, m, 'learn')); return (!x.passed && !m.quiz.passed && m.quiz.attempts === 1 && m.quiz.last.score === 0) || JSON.stringify(m.quiz.last); });
+  await t('Apply stays locked until the quiz is passed (Learn work submitted)', () => { submit(get(c, 'l1')); const lk = S.lockOf(c, get(c, 'a1')); return (lk && /quiz/.test(lk.why)) || JSON.stringify(lk); });
+  await t('pass mark is 2 of 3, 3 of 4, 3 of 5', () => S.quizPassMark(3) === 2 && S.quizPassMark(4) === 3 && S.quizPassMark(5) === 3);
+  await t('submitting answers through the form passes the quiz and opens Apply', () => {
+    let d = mount(S.studio.page(c, m, 'learn'));
+    correct(m).forEach((a, i) => { const el = d.querySelector('input[name="q' + i + '"][value="' + a + '"]'); el.checked = true; });
+    d.querySelector('.quiz form').dispatchEvent(new Event('submit', { cancelable: true }));
+    d = mount(S.studio.page(c, m, 'learn'));
+    return (m.quiz.passed && m.quiz.best === 3 && /3 of 3 correct/.test(d.textContent) && /Passed/.test(d.textContent) && d.querySelector('.quiz-qs .is-right') && S.lockOf(c, get(c, 'a1')) === null && /Try again/.test(d.textContent)) || d.textContent.slice(0, 400);
+  });
+  await t('a pass is never undone by a later failing try', () => { S.checkQuiz(m, wrong(m)); return (m.quiz.passed && m.quiz.best === 3 && m.quiz.attempts === 3) || JSON.stringify(m.quiz); });
+  await t('attempts, best and last answers survive save and load', () => { const q = S.normalize(JSON.parse(JSON.stringify({ app: 'sovereign', courses: [c] }))).courses[0].modules[0].quiz; return (q.passed && q.attempts === 3 && q.best === 3 && q.last.picks.length === 3) || JSON.stringify(q); });
+
+  /* ---------- three reflections ---------- */
+  await t('Wrap-up shows three reflection boxes, labelled by stage', () => { const d = mount(S.studio.page(c, m, 'wrap')); return (d.querySelectorAll('.reflect textarea').length === 3 && /Learn/.test(d.textContent) && /What surprised you in the readings\?/.test(d.textContent) && /0 of 3 written/.test(d.textContent)) || d.textContent.slice(0, 400); });
+  await t('the module completes only when all three are written', () => {
+    m.assignments.forEach(submit);
+    for (let i = 0; i < 3; i++) {
+      if (m.complete) return 'complete after ' + i;
+      const d = mount(S.studio.page(c, m, 'wrap')), f = d.querySelectorAll('.reflect form')[0];
+      f.querySelector('textarea').value = 'Answer ' + i; f.dispatchEvent(new Event('submit', { cancelable: true }));
+    }
+    return (m.complete === true && m.reflections.every((x) => x.answer) && /Module complete/.test(toastText())) || JSON.stringify(m.reflections);
+  });
+  await t('an earlier written reflection stays visible after the three questions are added', () => { const x = course(); const mm = x.modules[0]; mm.reflection = 'My earlier words.'; mm.reflections = S.makeReflections([{ stage: 'learn', q: 'L?' }, { stage: 'apply', q: 'A?' }, { stage: 'demonstrate', q: 'D?' }]); const d = mount(S.studio.page(x, mm, 'wrap')); return (/Your earlier reflection/.test(d.textContent) && /My earlier words\./.test(d.textContent) && d.querySelectorAll('.reflect textarea').length === 3) || d.textContent.slice(0, 300); });
+  await t('an older module shows one box, labelled with the AI’s original question', () => { const x = course({ legacy: 'What changed in how you think?' }); const d = mount(S.studio.page(x, x.modules[0], 'wrap')); return (d.querySelectorAll('.reflect textarea').length === 1 && /What changed in how you think\?/.test(d.textContent)) || d.textContent.slice(0, 300); });
+
+  /* ---------- the build form and the Modules page ---------- */
+  await t('the build form has the optional "Texts you know you need" box', () => { const d = mount(S.views.newAI()); const ta = d.querySelector('textarea[name="texts"]'); return (ta && ta.maxLength === 600 && /Texts you know you need \(optional\)/.test(d.textContent)) || 'missing'; });
+  await t('Modules page offers "Add quiz and reflections" with the estimated cost', () => { const x = course(); const d = mount(S.views.course ? S.views.course(x, 'modules') : S.vcModules(x)); return (/Add quiz and reflections/.test(d.textContent) && /2 modules have no Learn quiz/.test(d.textContent) && /\$0\.04–\$0\.24/.test(d.textContent)) || d.textContent.slice(0, 500); });
+  await t('cancelling the cost confirmation sends nothing', async () => { const x = course(), n = H.calls.worker.length; const d = mount(S.views.course(x, 'modules')); const btn = [...d.querySelectorAll('button')].find((b) => /Add quiz and reflections/.test(b.textContent)); window.confirm = () => false; btn.click(); await new Promise((r) => setTimeout(r, 50)); return (H.calls.worker.length === n && !x.modules[0].quiz) || 'sent'; });
+  await t('confirming adds a quiz and reflections to each module; one that cannot get a quiz is named, not hidden', async () => { const x = course(); const r2 = await S.ai.addStudy(x, {}); return (r2.total === 2 && r2.done === 1 && x.modules[0].quiz && x.modules[0].reflections && !x.modules[1].quiz && /Pricing: This module needs key ideas/.test(r2.failed[0]) && S.ai.studyTargets(x).length === 1) || JSON.stringify(r2); });
+  await t('a page found for a different text is not accepted (title words checked in code)', async () => { const x = course(); const r3 = await S.ai.findFoundational(x, x.modules[0], [{ title: 'Mislabelled Statute' }]); const f = x.modules[0].readings[0]; return (r3.linked === 0 && f.linkNeeded && !f.url) || JSON.stringify(f); });
+  await t('nothing left to add: the section disappears', () => { const x = course(); x.modules.forEach((mm) => { mm.quiz = m.quiz; mm.reflections = m.reflections; }); const d = mount(S.views.course(x, 'modules')); return !/Add quiz and reflections/.test(d.textContent) || 'still shown'; });
+
+  /* ---------- a whole new course through the build (mock) ---------- */
+  await t('building a course adds foundational texts to module 1 and a quiz to each module', async () => {
+    S.state.courses = CUR; CUR.length = 0;
+    const run = { ctl: new AbortController(), steps: [] };
+    const built = await S.ai.build({ topic: 'Starting a business', level: 'beginner', goal: 'understand', hours: 4, weeks: 6, extra: '', texts: 'Invented Rules' }, run);
+    const m1 = built.modules[0];
+    const f = m1.readings.filter((x) => x.foundational);
+    return (f.length === 2 && f.some((x) => x.url === 'https://law.mock-agency.gov/manual') && f.some((x) => x.linkNeeded && x.title === 'Invented Rules') && built.modules.every((mm) => mm.reflections && mm.reflections.length === 3) && built.modules.every((mm) => mm.reflection === '' && mm.reflectPrompt) && /foundational text/.test(built.ai.note || '')) || JSON.stringify({ f: f.map((x) => x.title + ' ' + x.url), note: built.ai.note, st: built.ai.status, q: built.modules.map((mm) => !!mm.quiz) });
+  });
+
+  H.restore(); S.ai.health = realHealth;
+  await t('saved app data and AI settings were not touched', () => localStorage.getItem('sovereign.v3') === before && localStorage.getItem('sovereign.ai') === beforeAI);
+  const pass = results.filter((x) => x[1]).length;
+  document.title = 'RESULT ' + pass + '/' + results.length;
+  document.getElementById('out').innerHTML = results.map(([n, ok, why]) => '<span class="' + (ok ? 'pass' : 'fail') + '">' + (ok ? 'PASS' : 'FAIL') + '</span> ' + n.replace(/</g, '&lt;') + (why ? ' — ' + why.replace(/</g, '&lt;') : '')).join('\n') + '\n\n' + pass + ' of ' + results.length + ' passed';
+})();
+</script></body></html>
